@@ -3632,16 +3632,6 @@ static void btrfs_read_locked_inode(struct inode *inode)
 	BTRFS_I(inode)->generation = btrfs_inode_generation(leaf, inode_item);
 	BTRFS_I(inode)->last_trans = btrfs_inode_transid(leaf, inode_item);
 
-	/*
-	 * If we were modified in the current generation and evicted from memory
-	 * and then re-read we need to do a full sync since we don't have any
-	 * idea about which extents were modified before we were evicted from
-	 * cache.
-	 */
-	if (BTRFS_I(inode)->last_trans == root->fs_info->generation)
-		set_bit(BTRFS_INODE_NEEDS_FULL_SYNC,
-			&BTRFS_I(inode)->runtime_flags);
-
 	inode->i_version = btrfs_inode_sequence(leaf, inode_item);
 	inode->i_generation = BTRFS_I(inode)->generation;
 	inode->i_rdev = 0;
@@ -3651,6 +3641,19 @@ static void btrfs_read_locked_inode(struct inode *inode)
 	BTRFS_I(inode)->flags = btrfs_inode_flags(leaf, inode_item);
 
 cache_index:
+	/*
+	 * If we were modified in the current generation and evicted from memory
+	 * and then re-read we need to do a full sync since we don't have any
+	 * idea about which extents were modified before we were evicted from
+	 * cache.
+	 *
+	 * This is required for both inode re-read from disk and delayed inode
+	 * in delayed_nodes_tree.
+	 */
+	if (BTRFS_I(inode)->last_trans == root->fs_info->generation)
+		set_bit(BTRFS_INODE_NEEDS_FULL_SYNC,
+			&BTRFS_I(inode)->runtime_flags);
+
 	path->slots[0]++;
 	if (inode->i_nlink != 1 ||
 	    path->slots[0] >= btrfs_header_nritems(leaf))
@@ -4020,16 +4023,16 @@ static int btrfs_unlink(struct inode *dir, struct dentry *dentry)
 {
 	struct btrfs_root *root = BTRFS_I(dir)->root;
 	struct btrfs_trans_handle *trans;
-	struct inode *inode = dentry->d_inode;
+	struct inode *inode = d_inode(dentry);
 	int ret;
 
 	trans = __unlink_start_trans(dir);
 	if (IS_ERR(trans))
 		return PTR_ERR(trans);
 
-	btrfs_record_unlink_dir(trans, dir, dentry->d_inode, 0);
+	btrfs_record_unlink_dir(trans, dir, d_inode(dentry), 0);
 
-	ret = btrfs_unlink_inode(trans, root, dir, dentry->d_inode,
+	ret = btrfs_unlink_inode(trans, root, dir, d_inode(dentry),
 				 dentry->d_name.name, dentry->d_name.len);
 	if (ret)
 		goto out;
@@ -4128,7 +4131,7 @@ out:
 
 static int btrfs_rmdir(struct inode *dir, struct dentry *dentry)
 {
-	struct inode *inode = dentry->d_inode;
+	struct inode *inode = d_inode(dentry);
 	int err = 0;
 	struct btrfs_root *root = BTRFS_I(dir)->root;
 	struct btrfs_trans_handle *trans;
@@ -4155,7 +4158,7 @@ static int btrfs_rmdir(struct inode *dir, struct dentry *dentry)
 		goto out;
 
 	/* now the directory is empty */
-	err = btrfs_unlink_inode(trans, root, dir, dentry->d_inode,
+	err = btrfs_unlink_inode(trans, root, dir, d_inode(dentry),
 				 dentry->d_name.name, dentry->d_name.len);
 	if (!err)
 		btrfs_i_size_write(inode, 0);
@@ -4915,7 +4918,7 @@ static int btrfs_setsize(struct inode *inode, struct iattr *attr)
 
 static int btrfs_setattr(struct dentry *dentry, struct iattr *attr)
 {
-	struct inode *inode = dentry->d_inode;
+	struct inode *inode = d_inode(dentry);
 	struct btrfs_root *root = BTRFS_I(inode)->root;
 	int err;
 
@@ -5547,10 +5550,10 @@ struct inode *btrfs_lookup_dentry(struct inode *dir, struct dentry *dentry)
 static int btrfs_dentry_delete(const struct dentry *dentry)
 {
 	struct btrfs_root *root;
-	struct inode *inode = dentry->d_inode;
+	struct inode *inode = d_inode(dentry);
 
 	if (!inode && !IS_ROOT(dentry))
-		inode = dentry->d_parent->d_inode;
+		inode = d_inode(dentry->d_parent);
 
 	if (inode) {
 		root = BTRFS_I(inode)->root;
@@ -6357,7 +6360,7 @@ static int btrfs_link(struct dentry *old_dentry, struct inode *dir,
 {
 	struct btrfs_trans_handle *trans;
 	struct btrfs_root *root = BTRFS_I(dir)->root;
-	struct inode *inode = old_dentry->d_inode;
+	struct inode *inode = d_inode(old_dentry);
 	u64 index;
 	int err;
 	int drop_inode = 0;
@@ -8260,7 +8263,7 @@ static ssize_t btrfs_direct_IO(struct kiocb *iocb, struct iov_iter *iter,
 	if (check_direct_IO(BTRFS_I(inode)->root, iocb, iter, offset))
 		return 0;
 
-	atomic_inc(&inode->i_dio_count);
+	inode_dio_begin(inode);
 	smp_mb__after_atomic();
 
 	/*
@@ -8300,7 +8303,7 @@ static ssize_t btrfs_direct_IO(struct kiocb *iocb, struct iov_iter *iter,
 		current->journal_info = &outstanding_extents;
 	} else if (test_bit(BTRFS_INODE_READDIO_NEED_LOCK,
 				     &BTRFS_I(inode)->runtime_flags)) {
-		inode_dio_done(inode);
+		inode_dio_end(inode);
 		flags = DIO_LOCKING | DIO_SKIP_HOLES;
 		wakeup = false;
 	}
@@ -8319,7 +8322,7 @@ static ssize_t btrfs_direct_IO(struct kiocb *iocb, struct iov_iter *iter,
 	}
 out:
 	if (wakeup)
-		inode_dio_done(inode);
+		inode_dio_end(inode);
 	if (relock)
 		mutex_lock(&inode->i_mutex);
 
@@ -9006,7 +9009,7 @@ static int btrfs_getattr(struct vfsmount *mnt,
 			 struct dentry *dentry, struct kstat *stat)
 {
 	u64 delalloc_bytes;
-	struct inode *inode = dentry->d_inode;
+	struct inode *inode = d_inode(dentry);
 	u32 blocksize = inode->i_sb->s_blocksize;
 
 	generic_fillattr(inode, stat);
@@ -9027,8 +9030,8 @@ static int btrfs_rename(struct inode *old_dir, struct dentry *old_dentry,
 	struct btrfs_trans_handle *trans;
 	struct btrfs_root *root = BTRFS_I(old_dir)->root;
 	struct btrfs_root *dest = BTRFS_I(new_dir)->root;
-	struct inode *new_inode = new_dentry->d_inode;
-	struct inode *old_inode = old_dentry->d_inode;
+	struct inode *new_inode = d_inode(new_dentry);
+	struct inode *old_inode = d_inode(old_dentry);
 	struct timespec ctime = CURRENT_TIME;
 	u64 index = 0;
 	u64 root_objectid;
@@ -9140,7 +9143,7 @@ static int btrfs_rename(struct inode *old_dir, struct dentry *old_dentry,
 					old_dentry->d_name.len);
 	} else {
 		ret = __btrfs_unlink_inode(trans, root, old_dir,
-					old_dentry->d_inode,
+					d_inode(old_dentry),
 					old_dentry->d_name.name,
 					old_dentry->d_name.len);
 		if (!ret)
@@ -9164,12 +9167,12 @@ static int btrfs_rename(struct inode *old_dir, struct dentry *old_dentry,
 			BUG_ON(new_inode->i_nlink == 0);
 		} else {
 			ret = btrfs_unlink_inode(trans, dest, new_dir,
-						 new_dentry->d_inode,
+						 d_inode(new_dentry),
 						 new_dentry->d_name.name,
 						 new_dentry->d_name.len);
 		}
 		if (!ret && new_inode->i_nlink == 0)
-			ret = btrfs_orphan_add(trans, new_dentry->d_inode);
+			ret = btrfs_orphan_add(trans, d_inode(new_dentry));
 		if (ret) {
 			btrfs_abort_transaction(trans, root, ret);
 			goto out_fail;

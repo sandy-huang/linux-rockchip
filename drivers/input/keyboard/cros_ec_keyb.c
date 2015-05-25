@@ -151,12 +151,14 @@ static int cros_ec_keyb_get_state(struct cros_ec_keyb *ckdev, uint8_t *kb_state)
 	int ret = 0;
 	struct cros_ec_command *msg;
 
-	msg = kzalloc(sizeof(*msg) + ckdev->cols, GFP_KERNEL);
+	msg = kmalloc(sizeof(*msg) + ckdev->cols, GFP_KERNEL);
 	if (!msg)
 		return -ENOMEM;
 
+	msg->version = 0;
 	msg->command = EC_CMD_MKBP_STATE;
 	msg->insize = ckdev->cols;
+	msg->outsize = 0;
 
 	ret = cros_ec_cmd_xfer(ckdev->ec, msg);
 	if (ret < 0) {
@@ -273,7 +275,7 @@ static int cros_ec_keyb_probe(struct platform_device *pdev)
 	ckdev->dev = dev;
 	dev_set_drvdata(&pdev->dev, ckdev);
 
-	idev->name = ec->ec_name;
+	idev->name = CROS_EC_DEV_NAME;
 	idev->phys = ec->phys_name;
 	__set_bit(EV_REP, idev->evbit);
 

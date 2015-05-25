@@ -13,25 +13,17 @@
 #include "cros-ec-sbs.dtsi"
 
 / {
-        model = "Google Pinky";
-        compatible = "google,veyron-pinky-rev2", "google,veyron-pinky",
-                     "google,veyron", "rockchip,rk3288";
+	model = "Google Pinky";
+	compatible = "google,veyron-pinky-rev2", "google,veyron-pinky",
+		     "google,veyron", "rockchip,rk3288";
 };
 
-&cpu0 {
-	operating-points = <
-		/* KHz    uV */
-		1800000 1300000
-		1608000 1200000
-		1416000 1150000
-		1200000 1100000
-		1008000 1050000
-		 816000 1000000
-		 600000  900000
-		 408000  850000
-		 216000  850000
-		 126000  850000
-	>;
+&gpio_keys {
+	pinctrl-0 = <&pwr_key_h &ap_lid_int_l>;
+
+	power {
+		gpios = <&gpio0 5 GPIO_ACTIVE_HIGH>;
+	};
 };
 
 /* Touchpad connector */
@@ -46,9 +38,8 @@
 &sdmmc {
 	pinctrl-names = "default";
 	pinctrl-0 = <&sdmmc_clk &sdmmc_cmd &sdmmc_cd_disabled &sdmmc_cd_gpio
-			&sdmmc_wp_gpio &sdmmc_bus4>;
-	wp-gpios = <&gpio7 10 GPIO_ACTIVE_LOW>;
-	wp-inverted;                             /* AKA active low */
+		     &sdmmc_wp_gpio &sdmmc_bus4>;
+	wp-gpios = <&gpio7 10 GPIO_ACTIVE_HIGH>;
 };
 
 &rk808 {
@@ -60,4 +51,23 @@
 			regulator-suspend-mem-disabled;
 		};
 	};
+};
+
+&pinctrl {
+	buttons {
+		pwr_key_h: pwr-key-h {
+			rockchip,pins = <0 5 RK_FUNC_GPIO &pcfg_pull_none>;
+		};
+	};
+
+	sdmmc {
+		sdmmc_wp_gpio: sdmmc-wp-gpio {
+			rockchip,pins = <7 10 RK_FUNC_GPIO &pcfg_pull_up>;
+		};
+	};
+};
+
+&tsadc {
+	/* Some connection is flaky making the tsadc hang the system */
+	status = "disabled";
 };

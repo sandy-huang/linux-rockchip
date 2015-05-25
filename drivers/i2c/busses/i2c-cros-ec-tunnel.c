@@ -182,6 +182,7 @@ static int ec_i2c_xfer(struct i2c_adapter *adap, struct i2c_msg i2c_msgs[],
 	const u16 bus_num = bus->remote_bus;
 	int request_len;
 	int response_len;
+	int alloc_size;
 	int result;
 	struct cros_ec_command *msg;
 
@@ -198,8 +199,8 @@ static int ec_i2c_xfer(struct i2c_adapter *adap, struct i2c_msg i2c_msgs[],
 		return response_len;
 	}
 
-	msg = kzalloc(sizeof(*msg) + max(request_len, response_len),
-		      GFP_KERNEL);
+	alloc_size = max(request_len, response_len);
+	msg = kmalloc(sizeof(*msg) + alloc_size, GFP_KERNEL);
 	if (!msg)
 		return -ENOMEM;
 
