@@ -1,0 +1,13 @@
+#
+# Rockchip Soc drivers
+#
+config ROCKCHIP_USB_UART
+	bool "Rockchip usb-uart override"
+	depends on ARCH_ROCKCHIP
+	select MFD_SYSCON
+	help
+	  Say y here to enable usb-uart functionality. Newer Rockchip SoCs
+	  provide means to repurpose one usb phy as uart2 output, making it
+	  possible to get debug output without needing to open a device.
+	  To enable this function on boot, add a rockchip.usb_uart option
+	  to the kernel commandline.
