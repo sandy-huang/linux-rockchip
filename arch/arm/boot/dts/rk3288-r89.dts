@@ -41,7 +41,6 @@
  */
 
 /dts-v1/;
-#include <dt-bindings/pwm/pwm.h>
 #include "rk3288.dtsi"
 
 / {
@@ -75,6 +74,13 @@
 			gpio-key,wakeup = <1>;
 			debounce-interval = <100>;
 		};
+	};
+
+	ir: ir-receiver {
+		compatible = "gpio-ir-receiver";
+		gpios = <&gpio7 0 GPIO_ACTIVE_LOW>; //FIXME
+		pinctrl-names = "default";
+		pinctrl-0 = <&ir_int>;
 	};
 
 	vcc_host: vcc-host-regulator {
@@ -309,6 +315,12 @@
 		};
 	};
 
+	ir {
+		ir_int: ir-int {
+			rockchip,pins = <7 0 RK_FUNC_GPIO &pcfg_pull_up>;
+		};
+	};
+
 	pmic {
 		pmic_int: pmic-int {
 			rockchip,pins = <RK_GPIO0 4 RK_FUNC_GPIO &pcfg_pull_up>;
@@ -324,10 +336,6 @@
 			rockchip,pins = <0 12 RK_FUNC_GPIO &pcfg_pull_none>;
 		};
 	};
-};
-
-&pwm0 {
-	status = "okay";
 };
 
 &saradc {
@@ -364,14 +372,6 @@
 };
 
 &uart2 {
-	status = "okay";
-};
-
-&uart3 {
-	status = "okay";
-};
-
-&uart4 {
 	status = "okay";
 };
 
