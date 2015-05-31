@@ -35,7 +35,6 @@
 static void __init rockchip_timer_init(void)
 {
 	if (of_machine_is_compatible("rockchip,rk3288")) {
-		void __iomem *reg_base;
 		struct regmap *grf;
 		void __iomem *reg_base;
 
@@ -50,22 +49,6 @@ static void __init rockchip_timer_init(void)
 			writel(0xffffffff, reg_base + 0x20);
 			writel(0xffffffff, reg_base + 0x24);
 			writel(1, reg_base + 0x30);
-			dsb();
-			iounmap(reg_base);
-		} else {
-			pr_err("rockchip: could not map timer7 registers\n");
-		}
-
-		/* enable timer7 for core */
-		pr_warn("rockchip: enabling rk3288-timer7 workaround\n");
-		reg_base = ioremap(0xFF810000, 0x4000);
-		if (reg_base) {
-			writel_relaxed(0, reg_base + 0x30);
-			dsb();
-			writel_relaxed(0xFFFFFFFF, reg_base + 0x20);
-			writel_relaxed(0xFFFFFFFF, reg_base + 0x24);
-			dsb();
-			writel_relaxed(1, reg_base + 0x30);
 			dsb();
 			iounmap(reg_base);
 		} else {
