@@ -24,48 +24,30 @@
 #include <linux/mfd/core.h>
 #include <linux/mfd/cros_ec.h>
 
-static int dev_id;
+#define CROS_EC_DEV_EC_INDEX 0
+#define CROS_EC_DEV_PD_INDEX 1
 
-static int cros_ec_dev_register(struct cros_ec_device *ec_dev,
-				int dev_id, int devidx)
-{
-	struct device *dev = ec_dev->dev;
-	struct cros_ec_platform ec_p = {
-		.cmd_offset = 0,
-	};
+struct cros_ec_platform ec_p = {
+	.cmd_offset = EC_CMD_PASSTHRU_OFFSET(CROS_EC_DEV_EC_INDEX),
+};
 
-	struct mfd_cell ec_cell = {
-		.name = "cros-ec-ctl",
-		.id = PLATFORM_DEVID_AUTO,
-		.platform_data = &ec_p,
-		.pdata_size = sizeof(ec_p),
-	};
+struct cros_ec_platform pd_p = {
+	.cmd_offset = EC_CMD_PASSTHRU_OFFSET(CROS_EC_DEV_PD_INDEX),
+};
 
-	switch (devidx) {
-	case 0:
-		if (IS_ENABLED(CONFIG_OF) && dev->of_node) {
-			ec_p.ec_name = of_get_property(dev->of_node, "devname",
-						       NULL);
-			if (ec_p.ec_name == NULL) {
-				dev_dbg(dev,
-					"Device name not found, using default");
-				ec_p.ec_name = CROS_EC_DEV_NAME;
-			}
-		} else {
-			ec_p.ec_name = CROS_EC_DEV_NAME;
-		}
-		break;
-	case 1:
-		ec_p.ec_name = CROS_EC_DEV_PD_NAME;
-		break;
-	default:
-		return -EINVAL;
-	}
+struct mfd_cell ec_cell = {
+	.name = "cros-ec-ctl",
+	.id = PLATFORM_DEVID_AUTO,
+	.platform_data = &ec_p,
+	.pdata_size = sizeof(ec_p),
+};
 
-	ec_p.cmd_offset = EC_CMD_PASSTHRU_OFFSET(devidx);
-	return mfd_add_devices(dev, dev_id, &ec_cell, 1,
-			       NULL, ec_dev->irq, NULL);
-}
+struct mfd_cell ec_pd_cell = {
+	.name = "cros-ec-ctl",
+	.id = PLATFORM_DEVID_AUTO,
+	.platform_data = &pd_p,
+	.pdata_size = sizeof(pd_p),
+};
 
 int cros_ec_register(struct cros_ec_device *ec_dev)
 {
@@ -88,7 +70,15 @@ int cros_ec_register(struct cros_ec_device *ec_dev)
 
 	cros_ec_query_all(ec_dev);
 
-	err = cros_ec_dev_register(ec_dev, dev_id++, 0);
+	if (IS_ENABLED(CONFIG_OF) && dev->of_node)
+		ec_p.ec_name = of_get_property(dev->of_node, "devname",
+					       NULL);
+
+	if (!ec_p.ec_name)
+		ec_p.ec_name = CROS_EC_DEV_NAME;
+
+	err = mfd_add_devices(ec_dev->dev, CROS_EC_DEV_EC_INDEX, &ec_cell, 1,
+			      NULL, ec_dev->irq, NULL);
 	if (err) {
 		dev_err(dev, "failed to add ec\n");
 		return err;
@@ -103,9 +93,12 @@ int cros_ec_register(struct cros_ec_device *ec_dev)
 		 * - the EC is responsive at init time (it is not true for a
 		 *   sensor hub.
 		 */
-		err = cros_ec_dev_register(ec_dev, dev_id++, 1);
+		pd_p.ec_name = CROS_EC_DEV_PD_NAME;
+
+		err = mfd_add_devices(ec_dev->dev, CROS_EC_DEV_PD_INDEX,
+				      &ec_pd_cell, 1, NULL, ec_dev->irq, NULL);
 		if (err) {
-			dev_err(dev, "failed to add additional ec\n");
+			dev_err(dev, "failed to add pd ec\n");
 			return err;
 		}
 	}
