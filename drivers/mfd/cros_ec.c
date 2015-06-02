@@ -24,11 +24,29 @@
 #include <linux/mfd/core.h>
 #include <linux/mfd/cros_ec.h>
 
-static const struct mfd_cell cros_devs[] = {
-	{
-		.name = "cros-ec-ctl",
-		.id = PLATFORM_DEVID_AUTO,
-	},
+#define CROS_EC_DEV_EC_INDEX 0
+#define CROS_EC_DEV_PD_INDEX 1
+
+struct cros_ec_platform ec_p = {
+	.cmd_offset = EC_CMD_PASSTHRU_OFFSET(CROS_EC_DEV_EC_INDEX),
+};
+
+struct cros_ec_platform pd_p = {
+	.cmd_offset = EC_CMD_PASSTHRU_OFFSET(CROS_EC_DEV_PD_INDEX),
+};
+
+struct mfd_cell ec_cell = {
+	.name = "cros-ec-ctl",
+	.id = PLATFORM_DEVID_AUTO,
+	.platform_data = &ec_p,
+	.pdata_size = sizeof(ec_p),
+};
+
+struct mfd_cell ec_pd_cell = {
+	.name = "cros-ec-ctl",
+	.id = PLATFORM_DEVID_AUTO,
+	.platform_data = &pd_p,
+	.pdata_size = sizeof(pd_p),
 };
 
 int cros_ec_register(struct cros_ec_device *ec_dev)
@@ -52,12 +70,37 @@ int cros_ec_register(struct cros_ec_device *ec_dev)
 
 	cros_ec_query_all(ec_dev);
 
-	err = mfd_add_devices(dev, 0, cros_devs,
-			      ARRAY_SIZE(cros_devs),
+	if (IS_ENABLED(CONFIG_OF) && dev->of_node)
+		ec_p.ec_name = of_get_property(dev->of_node, "devname",
+					       NULL);
+
+	if (!ec_p.ec_name)
+		ec_p.ec_name = CROS_EC_DEV_NAME;
+
+	err = mfd_add_devices(ec_dev->dev, CROS_EC_DEV_EC_INDEX, &ec_cell, 1,
 			      NULL, ec_dev->irq, NULL);
 	if (err) {
-		dev_err(dev, "failed to add mfd devices\n");
+		dev_err(dev, "failed to add ec\n");
 		return err;
+	}
+
+	if (ec_dev->max_passthru) {
+		/*
+		 * Register a PD device as well on top of this device.
+		 * We make the following assumptions:
+		 * - behind an EC, we have a pd
+		 * - only one device added.
+		 * - the EC is responsive at init time (it is not true for a
+		 *   sensor hub.
+		 */
+		pd_p.ec_name = CROS_EC_DEV_PD_NAME;
+
+		err = mfd_add_devices(ec_dev->dev, CROS_EC_DEV_PD_INDEX,
+				      &ec_pd_cell, 1, NULL, ec_dev->irq, NULL);
+		if (err) {
+			dev_err(dev, "failed to add pd ec\n");
+			return err;
+		}
 	}
 
 	if (IS_ENABLED(CONFIG_OF) && dev->of_node) {
