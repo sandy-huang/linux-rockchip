@@ -94,6 +94,7 @@ config MFD_AXP20X
 config MFD_CROS_EC
 	tristate "ChromeOS Embedded Controller"
 	select MFD_CORE
+	select CHROME_PLATFORMS
 	select CROS_EC_PROTO
 	help
 	  If you say Y here you get support for the ChromeOS Embedded
