@@ -16,6 +16,8 @@
 	model = "Google Pinky";
 	compatible = "google,veyron-pinky-rev2", "google,veyron-pinky",
 		     "google,veyron", "rockchip,rk3288";
+
+	/delete-node/emmc-pwrseq;
 };
 
 &gpio_keys {
@@ -24,6 +26,17 @@
 	power {
 		gpios = <&gpio0 5 GPIO_ACTIVE_HIGH>;
 	};
+};
+
+&emmc {
+	/*
+	 * Use a pullup instead of a drive since the output is 3.3V and
+	 * really should be 1.8V (oops).  The external pulldown will help
+	 * bring the voltage down if we only drive with a pullup here.
+	 * Therefore disable the powerseq (and actual reset) for pinky.
+	 */
+	/delete-property/mmc-pwrseq;
+	pinctrl-0 = <&emmc_clk &emmc_cmd &emmc_bus8 &emmc_reset>;
 };
 
 /* Touchpad connector */
@@ -57,6 +70,12 @@
 	buttons {
 		pwr_key_h: pwr-key-h {
 			rockchip,pins = <0 5 RK_FUNC_GPIO &pcfg_pull_none>;
+		};
+	};
+
+	emmc {
+		emmc_reset: emmc-reset {
+			rockchip,pins = <7 12 RK_FUNC_GPIO &pcfg_pull_up>;
 		};
 	};
 

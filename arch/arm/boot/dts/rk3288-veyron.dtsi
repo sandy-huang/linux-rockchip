@@ -109,6 +109,13 @@
 		wifi-supply = <&vcc18_wl>;
 	};
 
+	emmc_pwrseq: emmc-pwrseq {
+		compatible = "mmc-pwrseq-emmc";
+		pinctrl-0 = <&emmc_reset>;
+		pinctrl-names = "default";
+		reset-gpios = <&gpio2 9 GPIO_ACTIVE_HIGH>;
+	};
+
 	sdio_pwrseq: sdio-pwrseq {
 		compatible = "mmc-pwrseq-simple";
 		clocks = <&rk808 RK808_CLKOUT1>;
@@ -144,10 +151,11 @@
 	bus-width = <8>;
 	cap-mmc-highspeed;
 	disable-wp;
+	mmc-pwrseq = <&emmc_pwrseq>;
 	non-removable;
 	num-slots = <1>;
 	pinctrl-names = "default";
-	pinctrl-0 = <&emmc_clk &emmc_cmd &emmc_bus8 &emmc_deassert_reset>;
+	pinctrl-0 = <&emmc_clk &emmc_cmd &emmc_bus8>;
 	status = "okay";
 };
 
@@ -441,9 +449,8 @@
 	};
 
 	emmc {
-		/* Make sure eMMC is not in reset */
-		emmc_deassert_reset: emmc-deassert-reset {
-			rockchip,pins = <7 12 RK_FUNC_GPIO &pcfg_pull_up>;
+		emmc_reset: emmc-reset {
+			rockchip,pins = <2 9 RK_FUNC_GPIO &pcfg_pull_none>;
 		};
 
 		/*
