@@ -252,10 +252,17 @@ static int get_set_conduit_method(struct device_node *np)
 	return 0;
 }
 
-static void psci_sys_reset(enum reboot_mode reboot_mode, const char *cmd)
+static int psci_sys_reset(struct notifier_block *this,
+				   unsigned long mode, void *cmd)
 {
 	invoke_psci_fn(PSCI_0_2_FN_SYSTEM_RESET, 0, 0, 0);
+	return NOTIFY_DONE;
 }
+
+static struct notifier_block psci_restart_handler = {
+	.notifier_call = psci_sys_reset,
+	.priority = 127,
+};
 
 static void psci_sys_poweroff(void)
 {
@@ -321,7 +328,7 @@ static void __init psci_0_2_set_functions(void)
 
 	psci_ops.migrate_info_type = psci_migrate_info_type;
 
-	arm_pm_restart = psci_sys_reset;
+	register_restart_handler(&psci_restart_handler);
 
 	pm_power_off = psci_sys_poweroff;
 }
