@@ -30,3 +30,7 @@ Rockchip platforms device tree bindings
 - Netxeon R89 board:
     Required root node properties:
       - compatible = "netxeon,r89", "rockchip,rk3288";
+
+- Rockchip R88 board:
+    Required root node properties:
+      - compatible = "rockchip,r88", "rockchip,rk3368";

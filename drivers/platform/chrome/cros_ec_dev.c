@@ -56,7 +56,7 @@ static int ec_get_version(struct cros_ec_dev *ec, char *str, int maxlen)
 		return -ENOMEM;
 
 	msg->version = 0;
-	msg->command = EC_CMD_GET_VERSION;
+	msg->command = EC_CMD_GET_VERSION + ec->cmd_offset;
 	msg->insize = sizeof(*resp);
 	msg->outsize = 0;
 
