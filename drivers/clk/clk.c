@@ -21,6 +21,7 @@
 #include <linux/device.h>
 #include <linux/init.h>
 #include <linux/sched.h>
+#include <linux/clkdev.h>
 
 #include "clk.h"
 
@@ -62,11 +63,11 @@ struct clk_core {
 	int			phase;
 	struct hlist_head	children;
 	struct hlist_node	child_node;
-	struct hlist_node	debug_node;
 	struct hlist_head	clks;
 	unsigned int		notifier_count;
 #ifdef CONFIG_DEBUG_FS
 	struct dentry		*dentry;
+	struct hlist_node	debug_node;
 #endif
 	struct kref		ref;
 };
@@ -544,6 +545,8 @@ EXPORT_SYMBOL_GPL(__clk_mux_determine_rate_closest);
 
 static void clk_core_unprepare(struct clk_core *core)
 {
+	lockdep_assert_held(&prepare_lock);
+
 	if (!core)
 		return;
 
@@ -589,6 +592,8 @@ EXPORT_SYMBOL_GPL(clk_unprepare);
 static int clk_core_prepare(struct clk_core *core)
 {
 	int ret = 0;
+
+	lockdep_assert_held(&prepare_lock);
 
 	if (!core)
 		return 0;
@@ -645,6 +650,8 @@ EXPORT_SYMBOL_GPL(clk_prepare);
 
 static void clk_core_disable(struct clk_core *core)
 {
+	lockdep_assert_held(&enable_lock);
+
 	if (!core)
 		return;
 
@@ -692,6 +699,8 @@ EXPORT_SYMBOL_GPL(clk_disable);
 static int clk_core_enable(struct clk_core *core)
 {
 	int ret = 0;
+
+	lockdep_assert_held(&enable_lock);
 
 	if (!core)
 		return 0;
@@ -1431,6 +1440,9 @@ static void clk_change_rate(struct clk_core *core)
 	if (core->notifier_count && old_rate != core->rate)
 		__clk_notify(core, POST_RATE_CHANGE, old_rate, core->rate);
 
+	if (core->flags & CLK_RECALC_NEW_RATES)
+		(void)clk_calc_new_rates(core, core->new_rate);
+
 	/*
 	 * Use safe iteration, as change_rate can actually swap parents
 	 * for certain clock types.
@@ -1669,6 +1681,14 @@ static void clk_core_reparent(struct clk_core *core,
 	clk_reparent(core, new_parent);
 	__clk_recalc_accuracies(core);
 	__clk_recalc_rates(core, POST_RATE_CHANGE);
+}
+
+void clk_hw_reparent(struct clk_hw *hw, struct clk_hw *new_parent)
+{
+	if (!hw)
+		return;
+
+	clk_core_reparent(hw->core, !new_parent ? NULL : new_parent->core);
 }
 
 /**
@@ -2469,7 +2489,7 @@ void __clk_free_clk(struct clk *clk)
  *
  * clk_register is the primary interface for populating the clock tree with new
  * clock nodes.  It returns a pointer to the newly allocated struct clk which
- * cannot be dereferenced by driver code but may be used in conjuction with the
+ * cannot be dereferenced by driver code but may be used in conjunction with the
  * rest of the clock API.  In the event of an error clk_register will return an
  * error code; drivers must test for an error code after calling clk_register.
  */
@@ -3042,6 +3062,27 @@ const char *of_clk_get_parent_name(struct device_node *np, int index)
 	return clk_name;
 }
 EXPORT_SYMBOL_GPL(of_clk_get_parent_name);
+
+/**
+ * of_clk_parent_fill() - Fill @parents with names of @np's parents and return
+ * number of parents
+ * @np: Device node pointer associated with clock provider
+ * @parents: pointer to char array that hold the parents' names
+ * @size: size of the @parents array
+ *
+ * Return: number of parents for the clock node.
+ */
+int of_clk_parent_fill(struct device_node *np, const char **parents,
+		       unsigned int size)
+{
+	unsigned int i = 0;
+
+	while (i < size && (parents[i] = of_clk_get_parent_name(np, i)) != NULL)
+		i++;
+
+	return i;
+}
+EXPORT_SYMBOL_GPL(of_clk_parent_fill);
 
 struct clock_provider {
 	of_clk_init_cb_t clk_init_cb;
