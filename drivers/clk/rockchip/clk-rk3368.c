@@ -831,13 +831,13 @@ static void __init rk3368_clk_init(struct device_node *np)
 
 	rockchip_clk_init(np, reg_base, CLK_NR_CLKS);
 
-	/* xin12m is created by an cru-internal divider */
+	/* xin12m is created by a cru-internal divider */
 	clk = clk_register_fixed_factor(NULL, "xin12m", "xin24m", 0, 1, 2);
 	if (IS_ERR(clk))
 		pr_warn("%s: could not register clock xin12m: %ld\n",
 			__func__, PTR_ERR(clk));
 
-	/* xin12m is created by an cru-internal divider */
+	/* ddrphy_div4 is created by a cru-internal divider */
 	clk = clk_register_fixed_factor(NULL, "ddrphy_div4", "ddrphy_src", 0, 1, 4);
 	if (IS_ERR(clk))
 		pr_warn("%s: could not register clock xin12m: %ld\n",
