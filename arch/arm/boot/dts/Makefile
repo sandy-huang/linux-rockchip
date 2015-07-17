@@ -489,8 +489,8 @@ dtb-$(CONFIG_ARCH_ROCKCHIP) += \
 	rk3288-evb-rk808.dtb \
 	rk3288-firefly-beta.dtb \
 	rk3288-firefly.dtb \
-	rk3288-pinky-rev2.dtb \
-	rk3288-jerry-rev3.dtb \
+	rk3288-veyron-pinky.dtb \
+	rk3288-veyron-jerry.dtb \
 	rk3288-r89.dtb
 dtb-$(CONFIG_ARCH_S3C24XX) += \
 	s3c2416-smdk2416.dtb
