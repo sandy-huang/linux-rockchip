@@ -1,11 +1,45 @@
 /*
  * Google Veyron (and derivatives) board device tree source
  *
- * Copyright 2014 Google, Inc
+ * Copyright 2015 Google, Inc
  *
- * This program is free software; you can redistribute it and/or modify
- * it under the terms of the GNU General Public License version 2 as
- * published by the Free Software Foundation.
+ * This file is dual-licensed: you can use it either under the terms
+ * of the GPL or the X11 license, at your option. Note that this dual
+ * licensing only applies to this file, and not this project as a
+ * whole.
+ *
+ *  a) This file is free software; you can redistribute it and/or
+ *     modify it under the terms of the GNU General Public License as
+ *     published by the Free Software Foundation; either version 2 of the
+ *     License, or (at your option) any later version.
+ *
+ *     This file is distributed in the hope that it will be useful,
+ *     but WITHOUT ANY WARRANTY; without even the implied warranty of
+ *     MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ *     GNU General Public License for more details.
+ *
+ *  Or, alternatively,
+ *
+ *  b) Permission is hereby granted, free of charge, to any person
+ *     obtaining a copy of this software and associated documentation
+ *     files (the "Software"), to deal in the Software without
+ *     restriction, including without limitation the rights to use,
+ *     copy, modify, merge, publish, distribute, sublicense, and/or
+ *     sell copies of the Software, and to permit persons to whom the
+ *     Software is furnished to do so, subject to the following
+ *     conditions:
+ *
+ *     The above copyright notice and this permission notice shall be
+ *     included in all copies or substantial portions of the Software.
+ *
+ *     THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND,
+ *     EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES
+ *     OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND
+ *     NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT
+ *     HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY,
+ *     WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
+ *     FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR
+ *     OTHER DEALINGS IN THE SOFTWARE.
  */
 
 #include <dt-bindings/clock/rockchip,rk808.h>
@@ -14,6 +48,7 @@
 
 / {
 	memory {
+		device_type = "memory";
 		reg = <0x0 0x80000000>;
 	};
 
@@ -47,7 +82,7 @@
 		gpios = <&gpio0 13 GPIO_ACTIVE_HIGH>;
 		pinctrl-names = "default";
 		pinctrl-0 = <&ap_warm_reset_h>;
-		priority = /bits/ 8 <200>;
+		priority = <200>;
 	};
 
 /*	vdd_logic: pwm-regulator {
@@ -69,6 +104,42 @@
 		regulator-name = "vdd_logic";
 		regulator-ramp-delay = <4000>;
 	};*/
+
+	emmc_pwrseq: emmc-pwrseq {
+		compatible = "mmc-pwrseq-emmc";
+		pinctrl-0 = <&emmc_reset>;
+		pinctrl-names = "default";
+		reset-gpios = <&gpio2 9 GPIO_ACTIVE_HIGH>;
+	};
+
+	io_domains: io-domains {
+		compatible = "rockchip,rk3288-io-voltage-domain";
+		rockchip,grf = <&grf>;
+
+		bb-supply = <&vcc33_io>;
+		dvp-supply = <&vcc_18>;
+		flash0-supply = <&vcc18_flashio>;
+		gpio1830-supply = <&vcc33_io>;
+		gpio30-supply = <&vcc33_io>;
+		lcdc-supply = <&vcc33_lcd>;
+		wifi-supply = <&vcc18_wl>;
+	};
+
+	sdio_pwrseq: sdio-pwrseq {
+		compatible = "mmc-pwrseq-simple";
+		clocks = <&rk808 RK808_CLKOUT1>;
+		clock-names = "ext_clock";
+		pinctrl-names = "default";
+		pinctrl-0 = <&bt_enable_l>, <&wifi_enable_h>;
+
+		/*
+		 * On the module itself this is one of these (depending
+		 * on the actual card populated):
+		 * - SDIO_RESET_L_WL_REG_ON
+		 * - PDN (power down when low)
+		 */
+		reset-gpios = <&gpio4 28 GPIO_ACTIVE_LOW>;
+	};
 
 	vcc_5v: vcc-5v {
 		compatible = "regulator-fixed";
@@ -95,51 +166,6 @@
 		regulator-boot-on;
 		vin-supply = <&vcc_5v>;
 	};
-
-	io-domains {
-		compatible = "rockchip,rk3288-io-voltage-domain";
-		rockchip,grf = <&grf>;
-
-		bb-supply = <&vcc33_io>;
-		dvp-supply = <&vcc_18>;
-		flash0-supply = <&vcc18_flashio>;
-		gpio1830-supply = <&vcc33_io>;
-		gpio30-supply = <&vcc33_io>;
-		lcdc-supply = <&vcc33_lcd>;
-		wifi-supply = <&vcc18_wl>;
-	};
-
-	emmc_pwrseq: emmc-pwrseq {
-		compatible = "mmc-pwrseq-emmc";
-		pinctrl-0 = <&emmc_reset>;
-		pinctrl-names = "default";
-		reset-gpios = <&gpio2 9 GPIO_ACTIVE_HIGH>;
-	};
-
-	sdio_pwrseq: sdio-pwrseq {
-		compatible = "mmc-pwrseq-simple";
-		clocks = <&rk808 RK808_CLKOUT1>;
-		clock-names = "ext_clock";
-		pinctrl-names = "default";
-		pinctrl-0 = <&bt_enable_l>, <&wifi_enable_h>;
-
-		reset-gpios =
-			/*
-			 * On the module itself this is one of these (depending
-			 * on the actual card pouplated):
-			 * - BT_I2S_WS_BT_RFDISABLE_L
-			 * - No connect
-			 */
-			<&gpio4 29 GPIO_ACTIVE_LOW>,
-
-			/*
-			 * On the module itself this is one of these (depending
-			 * on the actual card populated):
-			 * - SDIO_RESET_L_WL_REG_ON
-			 * - PDN (power down when low)
-			 */
-			<&gpio4 28 GPIO_ACTIVE_LOW>;
-	};
 };
 
 &cpu0 {
@@ -147,6 +173,8 @@
 };
 
 &emmc {
+	status = "okay";
+
 	broken-cd;
 	bus-width = <8>;
 	cap-mmc-highspeed;
@@ -156,38 +184,10 @@
 	num-slots = <1>;
 	pinctrl-names = "default";
 	pinctrl-0 = <&emmc_clk &emmc_cmd &emmc_bus8>;
-	status = "okay";
 };
 
-&sdio0 {
-	broken-cd;
-	bus-width = <4>;
-	cap-sd-highspeed;
-	cap-sdio-irq;
-	clocks = <&cru HCLK_SDIO0>, <&cru SCLK_SDIO0>, <&cru SCLK_SDIO0_DRV>,
-		 <&cru SCLK_SDIO0_SAMPLE>;
-	clock-names = "biu", "ciu", "ciu_drv", "ciu_sample";
-	keep-power-in-suspend;
-	non-removable;
-	num-slots = <1>;
-	pinctrl-names = "default";
-	pinctrl-0 = <&sdio0_clk &sdio0_cmd &sdio0_bus4>;
+&hdmi {
 	status = "okay";
-	mmc-pwrseq = <&sdio_pwrseq>;
-	vmmc-supply = <&vcc33_sys>;
-	vqmmc-supply = <&vcc18_wl>;
-};
-
-&spi2 {
-	status = "okay";
-
-	rx-sample-delay-ns = <12>;
-
-	spiflash@0 {
-		compatible = "spidev";
-		spi-max-frequency = <50000000>;
-		reg = <0>;
-	};
 };
 
 &i2c0 {
@@ -199,12 +199,12 @@
 
 	rk808: pmic@1b {
 		compatible = "rockchip,rk808";
+		reg = <0x1b>;
 		clock-output-names = "xin32k", "wifibt_32kin";
 		interrupt-parent = <&gpio0>;
 		interrupts = <4 IRQ_TYPE_LEVEL_LOW>;
 		pinctrl-names = "default";
 		pinctrl-0 = <&pmic_int_l>;
-		reg = <0x1b>;
 		rockchip,system-power-controller;
 		wakeup-source;
 		#clock-cells = <1>;
@@ -217,35 +217,41 @@
 		vcc7-supply = <&vcc33_sys>;
 		vcc8-supply = <&vcc33_sys>;
 		vcc12-supply = <&vcc_18>;
-
 		vddio-supply = <&vcc33_io>;
 
 		regulators {
 			vdd_cpu: DCDC_REG1 {
+				regulator-name = "vdd_arm";
 				regulator-always-on;
 				regulator-boot-on;
 				regulator-min-microvolt = <750000>;
 				regulator-max-microvolt = <1450000>;
-				regulator-name = "vdd_arm";
 				regulator-ramp-delay = <6001>;
-				regulator-suspend-mem-disabled;
+				regulator-state-mem {
+					regulator-off-in-suspend;
+				};
 			};
 
 			vdd_gpu: DCDC_REG2 {
+				regulator-name = "vdd_gpu";
 				regulator-always-on;
 				regulator-boot-on;
 				regulator-min-microvolt = <800000>;
 				regulator-max-microvolt = <1250000>;
-				regulator-name = "vdd_gpu";
 				regulator-ramp-delay = <6001>;
-				regulator-suspend-mem-disabled;
+				regulator-state-mem {
+					regulator-on-in-suspend;
+					regulator-suspend-microvolt = <1000000>;
+				};
 			};
 
 			vcc135_ddr: DCDC_REG3 {
+				regulator-name = "vcc135_ddr";
 				regulator-always-on;
 				regulator-boot-on;
-				regulator-name = "vcc135_ddr";
-				regulator-suspend-mem-enabled;
+				regulator-state-mem {
+					regulator-on-in-suspend;
+				};
 			};
 
 			/*
@@ -256,12 +262,15 @@
 			 * power measurement purposes).
 			 */
 			vcc18_wl: vcc18_flashio: vcc_18: DCDC_REG4 {
+				regulator-name = "vcc_18";
 				regulator-always-on;
 				regulator-boot-on;
 				regulator-min-microvolt = <1800000>;
 				regulator-max-microvolt = <1800000>;
-				regulator-name = "vcc_18";
-				regulator-suspend-mem-microvolt = <1800000>;
+				regulator-state-mem {
+					regulator-on-in-suspend;
+					regulator-suspend-microvolt = <1800000>;
+				};
 			};
 
 			/*
@@ -272,37 +281,47 @@
 			 * (such as danger) they're the same net.
 			 */
 			vcc33_io: LDO_REG1 {
+				regulator-name = "vcc33_io";
 				regulator-always-on;
 				regulator-boot-on;
 				regulator-min-microvolt = <3300000>;
 				regulator-max-microvolt = <3300000>;
-				regulator-name = "vcc33_io";
-				regulator-suspend-mem-microvolt = <3300000>;
+				regulator-state-mem {
+					regulator-on-in-suspend;
+					regulator-suspend-microvolt = <3300000>;
+				};
 			};
 
 			vdd_10: LDO_REG3 {
+				regulator-name = "vdd_10";
 				regulator-always-on;
 				regulator-boot-on;
 				regulator-min-microvolt = <1000000>;
 				regulator-max-microvolt = <1000000>;
-				regulator-name = "vdd_10";
-				regulator-suspend-mem-microvolt = <1000000>;
+				regulator-state-mem {
+					regulator-on-in-suspend;
+					regulator-suspend-microvolt = <1000000>;
+				};
 			};
 
 			vdd10_lcd_pwren_h: LDO_REG7 {
+				regulator-name = "vdd10_lcd_pwren_h";
 				regulator-always-on;
 				regulator-boot-on;
 				regulator-min-microvolt = <2500000>;
 				regulator-max-microvolt = <2500000>;
-				regulator-name = "vdd10_lcd_pwren_h";
-				regulator-suspend-mem-disabled;
+				regulator-state-mem {
+					regulator-off-in-suspend;
+				};
 			};
 
 			vcc33_lcd: SWITCH_REG1 {
+				regulator-name = "vcc33_lcd";
 				regulator-always-on;
 				regulator-boot-on;
-				regulator-name = "vcc33_lcd";
-				regulator-suspend-mem-disabled;
+				regulator-state-mem {
+					regulator-off-in-suspend;
+				};
 			};
 		};
 	};
@@ -353,24 +372,50 @@
 	clocks = <&cru HCLK_I2S0>, <&cru SCLK_I2S0>, <&cru SCLK_I2S0_OUT>;
 };
 
-&wdt {
+&pwm1 {
 	status = "okay";
 };
 
-&pwm1 {
+&sdio0 {
 	status = "okay";
+
+	broken-cd;
+	bus-width = <4>;
+	cap-sd-highspeed;
+	cap-sdio-irq;
+	keep-power-in-suspend;
+	mmc-pwrseq = <&sdio_pwrseq>;
+	non-removable;
+	num-slots = <1>;
+	pinctrl-names = "default";
+	pinctrl-0 = <&sdio0_clk &sdio0_cmd &sdio0_bus4>;
+	vmmc-supply = <&vcc33_sys>;
+	vqmmc-supply = <&vcc18_wl>;
+};
+
+&spi2 {
+	status = "okay";
+
+	rx-sample-delay-ns = <12>;
+};
+
+&tsadc {
+	status = "okay";
+
+	tsadc-tshut-mode = <1>; /* tshut mode 0:CRU 1:GPIO */
+	tsadc-tshut-polarity = <1>; /* tshut polarity 0:LOW 1:HIGH */
 };
 
 &uart0 {
 	status = "okay";
 
-	/* Pins don't include flow control by default; add that in */
-	pinctrl-names = "default";
-	pinctrl-0 = <&uart0_xfer &uart0_cts &uart0_rts>;
-
 	/* We need to go faster than 24MHz, so adjust clock parents / rates */
 	assigned-clocks = <&cru SCLK_UART0>;
 	assigned-clock-rates = <48000000>;
+
+	/* Pins don't include flow control by default; add that in */
+	pinctrl-names = "default";
+	pinctrl-0 = <&uart0_xfer &uart0_cts &uart0_rts>;
 };
 
 &uart1 {
@@ -381,6 +426,28 @@
 	status = "okay";
 };
 
+&usbphy {
+	status = "okay";
+};
+
+&usb_host0_ehci {
+	status = "okay";
+
+	needs-reset-on-resume;
+};
+
+&usb_host1 {
+	status = "okay";
+};
+
+&usb_otg {
+	status = "okay";
+
+	assigned-clocks = <&cru SCLK_USBPHY480M_SRC>;
+	assigned-clock-parents = <&cru SCLK_OTGPHY0>;
+	dr_mode = "host";
+};
+
 &vopb {
 	status = "okay";
 };
@@ -389,17 +456,7 @@
 	status = "okay";
 };
 
-&hdmi {
-	status = "okay";
-};
-
-&gpu {
-	status = "okay";
-};
-
-&tsadc {
-	tsadc-tshut-mode = <1>; /* tshut mode 0:CRU 1:GPIO */
-	tsadc-tshut-polarity = <1>; /* tshut polarity 0:LOW 1:HIGH */
+&wdt {
 	status = "okay";
 };
 
@@ -407,21 +464,11 @@
 	pinctrl-names = "default", "sleep";
 	pinctrl-0 = <
 		/* Common for sleep and wake, but no owners */
-		&ddr0_retention
-		&ddrio_pwroff
 		&global_pwroff
-
-		/* Wake only */
-		&bt_dev_wake_awake
 	>;
 	pinctrl-1 = <
 		/* Common for sleep and wake, but no owners */
-		&ddr0_retention
-		&ddrio_pwroff
 		&global_pwroff
-
-		/* Sleep only */
-		&bt_dev_wake_sleep
 	>;
 
 	pcfg_pull_none_drv_8ma: pcfg-pull-none-drv-8ma {
@@ -489,6 +536,12 @@
 		};
 	};
 
+	recovery-switch {
+		rec_mode_l: rec-mode-l {
+			rockchip,pins = <0 9 RK_FUNC_GPIO &pcfg_pull_up>;
+		};
+	};
+
 	sdio0 {
 		wifi_enable_h: wifienable-h {
 			rockchip,pins = <4 28 RK_FUNC_GPIO &pcfg_pull_none>;
@@ -517,20 +570,6 @@
 		sdio0_clk: sdio0-clk {
 			rockchip,pins = <4 25 RK_FUNC_1 &pcfg_pull_none_drv_8ma>;
 		};
-
-		/*
-		 * These pins are only present on very new veyron boards; on
-		 * older boards bt_dev_wake is simply always high.  Note that
-		 * gpio4_26 is a NC on old veyron boards, so it doesn't hurt
-		 * to map this pin everywhere
-		 */
-		bt_dev_wake_sleep: bt-dev-wake-sleep {
-			rockchip,pins = <4 26 RK_FUNC_GPIO &pcfg_output_low>;
-		};
-
-		bt_dev_wake_awake: bt-dev-wake-awake {
-			rockchip,pins = <4 26 RK_FUNC_GPIO &pcfg_output_high>;
-		};
 	};
 
 	tpm {
@@ -556,30 +595,4 @@
 			rockchip,pins = <7 6 RK_FUNC_GPIO &pcfg_pull_none>;
 		};
 	};
-
-	recovery-switch {
-		rec_mode_l: rec-mode-l {
-			rockchip,pins = <0 9 RK_FUNC_GPIO &pcfg_pull_up>;
-		};
-	};
-};
-
-&usbphy {
-	status = "okay";
-};
-
-&usb_host0_ehci {
-	status = "okay";
-	needs-reset-on-resume;
-};
-
-&usb_host1 {
-	status = "okay";
-};
-
-&usb_otg {
-	dr_mode = "host";
-	status = "okay";
-	assigned-clocks = <&cru SCLK_USBPHY480M_SRC>;
-	assigned-clock-parents = <&cru SCLK_OTGPHY0>;
 };
