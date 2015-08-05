@@ -128,6 +128,7 @@ nouveau_cli_destroy(struct nouveau_cli *cli)
 	nvkm_vm_ref(NULL, &nvxx_client(&cli->base)->vm, NULL);
 	nvif_client_fini(&cli->base);
 	usif_client_fini(cli);
+	kfree(cli);
 }
 
 static void
@@ -865,8 +866,10 @@ nouveau_drm_preclose(struct drm_device *dev, struct drm_file *fpriv)
 
 	pm_runtime_get_sync(dev->dev);
 
+	mutex_lock(&cli->mutex);
 	if (cli->abi16)
 		nouveau_abi16_fini(cli->abi16);
+	mutex_unlock(&cli->mutex);
 
 	mutex_lock(&drm->client.mutex);
 	list_del(&cli->head);
@@ -943,7 +946,8 @@ static struct drm_driver
 driver_stub = {
 	.driver_features =
 		DRIVER_USE_AGP |
-		DRIVER_GEM | DRIVER_MODESET | DRIVER_PRIME | DRIVER_RENDER,
+		DRIVER_GEM | DRIVER_MODESET | DRIVER_PRIME | DRIVER_RENDER |
+		DRIVER_KMS_LEGACY_CONTEXT,
 
 	.load = nouveau_drm_load,
 	.unload = nouveau_drm_unload,
