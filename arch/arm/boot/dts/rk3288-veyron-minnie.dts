@@ -114,41 +114,12 @@
 &i2c3 {
 	status = "okay";
 
-	/*
-	 * Touchscreen pin control is shared between Atmel and Elan devices,
-	 * so we have to pull it up to the bus level.
-	 */
-	pinctrl-names = "default";
-	pinctrl-0 = <&i2c3_xfer &touch_int &touch_rst>;
-
 	clock-frequency = <400000>;
 	i2c-scl-falling-time-ns = <50>;
 	i2c-scl-rising-time-ns = <300>;
-
-	touchscreen@10 {
-		compatible = "elan,ekth3500";
-		reg = <0x10>;
-		interrupt-parent = <&gpio2>;
-		interrupts = <14 IRQ_TYPE_EDGE_FALLING>;
-		reset-gpios = <&gpio2 15 GPIO_ACTIVE_LOW>;
-		vcc33-supply = <&vcc33_touch>;
-		vccio-supply = <&vcc33_touch>;
-	};
-
-	touchscreen@4a {
-		compatible = "atmel,atmel_mxt_ts";
-		reg = <0x4a>;
-		atmel,reset-gpios = <&gpio2 15 GPIO_ACTIVE_LOW>;
-		avdd-supply = <&vcc5v_touch>;
-		interrupt-parent = <&gpio2>;
-		interrupts = <14 IRQ_TYPE_EDGE_FALLING>;
-		vdd-supply = <&vcc33_touch>;
-	};
 };
 
 &rk808 {
-	dvs-gpios = <&gpio7 12 GPIO_ACTIVE_HIGH>,
-		    <&gpio7 15 GPIO_ACTIVE_HIGH>;
 	pinctrl-names = "default";
 	pinctrl-0 = <&pmic_int_l &dvs_1 &dvs_2>;
 
@@ -172,9 +143,6 @@
 	pinctrl-names = "default";
 	pinctrl-0 = <&sdmmc_clk &sdmmc_cmd &sdmmc_cd_disabled &sdmmc_cd_gpio
 			&sdmmc_bus4>;
-
-	/* does not yet work reliably */
-	status = "disabled";
 };
 
 &vcc_5v {
