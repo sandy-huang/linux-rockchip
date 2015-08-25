@@ -3297,9 +3297,9 @@ static int kbase_common_device_init(struct kbase_device *kbdev)
 	err = kbase_devfreq_init(kbdev);
 	if (err) {
 		dev_err(kbdev->dev, "Couldn't initialize devfreq\n");
-		goto out_partial;
+	} else {
+		inited |= inited_devfreq;
 	}
-	inited |= inited_devfreq;
 #endif /* CONFIG_MALI_DEVFREQ */
 
 #ifdef SECURE_CALLBACKS
