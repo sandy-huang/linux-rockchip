@@ -6,7 +6,6 @@
  * published by the Free Software FoundatIon.
  */
 
-#include <linux/device_cooling.h>
 #include <linux/of.h>
 #include <linux/pm_runtime.h>
 #include <linux/regulator/driver.h>
@@ -162,29 +161,24 @@ int kbase_platform_early_init(void)
 	return 0;
 }
 
-static int kbase_rk_update_level(struct kbase_device *kbdev)
+static int kbase_rk_set_level(struct kbase_device *kbdev, int level)
 {
 	struct kbase_rk *kbase_rk = kbdev->platform_context;
 	unsigned long volt;
 	unsigned long freq;
 	int ret;
 	unsigned int current_level;
-	unsigned int level;
 
-	level = max_t(unsigned int, kbase_rk->thermal_throttling_level,
-		      kbase_rk->requested_level);
+	mutex_lock(&kbase_rk->set_level_lock);
 
 	current_level = kbase_rk->current_level;
 	volt = kbase_rk->fv_table[level].volt;
 	freq = kbase_rk->fv_table[level].freq;
 
-	if (level == current_level)
+	if (level == current_level) {
+		mutex_unlock(&kbase_rk->set_level_lock);
 		return 0;
-
-	dev_dbg(kbdev->dev, "Using operating point %d: (%lu Hz, %lu mV) for %lu Hz\n",
-		level, kbase_rk->fv_table[level].freq,
-		kbase_rk->fv_table[level].volt, freq);
-
+	}
 	if (level < current_level) {
 		ret = regulator_set_voltage(kbase_rk->regulator, volt, volt);
 		if (ret)
@@ -213,8 +207,11 @@ static int kbase_rk_update_level(struct kbase_device *kbdev)
 
 	kbase_rk->current_level = level;
 
+	mutex_unlock(&kbase_rk->set_level_lock);
+
 	return 0;
 err_set_level:
+	mutex_unlock(&kbase_rk->set_level_lock);
 
 	return ret;
 }
@@ -246,48 +243,14 @@ int kbase_rk_set_freq(struct kbase_device *kbdev, unsigned long freq)
 			break;
 	}
 
-	mutex_lock(&kbase_rk->set_level_lock);
-	kbase_rk->requested_level = level;
-	ret = kbase_rk_update_level(kbdev);
-	mutex_unlock(&kbase_rk->set_level_lock);
+	dev_dbg(kbdev->dev, "Using operating point %d: (%lu Hz, %lu mV) for %lu Hz\n",
+		level, kbase_rk->fv_table[level].freq,
+		kbase_rk->fv_table[level].volt, freq);
 
+	ret = kbase_rk_set_level(kbdev, level);
 	if (ret) {
 		dev_err(kbdev->dev, "set level error, %d\n", ret);
 		return ret;
-	}
-
-	return 0;
-}
-
-/**
- * gpufreq_thermal_notifier - notifier callback for devfreq_cooling.
- * @nb:	struct notifier_block * with callback info.
- * @event: value showing gpu thermal throttling frequency state.
- *
- * Return: 0 (success)
- */
-static int gpufreq_thermal_notifier(struct notifier_block *nb,
-				    unsigned long event, void *data)
-{
-	struct kbase_rk *kbase_rk =
-		container_of(nb, struct kbase_rk, thermal_change_nb);
-	struct kbase_device *kbdev = kbase_rk->kbdev;
-	int level = event;
-	int ret;
-
-	mutex_lock(&kbase_rk->set_level_lock);
-	if ((level != kbase_rk->thermal_throttling_level) &&
-	    (level > kbase_rk->requested_level))
-		dev_dbg(kbdev->dev, "Throttling GPU from opp %d to opp %d\n",
-			kbase_rk->requested_level, level);
-
-	kbase_rk->thermal_throttling_level = level;
-	ret = kbase_rk_update_level(kbdev);
-	mutex_unlock(&kbase_rk->set_level_lock);
-
-	if (ret) {
-		dev_err(kbdev->dev, "set level error, %d\n", ret);
-		return NOTIFY_BAD;
 	}
 
 	return 0;
@@ -594,19 +557,6 @@ static int kbase_rk_platform_init(struct kbase_device *kbdev)
 	ret = kbase_rk_dvfs_init(kbdev);
 	if (ret)
 		goto remove_sysfs;
-
-	if (of_find_property(kbdev->dev->of_node, "#cooling-cells", NULL)) {
-		struct thermal_cooling_device *cdev;
-		int length = kbase_rk->fv_table_length - 1;
-
-		cdev = devfreq_cooling_register(kbdev->dev, length);
-		if (IS_ERR(cdev))
-			pr_err("running gpufreq without cooling device: %ld\n",
-			       PTR_ERR(cdev));
-		kbase_rk->thermal_change_nb.notifier_call =
-				gpufreq_thermal_notifier;
-		register_devfreq_cooling_notifier(&kbase_rk->thermal_change_nb);
-	}
 
 	return 0;
 remove_sysfs:
