@@ -145,6 +145,7 @@
 			#dma-cells = <1>;
 			clocks = <&cru ACLK_DMAC2>;
 			clock-names = "apb_pclk";
+			arm,pl330-broken-no-flushp;
 		};
 
 		dmac_bus_ns: dma-controller@ff600000 {
@@ -156,6 +157,7 @@
 			clocks = <&cru ACLK_DMAC1>;
 			clock-names = "apb_pclk";
 			status = "disabled";
+			arm,pl330-broken-no-flushp;
 		};
 
 		dmac_bus_s: dma-controller@ffb20000 {
@@ -166,6 +168,7 @@
 			#dma-cells = <1>;
 			clocks = <&cru ACLK_DMAC1>;
 			clock-names = "apb_pclk";
+			arm,pl330-broken-no-flushp;
 		};
 	};
 
@@ -285,6 +288,7 @@
 		reg = <0xff110000 0x1000>;
 		#address-cells = <1>;
 		#size-cells = <0>;
+		rockchip,spi-broken-burst-len;
 		status = "disabled";
 	};
 
@@ -300,6 +304,7 @@
 		reg = <0xff120000 0x1000>;
 		#address-cells = <1>;
 		#size-cells = <0>;
+		rockchip,spi-broken-burst-len;
 		status = "disabled";
 	};
 
@@ -315,6 +320,7 @@
 		reg = <0xff130000 0x1000>;
 		#address-cells = <1>;
 		#size-cells = <0>;
+		rockchip,spi-broken-burst-len;
 		status = "disabled";
 	};
 
@@ -665,6 +671,7 @@
 		clocks = <&cru HCLK_I2S0>, <&cru SCLK_I2S0>;
 		pinctrl-names = "default";
 		pinctrl-0 = <&i2s0_bus>;
+		rockchip,i2s-broken-burst-len;
 		status = "disabled";
 	};
 
