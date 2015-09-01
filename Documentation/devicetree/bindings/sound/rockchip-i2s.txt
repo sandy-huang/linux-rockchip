@@ -22,6 +22,10 @@ Required properties:
    - "i2s_hclk": clock for I2S BUS
    - "i2s_clk" : clock for I2S controller
 
+Optional Properties:
+- rockchip,i2s-broken-burst-len: quirk for broken burst len on Rockchip platform.
+				 Add this property will force driver to set burst ONE.
+
 Example for rk3288 I2S controller:
 
 i2s@ff890000 {

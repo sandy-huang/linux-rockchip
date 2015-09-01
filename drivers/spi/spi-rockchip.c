@@ -199,6 +199,8 @@ struct rockchip_spi {
 	struct sg_table rx_sg;
 	struct rockchip_spi_dma_data dma_rx;
 	struct rockchip_spi_dma_data dma_tx;
+	int quirk;
+#define ROCKCHIP_SPI_BORKEN_BURST_LEN (1<<0) /* broken burst len*/
 };
 
 static inline void spi_enable_chip(struct rockchip_spi *rs, int enable)
@@ -449,7 +451,10 @@ static void rockchip_spi_prepare_dma(struct rockchip_spi *rs)
 		rxconf.direction = rs->dma_rx.direction;
 		rxconf.src_addr = rs->dma_rx.addr;
 		rxconf.src_addr_width = rs->n_bytes;
-		rxconf.src_maxburst = rs->n_bytes;
+		if (rs->quirk & ROCKCHIP_SPI_BORKEN_BURST_LEN)
+			rxconf.src_maxburst = 1;
+		else
+			rxconf.src_maxburst = rs->n_bytes;
 		dmaengine_slave_config(rs->dma_rx.ch, &rxconf);
 
 		rxdesc = dmaengine_prep_slave_sg(
@@ -466,7 +471,10 @@ static void rockchip_spi_prepare_dma(struct rockchip_spi *rs)
 		txconf.direction = rs->dma_tx.direction;
 		txconf.dst_addr = rs->dma_tx.addr;
 		txconf.dst_addr_width = rs->n_bytes;
-		txconf.dst_maxburst = rs->n_bytes;
+		if (rs->quirk & ROCKCHIP_SPI_BORKEN_BURST_LEN)
+			txconf.dst_maxburst = 1;
+		else
+			txconf.dst_maxburst = rs->n_bytes;
 		dmaengine_slave_config(rs->dma_tx.ch, &txconf);
 
 		txdesc = dmaengine_prep_slave_sg(
@@ -697,6 +705,10 @@ static int rockchip_spi_probe(struct platform_device *pdev)
 		ret = -EINVAL;
 		goto err_get_fifo_len;
 	}
+
+	if (of_property_read_bool(pdev->dev.of_node,
+				  "rockchip,spi-broken-burst-len"))
+		rs->quirk |= ROCKCHIP_SPI_BORKEN_BURST_LEN;
 
 	spin_lock_init(&rs->lock);
 

@@ -27,7 +27,8 @@ Optional Properties:
 - rx-sample-delay-ns: nanoseconds to delay after the SCLK edge before sampling
 		Rx data (may need to be fine tuned for high capacitance lines).
 		No delay (0) by default.
-
+- rockchip,spi-broken-burst-len: quirk for broken burst len on Rockchip platform.
+			Add this property will force driver to set burst ONE.
 
 Example:
 

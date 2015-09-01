@@ -411,6 +411,7 @@
 		#size-cells = <0>;
 		dmas = <&dmac2 10>, <&dmac2 11>;
 		dma-names = "tx", "rx";
+		rockchip,spi-broken-burst-len;
 		status = "disabled";
 	};
 
@@ -424,6 +425,7 @@
 		#size-cells = <0>;
 		dmas = <&dmac2 12>, <&dmac2 13>;
 		dma-names = "tx", "rx";
+		rockchip,spi-broken-burst-len;
 		status = "disabled";
 	};
 };
