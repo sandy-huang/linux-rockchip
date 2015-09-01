@@ -1151,7 +1151,7 @@ EXPORT_SYMBOL(drm_encoder_cleanup);
 int drm_universal_plane_init(struct drm_device *dev, struct drm_plane *plane,
 			     unsigned long possible_crtcs,
 			     const struct drm_plane_funcs *funcs,
-			     const uint32_t *formats, uint32_t format_count,
+			     const uint32_t *formats, unsigned int format_count,
 			     enum drm_plane_type type)
 {
 	struct drm_mode_config *config = &dev->mode_config;
@@ -1225,7 +1225,7 @@ EXPORT_SYMBOL(drm_universal_plane_init);
 int drm_plane_init(struct drm_device *dev, struct drm_plane *plane,
 		   unsigned long possible_crtcs,
 		   const struct drm_plane_funcs *funcs,
-		   const uint32_t *formats, uint32_t format_count,
+		   const uint32_t *formats, unsigned int format_count,
 		   bool is_primary)
 {
 	enum drm_plane_type type;
@@ -4753,9 +4753,9 @@ static int drm_mode_connector_set_obj_prop(struct drm_mode_object *obj,
 
 	/* Do DPMS ourselves */
 	if (property == connector->dev->mode_config.dpms_property) {
-		if (connector->funcs->dpms)
-			(*connector->funcs->dpms)(connector, (int)value);
 		ret = 0;
+		if (connector->funcs->dpms)
+			ret = (*connector->funcs->dpms)(connector, (int)value);
 	} else if (connector->funcs->set_property)
 		ret = connector->funcs->set_property(connector, property, value);
 
@@ -5273,9 +5273,11 @@ void drm_mode_config_reset(struct drm_device *dev)
 		if (encoder->funcs->reset)
 			encoder->funcs->reset(encoder);
 
+	mutex_lock(&dev->mode_config.mutex);
 	drm_for_each_connector(connector, dev)
 		if (connector->funcs->reset)
 			connector->funcs->reset(connector);
+	mutex_unlock(&dev->mode_config.mutex);
 }
 EXPORT_SYMBOL(drm_mode_config_reset);
 
