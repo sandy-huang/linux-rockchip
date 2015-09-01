@@ -328,7 +328,7 @@ intel_dp_mst_connector_destroy(struct drm_connector *connector)
 }
 
 static const struct drm_connector_funcs intel_dp_mst_connector_funcs = {
-	.dpms = intel_connector_dpms,
+	.dpms = drm_atomic_helper_connector_dpms,
 	.detect = intel_dp_mst_detect,
 	.fill_modes = drm_helper_probe_single_connector_modes,
 	.set_property = intel_dp_mst_set_property,
@@ -406,7 +406,7 @@ static bool intel_dp_mst_get_hw_state(struct intel_connector *connector)
 
 static void intel_connector_add_to_fbdev(struct intel_connector *connector)
 {
-#ifdef CONFIG_DRM_I915_FBDEV
+#ifdef CONFIG_DRM_FBDEV_EMULATION
 	struct drm_i915_private *dev_priv = to_i915(connector->base.dev);
 	drm_fb_helper_add_one_connector(&dev_priv->fbdev->helper, &connector->base);
 #endif
@@ -414,7 +414,7 @@ static void intel_connector_add_to_fbdev(struct intel_connector *connector)
 
 static void intel_connector_remove_from_fbdev(struct intel_connector *connector)
 {
-#ifdef CONFIG_DRM_I915_FBDEV
+#ifdef CONFIG_DRM_FBDEV_EMULATION
 	struct drm_i915_private *dev_priv = to_i915(connector->base.dev);
 	drm_fb_helper_remove_one_connector(&dev_priv->fbdev->helper, &connector->base);
 #endif
@@ -464,9 +464,20 @@ static void intel_dp_destroy_mst_connector(struct drm_dp_mst_topology_mgr *mgr,
 {
 	struct intel_connector *intel_connector = to_intel_connector(connector);
 	struct drm_device *dev = connector->dev;
+
 	/* need to nuke the connector */
 	drm_modeset_lock_all(dev);
-	intel_connector_dpms(connector, DRM_MODE_DPMS_OFF);
+	if (connector->state->crtc) {
+		struct drm_mode_set set;
+		int ret;
+
+		memset(&set, 0, sizeof(set));
+		set.crtc = connector->state->crtc,
+
+		ret = drm_atomic_helper_set_config(&set);
+
+		WARN(ret, "Disabling mst crtc failed with %i\n", ret);
+	}
 	drm_modeset_unlock_all(dev);
 
 	intel_connector->unregister(intel_connector);
