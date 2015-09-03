@@ -612,6 +612,36 @@
 		status = "disabled";
 	};
 
+	/*
+	 * Memory Scheduler - service-bus 0x0 and 0x80 [called noc sometimes]
+	 * PMU_SYS_REG2 (informations written by loader, but shouldn't that
+	 *               info be part of the dts instead?)
+	 * SGRF + GRF?
+	 * \ Designware uPCTL
+	 *   \ Designware PHY Utility Block
+	 *     \ (probably) Designware multiPHY
+	 */
+
+	upctl0: memory-controller@ff610000 {
+		compatible = "snps,dw-upctl";
+		reg = <0xff610000 0x1000>;
+	};
+
+	publ0: memory-controller@ff620000 {
+		compatible = "snps,dw-publ";
+		reg = <0xff620000 0x1000>;
+	};
+
+	upctl1: memory-controller@ff630000 {
+		compatible = "snps,dw-upctl";
+		reg = <0xff630000 0x1000>;
+	};
+
+	publ1: memory-controller@ff640000 {
+		compatible = "snps,dw-publ";
+		reg = <0xff640000 0x1000>;
+	};
+
 	i2c0: i2c@ff650000 {
 		compatible = "rockchip,rk3288-i2c";
 		reg = <0xff650000 0x1000>;

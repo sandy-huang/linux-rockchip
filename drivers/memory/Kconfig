@@ -36,6 +36,16 @@ config ATMEL_EBI
 	  tree is used. This bus supports NANDs, external ethernet controller,
 	  SRAMs, ATA devices, etc.
 
+config DW_PUBL
+	tristate "Designware PHY Utility Block lite driver"
+	help
+	  Driver for the DDR Phy utility blocks from Synopsis.
+
+config DW_UPCTL
+	tristate "Designware Universal DDR Protocol Controller (uPCTL) driver"
+	help
+	  Driver for the DDR Protocol Controller from Synopsis.
+
 config TI_AEMIF
 	tristate "Texas Instruments AEMIF driver"
 	depends on (ARCH_DAVINCI || ARCH_KEYSTONE) && OF
