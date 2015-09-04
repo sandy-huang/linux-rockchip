@@ -158,6 +158,7 @@ L:	linux-wpan@vger.kernel.org
 S:	Maintained
 F:	net/6lowpan/
 F:	include/net/6lowpan.h
+F:	Documentation/networking/6lowpan.txt
 
 6PACK NETWORK DRIVER FOR AX.25
 M:	Andreas Koensgen <ajk@comnets.uni-bremen.de>
@@ -810,11 +811,13 @@ F:	arch/arm/include/asm/floppy.h
 ARM PMU PROFILING AND DEBUGGING
 M:	Will Deacon <will.deacon@arm.com>
 S:	Maintained
-F:	arch/arm/kernel/perf_event*
+F:	arch/arm/kernel/perf_*
 F:	arch/arm/oprofile/common.c
-F:	arch/arm/include/asm/pmu.h
 F:	arch/arm/kernel/hw_breakpoint.c
 F:	arch/arm/include/asm/hw_breakpoint.h
+F:	arch/arm/include/asm/perf_event.h
+F:	drivers/perf/arm_pmu.c
+F:	include/linux/perf/arm_pmu.h
 
 ARM PORT
 M:	Russell King <linux@arm.linux.org.uk>
@@ -938,7 +941,7 @@ M:	Sunil Goutham <sgoutham@cavium.com>
 M:	Robert Richter <rric@kernel.org>
 L:	linux-arm-kernel@lists.infradead.org (moderated for non-subscribers)
 S:	Supported
-F:	drivers/net/ethernet/cavium/
+F:	drivers/net/ethernet/cavium/thunder/
 
 ARM/CIRRUS LOGIC CLPS711X ARM ARCHITECTURE
 M:	Alexander Shiyan <shc_work@mail.ru>
@@ -2570,7 +2573,6 @@ M:     Raghu Vatsavayi <raghu.vatsavayi@caviumnetworks.com>
 L:     netdev@vger.kernel.org
 W:     http://www.cavium.com
 S:     Supported
-F:     drivers/net/ethernet/cavium/
 F:     drivers/net/ethernet/cavium/liquidio/
 
 CC2520 IEEE-802.15.4 RADIO DRIVER
@@ -4106,15 +4108,6 @@ F:	Documentation/filesystems/ext2.txt
 F:	fs/ext2/
 F:	include/linux/ext2*
 
-EXT3 FILE SYSTEM
-M:	Jan Kara <jack@suse.com>
-M:	Andrew Morton <akpm@linux-foundation.org>
-M:	Andreas Dilger <adilger.kernel@dilger.ca>
-L:	linux-ext4@vger.kernel.org
-S:	Maintained
-F:	Documentation/filesystems/ext3.txt
-F:	fs/ext3/
-
 EXT4 FILE SYSTEM
 M:	"Theodore Ts'o" <tytso@mit.edu>
 M:	Andreas Dilger <adilger.kernel@dilger.ca>
@@ -4453,6 +4446,7 @@ F:	include/linux/fscache*.h
 F2FS FILE SYSTEM
 M:	Jaegeuk Kim <jaegeuk@kernel.org>
 M:	Changman Lee <cm224.lee@samsung.com>
+R:	Chao Yu <chao2.yu@samsung.com>
 L:	linux-f2fs-devel@lists.sourceforge.net
 W:	http://en.wikipedia.org/wiki/F2FS
 T:	git git://git.kernel.org/pub/scm/linux/kernel/git/jaegeuk/f2fs.git
@@ -4461,6 +4455,7 @@ F:	Documentation/filesystems/f2fs.txt
 F:	Documentation/ABI/testing/sysfs-fs-f2fs
 F:	fs/f2fs/
 F:	include/linux/f2fs_fs.h
+F:	include/trace/events/f2fs.h
 
 FUJITSU FR-V (FRV) PORT
 M:	David Howells <dhowells@redhat.com>
@@ -5815,16 +5810,9 @@ S:	Maintained
 F:	fs/jffs2/
 F:	include/uapi/linux/jffs2.h
 
-JOURNALLING LAYER FOR BLOCK DEVICES (JBD)
-M:	Andrew Morton <akpm@linux-foundation.org>
-M:	Jan Kara <jack@suse.com>
-L:	linux-ext4@vger.kernel.org
-S:	Maintained
-F:	fs/jbd/
-F:	include/linux/jbd.h
-
 JOURNALLING LAYER FOR BLOCK DEVICES (JBD2)
 M:	"Theodore Ts'o" <tytso@mit.edu>
+M:	Jan Kara <jack@suse.com>
 L:	linux-ext4@vger.kernel.org
 S:	Maintained
 F:	fs/jbd2/
@@ -8135,7 +8123,7 @@ S:	Supported
 F:	drivers/scsi/pmcraid.*
 
 PMC SIERRA PM8001 DRIVER
-M:	xjtuwjp@gmail.com
+M:	Jack Wang <jinpu.wang@profitbricks.com>
 M:	lindar_liu@usish.com
 L:	pmchba@pmcs.com
 L:	linux-scsi@vger.kernel.org
@@ -8161,6 +8149,15 @@ S:	Maintained
 F:	include/linux/power_supply.h
 F:	drivers/power/
 X:	drivers/power/avs/
+
+POWER STATE COORDINATION INTERFACE (PSCI)
+M:	Mark Rutland <mark.rutland@arm.com>
+M:	Lorenzo Pieralisi <lorenzo.pieralisi@arm.com>
+L:	linux-arm-kernel@lists.infradead.org
+S:	Maintained
+F:	drivers/firmware/psci.c
+F:	include/linux/psci.h
+F:	include/uapi/linux/psci.h
 
 PNP SUPPORT
 M:	"Rafael J. Wysocki" <rafael.j.wysocki@intel.com>
@@ -8944,6 +8941,12 @@ M:	Andrzej Hajda <a.hajda@samsung.com>
 L:	linux-media@vger.kernel.org
 S:	Supported
 F:	drivers/media/i2c/s5k5baf.c
+
+SAMSUNG S3FWRN5 NFC DRIVER
+M:	Robert Baldyga <r.baldyga@samsung.com>
+L:	linux-nfc@lists.01.org (moderated for non-subscribers)
+S:	Supported
+F:	drivers/nfc/s3fwrn5
 
 SAMSUNG SOC CLOCK DRIVERS
 M:	Sylwester Nawrocki <s.nawrocki@samsung.com>
@@ -11108,7 +11111,7 @@ F:	drivers/input/mouse/vmmouse.c
 F:	drivers/input/mouse/vmmouse.h
 
 VMWARE VMXNET3 ETHERNET DRIVER
-M:	Shreyas Bhatewara <sbhatewara@vmware.com>
+M:	Shrikrishna Khare <skhare@vmware.com>
 M:	"VMware, Inc." <pv-drivers@vmware.com>
 L:	netdev@vger.kernel.org
 S:	Maintained
@@ -11132,6 +11135,14 @@ T:	git git://git.kernel.org/pub/scm/linux/kernel/git/broonie/regulator.git
 S:	Supported
 F:	drivers/regulator/
 F:	include/linux/regulator/
+
+VRF
+M:	David Ahern <dsa@cumulusnetworks.com>
+M:	Shrijeet Mukherjee <shm@cumulusnetworks.com>
+L:	netdev@vger.kernel.org
+S:	Maintained
+F:	drivers/net/vrf.c
+F:	include/net/vrf.h
 
 VT1211 HARDWARE MONITOR DRIVER
 M:	Juerg Haefliger <juergh@gmail.com>
@@ -11288,6 +11299,7 @@ F:	sound/soc/codecs/wm*
 
 WORKQUEUE
 M:	Tejun Heo <tj@kernel.org>
+R:	Lai Jiangshan <jiangshanlai@gmail.com>
 T:	git git://git.kernel.org/pub/scm/linux/kernel/git/tj/wq.git
 S:	Maintained
 F:	include/linux/workqueue.h
