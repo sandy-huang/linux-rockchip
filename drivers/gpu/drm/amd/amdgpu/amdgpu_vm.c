@@ -627,8 +627,13 @@ static int amdgpu_vm_update_ptes(struct amdgpu_device *adev,
 {
 	uint64_t mask = AMDGPU_VM_PTE_COUNT - 1;
 	uint64_t last_pte = ~0, last_dst = ~0;
+	void *owner = AMDGPU_FENCE_OWNER_VM;
 	unsigned count = 0;
 	uint64_t addr;
+
+	/* sync to everything on unmapping */
+	if (!(flags & AMDGPU_PTE_VALID))
+		owner = AMDGPU_FENCE_OWNER_UNDEFINED;
 
 	/* walk over the address space and update the page tables */
 	for (addr = start; addr < end; ) {
@@ -638,8 +643,7 @@ static int amdgpu_vm_update_ptes(struct amdgpu_device *adev,
 		uint64_t pte;
 		int r;
 
-		amdgpu_sync_resv(adev, &ib->sync, pt->tbo.resv,
-				 AMDGPU_FENCE_OWNER_VM);
+		amdgpu_sync_resv(adev, &ib->sync, pt->tbo.resv, owner);
 		r = reservation_object_reserve_shared(pt->tbo.resv);
 		if (r)
 			return r;
@@ -789,17 +793,6 @@ static int amdgpu_vm_bo_update_mapping(struct amdgpu_device *adev,
 	}
 
 	ib->length_dw = 0;
-
-	if (!(flags & AMDGPU_PTE_VALID)) {
-		unsigned i;
-
-		for (i = 0; i < AMDGPU_MAX_RINGS; ++i) {
-			struct amdgpu_fence *f = vm->ids[i].last_id_use;
-			r = amdgpu_sync_fence(adev, &ib->sync, &f->base);
-			if (r)
-				return r;
-		}
-	}
 
 	r = amdgpu_vm_update_ptes(adev, vm, ib, mapping->it.start,
 				  mapping->it.last + 1, addr + mapping->offset,
@@ -1106,7 +1099,9 @@ int amdgpu_vm_bo_map(struct amdgpu_device *adev,
 
 		r = amdgpu_bo_create(adev, AMDGPU_VM_PTE_COUNT * 8,
 				     AMDGPU_GPU_PAGE_SIZE, true,
-				     AMDGPU_GEM_DOMAIN_VRAM, 0, NULL, &pt);
+				     AMDGPU_GEM_DOMAIN_VRAM,
+				     AMDGPU_GEM_CREATE_NO_CPU_ACCESS,
+				     NULL, &pt);
 		if (r)
 			goto error_free;
 
@@ -1306,7 +1301,8 @@ int amdgpu_vm_init(struct amdgpu_device *adev, struct amdgpu_vm *vm)
 	vm->page_directory_fence = NULL;
 
 	r = amdgpu_bo_create(adev, pd_size, align, true,
-			     AMDGPU_GEM_DOMAIN_VRAM, 0,
+			     AMDGPU_GEM_DOMAIN_VRAM,
+			     AMDGPU_GEM_CREATE_NO_CPU_ACCESS,
 			     NULL, &vm->page_directory);
 	if (r)
 		return r;

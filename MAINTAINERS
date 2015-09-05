@@ -740,6 +740,12 @@ X:	drivers/iio/*/adjd*
 F:	drivers/staging/iio/*/ad*
 F:	staging/iio/trigger/iio-trig-bfin-timer.c
 
+ANALOG DEVICES INC DMA DRIVERS
+M:	Lars-Peter Clausen <lars@metafoo.de>
+W:	http://ez.analog.com/community/linux-device-drivers
+S:	Supported
+F:	drivers/dma/dma-axi-dmac.c
+
 ANDROID DRIVERS
 M:	Greg Kroah-Hartman <gregkh@linuxfoundation.org>
 M:	Arve Hjønnevåg <arve@android.com>
@@ -1516,6 +1522,7 @@ S:	Maintained
 F:	arch/arm/mach-sti/
 F:	arch/arm/boot/dts/sti*
 F:	drivers/clocksource/arm_global_timer.c
+F:	drivers/clocksource/clksrc_st_lpc.c
 F:	drivers/i2c/busses/i2c-st.c
 F:	drivers/media/rc/st_rc.c
 F:	drivers/mmc/host/sdhci-st.c
@@ -6616,6 +6623,14 @@ S:	Supported
 F:	drivers/power/max14577_charger.c
 F:	drivers/power/max77693_charger.c
 
+MAXIM MAX77802 MULTIFUNCTION PMIC DEVICE DRIVERS
+M:	Javier Martinez Canillas <javier@osg.samsung.com>
+L:	linux-kernel@vger.kernel.org
+S:	Supported
+F:	drivers/*/*max77802.c
+F:	Documentation/devicetree/bindings/*/*max77802.txt
+F:	include/dt-bindings/*/*max77802.h
+
 MAXIM PMIC AND MUIC DRIVERS FOR EXYNOS BASED BOARDS
 M:	Chanwoo Choi <cw00.choi@samsung.com>
 M:	Krzysztof Kozlowski <k.kozlowski@samsung.com>
@@ -6629,7 +6644,7 @@ F:	drivers/extcon/extcon-max77693.c
 F:	drivers/rtc/rtc-max77686.c
 F:	drivers/clk/clk-max77686.c
 F:	Documentation/devicetree/bindings/mfd/max14577.txt
-F:	Documentation/devicetree/bindings/mfd/max77686.txt
+F:	Documentation/devicetree/bindings/*/max77686.txt
 F:	Documentation/devicetree/bindings/mfd/max77693.txt
 F:	Documentation/devicetree/bindings/clock/maxim,max77686.txt
 F:	include/linux/mfd/max14577*.h
@@ -8073,7 +8088,6 @@ F:	drivers/pinctrl/sh-pfc/
 
 PIN CONTROLLER - SAMSUNG
 M:	Tomasz Figa <tomasz.figa@gmail.com>
-M:	Thomas Abraham <thomas.abraham@linaro.org>
 L:	linux-arm-kernel@lists.infradead.org (moderated for non-subscribers)
 L:	linux-samsung-soc@vger.kernel.org (moderated for non-subscribers)
 S:	Maintained
