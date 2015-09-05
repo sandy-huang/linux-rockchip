@@ -622,6 +622,13 @@
 	 *     \ (probably) Designware multiPHY
 	 */
 
+	dmc: dynamic-memory-controller {
+		compatible = "rockchip,rk3288-dmc";
+		rockchip,grf = <&grf>;
+		rockchip,msch-niu = <&service_bus>;
+
+	};
+
 	upctl0: memory-controller@ff610000 {
 		compatible = "snps,dw-upctl";
 		reg = <0xff610000 0x1000>;
@@ -641,6 +648,12 @@
 		compatible = "snps,dw-publ";
 		reg = <0xff640000 0x1000>;
 	};
+
+	service_bus: syscon@ffac0000 {
+		compatible = "rockchip,rk3288-service-bus", "syscon";
+		reg = <0xffac0000 0x1000>;
+	};
+
 
 	i2c0: i2c@ff650000 {
 		compatible = "rockchip,rk3288-i2c";

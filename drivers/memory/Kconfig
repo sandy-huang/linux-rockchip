@@ -46,6 +46,11 @@ config DW_UPCTL
 	help
 	  Driver for the DDR Protocol Controller from Synopsis.
 
+config ROCKCHIP_DMC
+	tristate "Rockchip dynamic memory controller driver"
+	help
+	  Driver for the dynamic memory controller in Rockchip SoCs.
+
 config TI_AEMIF
 	tristate "Texas Instruments AEMIF driver"
 	depends on (ARCH_DAVINCI || ARCH_KEYSTONE) && OF

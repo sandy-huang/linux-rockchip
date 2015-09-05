@@ -266,6 +266,38 @@
 		reg = <0x20008000 0x200>;
 	};
 
+	/*
+	 * Memory Scheduler - service-bus 0x0 and 0x80 [called noc sometimes]
+	 * PMU_SYS_REG2 (informations written by loader, but shouldn't that
+	 *               info be part of the dts instead?)
+	 * GRF?
+	 * \ Designware uPCTL
+	 *   \ Designware PHY Utility Block
+	 *     \ (probably) Designware multiPHY
+	 */
+
+	dmc: dynamic-memory-controller {
+		compatible = "rockchip,rk3188-dmc";
+		rockchip,grf = <&grf>;
+		rockchip,msch-niu = <&service_sys>;
+
+	};
+
+	upctl: memory-controller@20020000 {
+		compatible = "snps,dw-upctl";
+		reg = <0x20020000 0x1000>;
+	};
+
+	publ: memory-controller@2004000 {
+		compatible = "snps,dw-publ";
+		reg = <0x20040000 0x1000>;
+	};
+
+	service_sys: syscon@10128000 {
+		compatible = "rockchip,rk3188-service-sys", "syscon";
+		reg = <0x10128000 0x1000>;
+	};
+
 	i2c0: i2c@2002d000 {
 		compatible = "rockchip,rk3066-i2c";
 		reg = <0x2002d000 0x1000>;

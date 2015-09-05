@@ -10,6 +10,7 @@ obj-$(CONFIG_ATMEL_SDRAMC)	+= atmel-sdramc.o
 obj-$(CONFIG_ATMEL_EBI)		+= atmel-ebi.o
 obj-$(CONFIG_DW_PUBL)		+= dw-publ.o
 obj-$(CONFIG_DW_UPCTL)		+= dw-upctl.o
+obj-$(CONFIG_ROCKCHIP_DMC)	+= rockchip-dmc.o
 obj-$(CONFIG_TI_AEMIF)		+= ti-aemif.o
 obj-$(CONFIG_TI_EMIF)		+= emif.o
 obj-$(CONFIG_OMAP_GPMC)		+= omap-gpmc.o
