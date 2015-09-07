@@ -147,6 +147,7 @@ static struct snd_soc_dai_link rk_dailink = {
 
 static struct snd_soc_card snd_soc_card_rk = {
 	.name = "ROCKCHIP-I2S",
+	.owner = THIS_MODULE,
 	.dai_link = &rk_dailink,
 	.num_links = 1,
 	.aux_dev = &rk_98090_headset_dev,
@@ -222,7 +223,6 @@ static struct platform_driver snd_rk_mc_driver = {
 	.probe = snd_rk_mc_probe,
 	.driver = {
 		.name = DRV_NAME,
-		.owner = THIS_MODULE,
 		.pm = &snd_soc_pm_ops,
 		.of_match_table = rockchip_max98090_of_match,
 	},
