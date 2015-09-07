@@ -118,7 +118,7 @@ static int rk_init(struct snd_soc_pcm_runtime *runtime)
 				    SND_JACK_BTN_0 | SND_JACK_BTN_1 |
 				    SND_JACK_BTN_2 | SND_JACK_BTN_3,
 				    &headset_jack, NULL, 0);
-	if (!ret) {
+	if (ret) {
 		dev_err(card->dev, "New Headset Jack failed! (%d)\n", ret);
 		return ret;
 	}
@@ -146,6 +146,7 @@ static struct snd_soc_dai_link rk_dailink = {
 
 static struct snd_soc_card snd_soc_card_rk = {
 	.name = "I2S-RT5650",
+	.owner = THIS_MODULE,
 	.dai_link = &rk_dailink,
 	.num_links = 1,
 	.dapm_widgets = rk_dapm_widgets,
@@ -211,7 +212,6 @@ static struct platform_driver snd_rk_mc_driver = {
 	.probe = snd_rk_mc_probe,
 	.driver = {
 		.name = DRV_NAME,
-		.owner = THIS_MODULE,
 		.pm = &snd_soc_pm_ops,
 		.of_match_table = rockchip_rt5645_of_match,
 	},
