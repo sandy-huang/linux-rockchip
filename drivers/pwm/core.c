@@ -146,12 +146,12 @@ of_pwm_xlate_with_flags(struct pwm_chip *pc, const struct of_phandle_args *args)
 	if (IS_ERR(pwm))
 		return pwm;
 
-	pwm_set_period(pwm, args->args[1]);
+	pwm_set_default_period(pwm, args->args[1]);
 
 	if (args->args[2] & PWM_POLARITY_INVERTED)
-		pwm_set_polarity(pwm, PWM_POLARITY_INVERSED);
+		pwm_set_default_polarity(pwm, PWM_POLARITY_INVERSED);
 	else
-		pwm_set_polarity(pwm, PWM_POLARITY_NORMAL);
+		pwm_set_default_polarity(pwm, PWM_POLARITY_NORMAL);
 
 	return pwm;
 }
@@ -172,7 +172,7 @@ of_pwm_simple_xlate(struct pwm_chip *pc, const struct of_phandle_args *args)
 	if (IS_ERR(pwm))
 		return pwm;
 
-	pwm_set_period(pwm, args->args[1]);
+	pwm_set_default_period(pwm, args->args[1]);
 
 	return pwm;
 }
@@ -268,7 +268,7 @@ int pwmchip_add_with_polarity(struct pwm_chip *chip,
 		pwm->chip = chip;
 		pwm->pwm = chip->base + i;
 		pwm->hwpwm = i;
-		pwm->polarity = polarity;
+		pwm_set_default_polarity(pwm, polarity);
 
 		radix_tree_insert(&pwm_tree, pwm->pwm, pwm);
 	}
@@ -730,8 +730,8 @@ struct pwm_device *pwm_get(struct device *dev, const char *con_id)
 	if (IS_ERR(pwm))
 		goto out;
 
-	pwm_set_period(pwm, chosen->period);
-	pwm_set_polarity(pwm, chosen->polarity);
+	pwm_set_default_period(pwm, chosen->period);
+	pwm_set_default_polarity(pwm, chosen->polarity);
 
 out:
 	mutex_unlock(&pwm_lookup_lock);

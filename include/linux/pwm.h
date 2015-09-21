@@ -115,9 +115,20 @@ static inline void pwm_set_period(struct pwm_device *pwm, unsigned int period)
 		pwm->period = period;
 }
 
+static inline void pwm_set_default_period(struct pwm_device *pwm,
+					  unsigned int period)
+{
+	pwm_set_period(pwm, period);
+}
+
 static inline unsigned int pwm_get_period(const struct pwm_device *pwm)
 {
 	return pwm ? pwm->period : 0;
+}
+
+static inline unsigned int pwm_get_default_period(const struct pwm_device *pwm)
+{
+	return pwm_get_period(pwm);
 }
 
 static inline void pwm_set_duty_cycle(struct pwm_device *pwm, unsigned int duty)
@@ -135,6 +146,12 @@ static inline unsigned int pwm_get_duty_cycle(const struct pwm_device *pwm)
  * pwm_set_polarity - configure the polarity of a PWM signal
  */
 int pwm_set_polarity(struct pwm_device *pwm, enum pwm_polarity polarity);
+
+static inline void pwm_set_default_polarity(struct pwm_device *pwm,
+					    enum pwm_polarity polarity)
+{
+	pwm_set_polarity(pwm, polarity);
+}
 
 static inline enum pwm_polarity pwm_get_polarity(const struct pwm_device *pwm)
 {

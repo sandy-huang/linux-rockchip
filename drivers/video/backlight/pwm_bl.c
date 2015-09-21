@@ -294,7 +294,7 @@ static int pwm_backlight_probe(struct platform_device *pdev)
 	 * set the period from platform data if it has not already been set
 	 * via the PWM lookup table.
 	 */
-	pb->period = pwm_get_period(pb->pwm);
+	pb->period = pwm_get_default_period(pb->pwm);
 	if (!pb->period && (data->pwm_period_ns > 0)) {
 		pb->period = data->pwm_period_ns;
 		pwm_set_period(pb->pwm, data->pwm_period_ns);
