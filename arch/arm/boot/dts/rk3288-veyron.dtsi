@@ -85,7 +85,7 @@
 		priority = <200>;
 	};
 
-/*	vdd_logic: pwm-regulator {
+	vdd_logic: pwm-regulator {
 		compatible = "pwm-regulator";
 		pwms = <&pwm1 0 2000 0>;
 
@@ -103,7 +103,9 @@
 		regulator-max-microvolt = <1350000>;
 		regulator-name = "vdd_logic";
 		regulator-ramp-delay = <4000>;
-	};*/
+		regulator-always-on;
+		regulator-boot-on;
+	};
 
 	emmc_pwrseq: emmc-pwrseq {
 		compatible = "mmc-pwrseq-emmc";
