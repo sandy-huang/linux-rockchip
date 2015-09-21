@@ -270,6 +270,9 @@ int pwmchip_add_with_polarity(struct pwm_chip *chip,
 		pwm->hwpwm = i;
 		pwm_set_default_polarity(pwm, polarity);
 
+		if (chip->ops->reset_state)
+			chip->ops->reset_state(chip, pwm);
+
 		radix_tree_insert(&pwm_tree, pwm->pwm, pwm);
 	}
 
