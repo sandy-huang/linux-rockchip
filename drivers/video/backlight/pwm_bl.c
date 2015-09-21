@@ -293,12 +293,14 @@ static int pwm_backlight_probe(struct platform_device *pdev)
 	 * period, parsed from the DT, in the PWM device. For the non-DT case,
 	 * set the period from platform data if it has not already been set
 	 * via the PWM lookup table.
+	 * FIXME: This assignment should be dropped as soon as all the boards
+	 * have moved to the PWM lookup table approach. The same goes for the
+	 * pb->period field which should be replaced by
+	 * pwm_get_default_period() calls.
 	 */
-	pb->period = pwm_get_period(pb->pwm);
-	if (!pb->period && (data->pwm_period_ns > 0)) {
+	pb->period = pwm_get_default_period(pb->pwm);
+	if (!pb->period && (data->pwm_period_ns > 0))
 		pb->period = data->pwm_period_ns;
-		pwm_set_period(pb->pwm, data->pwm_period_ns);
-	}
 
 	pb->lth_brightness = data->lth_brightness * (pb->period / pb->scale);
 
