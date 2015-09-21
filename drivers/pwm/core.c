@@ -494,8 +494,15 @@ EXPORT_SYMBOL_GPL(pwm_set_polarity);
  */
 int pwm_enable(struct pwm_device *pwm)
 {
-	if (pwm && !test_and_set_bit(PWMF_ENABLED, &pwm->flags))
-		return pwm->chip->ops->enable(pwm->chip, pwm);
+	if (pwm && !pwm_is_enabled(pwm)) {
+		int err;
+
+		err = pwm->chip->ops->enable(pwm->chip, pwm);
+		if (!err)
+			pwm->state.enabled = true;
+
+		return err;
+	}
 
 	return pwm ? 0 : -EINVAL;
 }
@@ -507,8 +514,10 @@ EXPORT_SYMBOL_GPL(pwm_enable);
  */
 void pwm_disable(struct pwm_device *pwm)
 {
-	if (pwm && test_and_clear_bit(PWMF_ENABLED, &pwm->flags))
+	if (pwm && pwm_is_enabled(pwm)) {
 		pwm->chip->ops->disable(pwm->chip, pwm);
+		pwm->state.enabled = false;
+	}
 }
 EXPORT_SYMBOL_GPL(pwm_disable);
 
