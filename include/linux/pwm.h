@@ -171,6 +171,30 @@ static inline enum pwm_polarity pwm_get_polarity(const struct pwm_device *pwm)
 	return pwm ? pwm->state.polarity : PWM_POLARITY_NORMAL;
 }
 
+int pwm_apply_state(struct pwm_device *pwm, const struct pwm_state *state);
+
+/**
+ * pwm_get_state() - retrieve the current PWM state
+ * @pwm: PWM device
+ * @state: state to fill with the current PWM state
+ */
+static inline void pwm_get_state(struct pwm_device *pwm,
+				 struct pwm_state *state)
+{
+	*state = pwm->state;
+}
+
+/**
+ * pwm_get_default_state() - retrieve the default PWM state
+ * @pwm: PWM device
+ * @state: state to fill with the default PWM state
+ */
+static inline void pwm_get_default_state(struct pwm_device *pwm,
+					 struct pwm_state *state)
+{
+	*state = pwm->default_state;
+}
+
 /**
  * struct pwm_ops - PWM controller operations
  * @request: optional hook for requesting a PWM
@@ -179,6 +203,7 @@ static inline enum pwm_polarity pwm_get_polarity(const struct pwm_device *pwm)
  * @set_polarity: configure the polarity of this PWM
  * @enable: enable PWM output toggling
  * @disable: disable PWM output toggling
+ * @apply: atomically apply a new PWM config
  * @reset_state: reset the current PWM state (pwm->state) to the actual
  *		 hardware state. This function is only called once per
  *		 PWM device when the PWM chip is registered.
@@ -194,6 +219,8 @@ struct pwm_ops {
 			    enum pwm_polarity polarity);
 	int (*enable)(struct pwm_chip *chip, struct pwm_device *pwm);
 	void (*disable)(struct pwm_chip *chip, struct pwm_device *pwm);
+	int (*apply)(struct pwm_chip *chip, struct pwm_device *pwm,
+		     const struct pwm_state *state);
 	void (*reset_state)(struct pwm_chip *chip, struct pwm_device *pwm);
 #ifdef CONFIG_DEBUG_FS
 	void (*dbg_show)(struct pwm_chip *chip, struct seq_file *s);

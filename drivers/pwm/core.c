@@ -46,6 +46,12 @@ static struct pwm_device *pwm_to_device(unsigned int pwm)
 	return radix_tree_lookup(&pwm_tree, pwm);
 }
 
+static void pwm_set_state(struct pwm_device *pwm,
+			  const struct pwm_state *state)
+{
+	pwm->state = *state;
+}
+
 static int alloc_pwms(int pwm, unsigned int count)
 {
 	unsigned int from = 0;
@@ -226,6 +232,19 @@ void *pwm_get_chip_data(struct pwm_device *pwm)
 }
 EXPORT_SYMBOL_GPL(pwm_get_chip_data);
 
+static bool pwm_ops_check(const struct pwm_ops *ops)
+{
+	/* driver supports legacy, non-atomic operation */
+	if (ops->config && ops->enable && ops->disable)
+		return true;
+
+	/* driver supports atomic operation */
+	if (ops->apply)
+		return true;
+
+	return false;
+}
+
 /**
  * pwmchip_add_with_polarity() - register a new PWM chip
  * @chip: the PWM chip to add
@@ -244,8 +263,10 @@ int pwmchip_add_with_polarity(struct pwm_chip *chip,
 	unsigned int i;
 	int ret;
 
-	if (!chip || !chip->dev || !chip->ops || !chip->ops->config ||
-	    !chip->ops->enable || !chip->ops->disable || !chip->npwm)
+	if (!chip || !chip->dev || !chip->ops || !chip->npwm)
+		return -EINVAL;
+
+	if (!pwm_ops_check(chip->ops))
 		return -EINVAL;
 
 	mutex_lock(&pwm_lock);
@@ -445,7 +466,19 @@ int pwm_config(struct pwm_device *pwm, int duty_ns, int period_ns)
 	if (!pwm || duty_ns < 0 || period_ns <= 0 || duty_ns > period_ns)
 		return -EINVAL;
 
-	err = pwm->chip->ops->config(pwm->chip, pwm, duty_ns, period_ns);
+	if (pwm->chip->ops->apply) {
+		struct pwm_state state;
+
+		pwm_get_state(pwm, &state);
+		state.period = period_ns;
+		state.duty_cycle = duty_ns;
+
+		err = pwm->chip->ops->apply(pwm->chip, pwm, &state);
+	} else {
+		err = pwm->chip->ops->config(pwm->chip, pwm, duty_ns,
+					     period_ns);
+	}
+
 	if (err)
 		return err;
 
@@ -473,6 +506,18 @@ int pwm_set_polarity(struct pwm_device *pwm, enum pwm_polarity polarity)
 	if (!pwm || !pwm->chip->ops)
 		return -EINVAL;
 
+	if (pwm->chip->ops->apply) {
+		struct pwm_state state;
+
+		pwm_get_state(pwm, &state);
+		state.polarity = polarity;
+		err = pwm->chip->ops->apply(pwm->chip, pwm, &state);
+		if (!err)
+			pwm->state.polarity = polarity;
+
+		return err;
+	}
+
 	if (!pwm->chip->ops->set_polarity)
 		return -ENOSYS;
 
@@ -497,17 +542,29 @@ EXPORT_SYMBOL_GPL(pwm_set_polarity);
  */
 int pwm_enable(struct pwm_device *pwm)
 {
-	if (pwm && !pwm_is_enabled(pwm)) {
-		int err;
+	int err;
 
+	if (!pwm)
+		return -EINVAL;
+
+	if (pwm_is_enabled(pwm))
+		return 0;
+
+	if (pwm->chip->ops->apply) {
+		struct pwm_state state;
+
+		pwm_get_state(pwm, &state);
+		state.enabled = true;
+
+		err = pwm->chip->ops->apply(pwm->chip, pwm, &state);
+	} else {
 		err = pwm->chip->ops->enable(pwm->chip, pwm);
-		if (!err)
-			pwm->state.enabled = true;
-
-		return err;
 	}
 
-	return pwm ? 0 : -EINVAL;
+	if (!err)
+		pwm->state.enabled = true;
+
+	return err;
 }
 EXPORT_SYMBOL_GPL(pwm_enable);
 
@@ -517,12 +574,73 @@ EXPORT_SYMBOL_GPL(pwm_enable);
  */
 void pwm_disable(struct pwm_device *pwm)
 {
-	if (pwm && pwm_is_enabled(pwm)) {
+	if (!pwm || !pwm_is_enabled(pwm))
+		return;
+
+	if (pwm->chip->ops->apply) {
+		struct pwm_state state;
+
+		pwm_get_state(pwm, &state);
+		state.enabled = false;
+
+		pwm->chip->ops->apply(pwm->chip, pwm, &state);
+	} else {
 		pwm->chip->ops->disable(pwm->chip, pwm);
-		pwm->state.enabled = false;
 	}
+
+	pwm->state.enabled = false;
 }
 EXPORT_SYMBOL_GPL(pwm_disable);
+
+/**
+ * pwm_apply_state() - atomically apply a new state to a PWM device
+ * @pwm: PWM device
+ * @state: new state to apply
+ */
+int pwm_apply_state(struct pwm_device *pwm, const struct pwm_state *state)
+{
+	int err = 0;
+
+	if (!pwm)
+		return -EINVAL;
+
+	if (!memcmp(state, &pwm->state, sizeof(*state)))
+		return 0;
+
+	if (pwm->chip->ops->apply) {
+		err = pwm->chip->ops->apply(pwm->chip, pwm, state);
+		if (!err)
+			pwm_set_state(pwm, state);
+	} else {
+		/*
+		 * FIXME: restore the initial state in case of error.
+		 */
+		if (state->polarity != pwm->state.polarity) {
+			pwm_disable(pwm);
+			err = pwm_set_polarity(pwm, state->polarity);
+			if (err)
+				goto out;
+		}
+
+		if (state->period != pwm->state.period ||
+		    state->duty_cycle != pwm->state.duty_cycle) {
+			err = pwm_config(pwm, state->period, state->duty_cycle);
+			if (err)
+				goto out;
+		}
+
+		if (state->enabled != pwm->state.enabled) {
+			if (state->enabled)
+				err = pwm_enable(pwm);
+			else
+				pwm_disable(pwm);
+		}
+	}
+
+out:
+	return err;
+}
+EXPORT_SYMBOL_GPL(pwm_apply_state);
 
 static struct pwm_chip *of_node_to_pwmchip(struct device_node *np)
 {
