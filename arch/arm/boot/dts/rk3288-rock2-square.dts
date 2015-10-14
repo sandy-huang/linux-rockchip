@@ -166,6 +166,10 @@
 	status = "okay";
 };
 
+&io_domains {
+	dvp-supply = <&vcc18_dvp>;
+};
+
 &pinctrl {
 	dvp {
 		dvp_pwr: dvp-pwr {
