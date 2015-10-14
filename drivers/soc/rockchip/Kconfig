@@ -1,6 +1,20 @@
+if ARCH_ROCKCHIP || COMPILE_TEST
+
 #
 # Rockchip Soc drivers
 #
+config ROCKCHIP_PM_DOMAINS
+        bool "Rockchip generic power domain"
+        depends on PM
+        select PM_GENERIC_DOMAINS
+        help
+          Say y here to enable power domain support.
+          In order to meet high performance and low power requirements, a power
+          management unit is designed or saving power when RK3288 in low power
+          mode. The RK3288 PMU is dedicated for managing the power of the whole chip.
+
+          If unsure, say N.
+
 config ROCKCHIP_USB_UART
 	bool "Rockchip usb-uart override"
 	depends on ARCH_ROCKCHIP
@@ -11,3 +25,5 @@ config ROCKCHIP_USB_UART
 	  possible to get debug output without needing to open a device.
 	  To enable this function on boot, add a rockchip.usb_uart option
 	  to the kernel commandline.
+
+endif
