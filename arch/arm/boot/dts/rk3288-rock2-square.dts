@@ -63,6 +63,42 @@
 		#sound-dai-cells = <0>;
 	};
 
+	/*
+	 * All dvp regulators are separately supplied by vcc_sys,
+	 * but share the dvp_pwr pin, so all are enabled/disabled
+	 * at the same time. Se we let vcc28_dvp control the pin
+	 * and the other two regulators use it as supply.
+	 * Also the pins and supplies are called *cif* in the main
+	 * schematics but *_dvp in the baseboard file.
+	 */
+	vcc15_dvp: vcc15-dvp-regulator {
+		compatible = "regulator-fixed";
+		regulator-name = "vcc15_dvp";
+		regulator-min-microvolt = <1500000>;
+		regulator-max-microvolt = <1500000>;
+		vin-supply = <&vcc28_dvp>;
+	};
+
+	vcc18_dvp: vcc18-dvp-regulator {
+		compatible = "regulator-fixed";
+		regulator-name = "vcc18_dvp";
+		regulator-min-microvolt = <1800000>;
+		regulator-max-microvolt = <1800000>;
+		vin-supply = <&vcc28_dvp>;
+	};
+
+	vcc28_dvp: vcc28-dvp-regulator {
+		compatible = "regulator-fixed";
+		enable-active-high;
+		gpio = <&gpio0 17 GPIO_ACTIVE_HIGH>;
+		pinctrl-names = "default";
+		pinctrl-0 = <&dvp_pwr>;
+		regulator-name = "vcc28_dvp";
+		regulator-min-microvolt = <2800000>;
+		regulator-max-microvolt = <2800000>;
+		vin-supply = <&vcc_io>;
+	};
+
 	vcc_usb_host: vcc-host-regulator {
 		compatible = "regulator-fixed";
 		enable-active-high;
@@ -131,6 +167,12 @@
 };
 
 &pinctrl {
+	dvp {
+		dvp_pwr: dvp-pwr {
+			rockchip,pins = <0 17 RK_FUNC_GPIO &pcfg_pull_none>;
+		};
+	};
+
 	pmic {
 		pmic_int: pmic-int {
 			rockchip,pins = <0 4 RK_FUNC_GPIO &pcfg_pull_up>;
