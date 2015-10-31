@@ -626,27 +626,51 @@
 		compatible = "rockchip,rk3288-dmc";
 		rockchip,grf = <&grf>;
 		rockchip,msch-niu = <&service_bus>;
-
+		ports = <&upctl0_out>, <&upctl1_out>;
 	};
 
 	upctl0: memory-controller@ff610000 {
 		compatible = "snps,dw-upctl";
 		reg = <0xff610000 0x1000>;
+
+		upctl0_out: port {
+			upctl0_out_publ0: endpoint {
+				remote-endpoint = <&publ0_in_upctl0>;
+			};
+		};
 	};
 
 	publ0: memory-controller@ff620000 {
 		compatible = "snps,dw-publ";
 		reg = <0xff620000 0x1000>;
+
+		port {
+			publ0_in_upctl0: endpoint {
+				remote-endpoint = <&upctl0_out_publ0>;
+			};
+		};
 	};
 
 	upctl1: memory-controller@ff630000 {
 		compatible = "snps,dw-upctl";
 		reg = <0xff630000 0x1000>;
+
+		upctl1_out: port {
+			upctl1_out_publ1: endpoint {
+				remote-endpoint = <&publ1_in_upctl1>;
+			};
+		};
 	};
 
 	publ1: memory-controller@ff640000 {
 		compatible = "snps,dw-publ";
 		reg = <0xff640000 0x1000>;
+
+		port {
+			publ1_in_upctl1: endpoint {
+				remote-endpoint = <&upctl1_out_publ1>;
+			};
+		};
 	};
 
 	service_bus: syscon@ffac0000 {
