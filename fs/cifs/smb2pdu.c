@@ -660,7 +660,7 @@ ssetup_ntlmssp_authenticate:
 			goto ssetup_exit;
 		}
 
-		msg = spnego_key->payload.data;
+		msg = spnego_key->payload.data[0];
 		/*
 		 * check version field to make sure that cifs.upcall is
 		 * sending us a response in an expected form
@@ -922,7 +922,7 @@ SMB2_tcon(const unsigned int xid, struct cifs_ses *ses, const char *tree,
 	if (tcon && tcon->bad_network_name)
 		return -ENOENT;
 
-	if ((tcon->seal) &&
+	if ((tcon && tcon->seal) &&
 	    ((ses->server->capabilities & SMB2_GLOBAL_CAP_ENCRYPTION) == 0)) {
 		cifs_dbg(VFS, "encryption requested but no server support");
 		return -EOPNOTSUPP;

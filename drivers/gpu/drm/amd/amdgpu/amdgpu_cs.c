@@ -104,10 +104,11 @@ int amdgpu_cs_get_ring(struct amdgpu_device *adev, u32 ip_type,
 		}
 		break;
 	case AMDGPU_HW_IP_DMA:
-		if (ring < 2) {
-			*out_ring = &adev->sdma[ring].ring;
+		if (ring < adev->sdma.num_instances) {
+			*out_ring = &adev->sdma.instance[ring].ring;
 		} else {
-			DRM_ERROR("only two SDMA rings are supported\n");
+			DRM_ERROR("only %d SDMA rings are supported\n",
+				  adev->sdma.num_instances);
 			return -EINVAL;
 		}
 		break;
@@ -156,7 +157,8 @@ int amdgpu_cs_parser_init(struct amdgpu_cs_parser *p, void *data)
 	uint64_t *chunk_array_user;
 	uint64_t *chunk_array;
 	struct amdgpu_fpriv *fpriv = p->filp->driver_priv;
-	unsigned size, i;
+	unsigned size;
+	int i;
 	int ret;
 
 	if (cs->in.num_chunks == 0)
@@ -176,7 +178,7 @@ int amdgpu_cs_parser_init(struct amdgpu_cs_parser *p, void *data)
 
 	/* get chunks */
 	INIT_LIST_HEAD(&p->validated);
-	chunk_array_user = (uint64_t __user *)(cs->in.chunks);
+	chunk_array_user = (uint64_t __user *)(unsigned long)(cs->in.chunks);
 	if (copy_from_user(chunk_array, chunk_array_user,
 			   sizeof(uint64_t)*cs->in.num_chunks)) {
 		ret = -EFAULT;
@@ -196,7 +198,7 @@ int amdgpu_cs_parser_init(struct amdgpu_cs_parser *p, void *data)
 		struct drm_amdgpu_cs_chunk user_chunk;
 		uint32_t __user *cdata;
 
-		chunk_ptr = (void __user *)chunk_array[i];
+		chunk_ptr = (void __user *)(unsigned long)chunk_array[i];
 		if (copy_from_user(&user_chunk, chunk_ptr,
 				       sizeof(struct drm_amdgpu_cs_chunk))) {
 			ret = -EFAULT;
@@ -207,7 +209,7 @@ int amdgpu_cs_parser_init(struct amdgpu_cs_parser *p, void *data)
 		p->chunks[i].length_dw = user_chunk.length_dw;
 
 		size = p->chunks[i].length_dw;
-		cdata = (void __user *)user_chunk.chunk_data;
+		cdata = (void __user *)(unsigned long)user_chunk.chunk_data;
 		p->chunks[i].user_ptr = cdata;
 
 		p->chunks[i].kdata = drm_malloc_ab(size, sizeof(uint32_t));
@@ -566,9 +568,24 @@ static int amdgpu_bo_vm_update_pte(struct amdgpu_cs_parser *p,
 			if (r)
 				return r;
 		}
+
 	}
 
-	return amdgpu_vm_clear_invalids(adev, vm, &p->ibs[0].sync);
+	r = amdgpu_vm_clear_invalids(adev, vm, &p->ibs[0].sync);
+
+	if (amdgpu_vm_debug && p->bo_list) {
+		/* Invalidate all BOs to test for userspace bugs */
+		for (i = 0; i < p->bo_list->num_entries; i++) {
+			/* ignore duplicates */
+			bo = p->bo_list->array[i].robj;
+			if (!bo)
+				continue;
+
+			amdgpu_vm_bo_invalidate(adev, bo);
+		}
+	}
+
+	return r;
 }
 
 static int amdgpu_cs_ib_vm_chunk(struct amdgpu_device *adev,

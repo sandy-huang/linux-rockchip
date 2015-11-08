@@ -197,6 +197,7 @@ config ENABLE_MUST_CHECK
 config FRAME_WARN
 	int "Warn for stack frames larger than (needs gcc 4.4)"
 	range 0 8192
+	default 0 if KASAN
 	default 1024 if !64BIT
 	default 2048 if 64BIT
 	help
@@ -1684,6 +1685,9 @@ config TEST_STRING_HELPERS
 
 config TEST_KSTRTOX
 	tristate "Test kstrto*() family of functions at runtime"
+
+config TEST_PRINTF
+	tristate "Test printf() family of functions at runtime"
 
 config TEST_RHASHTABLE
 	tristate "Perform selftest on resizable hash table"
