@@ -126,8 +126,14 @@ struct rockchip_gem_object *
 	if (ret)
 		goto err_free_rk_obj;
 
+	ret = drm_gem_create_mmap_offset(obj);
+	if (ret)
+		goto err_free_buf;
+
 	return rk_obj;
 
+err_free_buf:
+	rockchip_gem_free_buf(rk_obj);
 err_free_rk_obj:
 	kfree(rk_obj);
 	return ERR_PTR(ret);
@@ -196,7 +202,6 @@ int rockchip_gem_dumb_map_offset(struct drm_file *file_priv,
 				 uint64_t *offset)
 {
 	struct drm_gem_object *obj;
-	int ret;
 
 	obj = drm_gem_object_lookup(dev, file_priv, handle);
 	if (!obj) {
@@ -204,14 +209,9 @@ int rockchip_gem_dumb_map_offset(struct drm_file *file_priv,
 		return -EINVAL;
 	}
 
-	ret = drm_gem_create_mmap_offset(obj);
-	if (ret)
-		goto out;
-
 	*offset = drm_vma_node_offset_addr(&obj->vma_node);
 	DRM_DEBUG_KMS("offset = 0x%llx\n", *offset);
 
-out:
 	drm_gem_object_unreference_unlocked(obj);
 
 	return 0;
