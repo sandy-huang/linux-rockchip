@@ -345,7 +345,6 @@ struct amdgpu_ring_funcs {
 	/* testing functions */
 	int (*test_ring)(struct amdgpu_ring *ring);
 	int (*test_ib)(struct amdgpu_ring *ring);
-	bool (*is_lockup)(struct amdgpu_ring *ring);
 	/* insert NOP packets */
 	void (*insert_nop)(struct amdgpu_ring *ring, uint32_t count);
 };
@@ -406,7 +405,6 @@ struct amdgpu_fence_driver {
 /* some special values for the owner field */
 #define AMDGPU_FENCE_OWNER_UNDEFINED	((void*)0ul)
 #define AMDGPU_FENCE_OWNER_VM		((void*)1ul)
-#define AMDGPU_FENCE_OWNER_MOVE		((void*)2ul)
 
 #define AMDGPU_FENCE_FLAG_64BIT         (1 << 0)
 #define AMDGPU_FENCE_FLAG_INT           (1 << 1)
@@ -448,57 +446,10 @@ int amdgpu_fence_wait_next(struct amdgpu_ring *ring);
 int amdgpu_fence_wait_empty(struct amdgpu_ring *ring);
 unsigned amdgpu_fence_count_emitted(struct amdgpu_ring *ring);
 
-signed long amdgpu_fence_wait_any(struct amdgpu_device *adev,
-				  struct fence **array,
-				  uint32_t count,
-				  bool intr,
-				  signed long t);
-struct amdgpu_fence *amdgpu_fence_ref(struct amdgpu_fence *fence);
-void amdgpu_fence_unref(struct amdgpu_fence **fence);
-
 bool amdgpu_fence_need_sync(struct amdgpu_fence *fence,
 			    struct amdgpu_ring *ring);
 void amdgpu_fence_note_sync(struct amdgpu_fence *fence,
 			    struct amdgpu_ring *ring);
-
-static inline struct amdgpu_fence *amdgpu_fence_later(struct amdgpu_fence *a,
-						      struct amdgpu_fence *b)
-{
-	if (!a) {
-		return b;
-	}
-
-	if (!b) {
-		return a;
-	}
-
-	BUG_ON(a->ring != b->ring);
-
-	if (a->seq > b->seq) {
-		return a;
-	} else {
-		return b;
-	}
-}
-
-static inline bool amdgpu_fence_is_earlier(struct amdgpu_fence *a,
-					   struct amdgpu_fence *b)
-{
-	if (!a) {
-		return false;
-	}
-
-	if (!b) {
-		return true;
-	}
-
-	BUG_ON(a->ring != b->ring);
-
-	return a->seq < b->seq;
-}
-
-int amdgpu_user_fence_emit(struct amdgpu_ring *ring, struct amdgpu_user_fence *user,
-			   void *owner, struct amdgpu_fence **fence);
 
 /*
  * TTM.
@@ -710,7 +661,7 @@ void amdgpu_semaphore_free(struct amdgpu_device *adev,
  */
 struct amdgpu_sync {
 	struct amdgpu_semaphore *semaphores[AMDGPU_NUM_SYNCS];
-	struct amdgpu_fence	*sync_to[AMDGPU_MAX_RINGS];
+	struct fence		*sync_to[AMDGPU_MAX_RINGS];
 	DECLARE_HASHTABLE(fences, 4);
 	struct fence	        *last_vm_update;
 };
@@ -907,8 +858,6 @@ struct amdgpu_ring {
 	unsigned		ring_size;
 	unsigned		ring_free_dw;
 	int			count_dw;
-	atomic_t		last_rptr;
-	atomic64_t		last_activity;
 	uint64_t		gpu_addr;
 	uint32_t		align_mask;
 	uint32_t		ptr_mask;
@@ -978,7 +927,7 @@ struct amdgpu_vm_id {
 	/* last flushed PD/PT update */
 	struct fence	        *flushed_updates;
 	/* last use of vmid */
-	struct amdgpu_fence	*last_id_use;
+	struct fence		*last_id_use;
 };
 
 struct amdgpu_vm {
@@ -1011,7 +960,7 @@ struct amdgpu_vm {
 };
 
 struct amdgpu_vm_manager {
-	struct amdgpu_fence		*active[AMDGPU_NUM_VM];
+	struct fence			*active[AMDGPU_NUM_VM];
 	uint32_t			max_pfn;
 	/* number of VMIDs */
 	unsigned			nvm;
@@ -1230,8 +1179,6 @@ void amdgpu_ring_commit(struct amdgpu_ring *ring);
 void amdgpu_ring_unlock_commit(struct amdgpu_ring *ring);
 void amdgpu_ring_undo(struct amdgpu_ring *ring);
 void amdgpu_ring_unlock_undo(struct amdgpu_ring *ring);
-void amdgpu_ring_lockup_update(struct amdgpu_ring *ring);
-bool amdgpu_ring_test_lockup(struct amdgpu_ring *ring);
 unsigned amdgpu_ring_backup(struct amdgpu_ring *ring,
 			    uint32_t **data);
 int amdgpu_ring_restore(struct amdgpu_ring *ring,
@@ -1241,6 +1188,7 @@ int amdgpu_ring_init(struct amdgpu_device *adev, struct amdgpu_ring *ring,
 		     struct amdgpu_irq_src *irq_src, unsigned irq_type,
 		     enum amdgpu_ring_type ring_type);
 void amdgpu_ring_fini(struct amdgpu_ring *ring);
+struct amdgpu_ring *amdgpu_ring_from_fence(struct fence *f);
 
 /*
  * CS.
@@ -1765,11 +1713,11 @@ void amdgpu_test_syncing(struct amdgpu_device *adev);
 int amdgpu_mn_register(struct amdgpu_bo *bo, unsigned long addr);
 void amdgpu_mn_unregister(struct amdgpu_bo *bo);
 #else
-static int amdgpu_mn_register(struct amdgpu_bo *bo, unsigned long addr)
+static inline int amdgpu_mn_register(struct amdgpu_bo *bo, unsigned long addr)
 {
 	return -ENODEV;
 }
-static void amdgpu_mn_unregister(struct amdgpu_bo *bo) {}
+static inline void amdgpu_mn_unregister(struct amdgpu_bo *bo) {}
 #endif
 
 /*
@@ -1961,7 +1909,6 @@ struct amdgpu_device {
 	struct device			*dev;
 	struct drm_device		*ddev;
 	struct pci_dev			*pdev;
-	struct rw_semaphore		exclusive_lock;
 
 	/* ASIC */
 	enum amd_asic_type		asic_type;
@@ -1975,7 +1922,6 @@ struct amdgpu_device {
 	bool				suspend;
 	bool				need_dma32;
 	bool				accel_working;
-	bool				needs_reset;
 	struct work_struct 		reset_work;
 	struct notifier_block		acpi_nb;
 	struct amdgpu_i2c_chan		*i2c_bus[AMDGPU_MAX_I2C_BUS];
@@ -2254,7 +2200,6 @@ amdgpu_get_sdma_instance(struct amdgpu_ring *ring)
 #define amdgpu_ring_parse_cs(r, p, ib) ((r)->funcs->parse_cs((p), (ib)))
 #define amdgpu_ring_test_ring(r) (r)->funcs->test_ring((r))
 #define amdgpu_ring_test_ib(r) (r)->funcs->test_ib((r))
-#define amdgpu_ring_is_lockup(r) (r)->funcs->is_lockup((r))
 #define amdgpu_ring_get_rptr(r) (r)->funcs->get_rptr((r))
 #define amdgpu_ring_get_wptr(r) (r)->funcs->get_wptr((r))
 #define amdgpu_ring_set_wptr(r) (r)->funcs->set_wptr((r))

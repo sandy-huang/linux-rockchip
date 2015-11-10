@@ -229,46 +229,22 @@ static void dce_v8_0_pageflip_interrupt_fini(struct amdgpu_device *adev)
  * @crtc_id: crtc to cleanup pageflip on
  * @crtc_base: new address of the crtc (GPU MC address)
  *
- * Does the actual pageflip (evergreen+).
- * During vblank we take the crtc lock and wait for the update_pending
- * bit to go high, when it does, we release the lock, and allow the
- * double buffered update to take place.
- * Returns the current update pending status.
+ * Triggers the actual pageflip by updating the primary
+ * surface base address.
  */
 static void dce_v8_0_page_flip(struct amdgpu_device *adev,
 			      int crtc_id, u64 crtc_base)
 {
 	struct amdgpu_crtc *amdgpu_crtc = adev->mode_info.crtcs[crtc_id];
-	u32 tmp = RREG32(mmGRPH_UPDATE + amdgpu_crtc->crtc_offset);
-	int i;
 
-	/* Lock the graphics update lock */
-	tmp |= GRPH_UPDATE__GRPH_UPDATE_LOCK_MASK;
-	WREG32(mmGRPH_UPDATE + amdgpu_crtc->crtc_offset, tmp);
-
-	/* update the scanout addresses */
-	WREG32(mmGRPH_SECONDARY_SURFACE_ADDRESS_HIGH + amdgpu_crtc->crtc_offset,
-	       upper_32_bits(crtc_base));
-	WREG32(mmGRPH_SECONDARY_SURFACE_ADDRESS + amdgpu_crtc->crtc_offset,
-	       (u32)crtc_base);
-
+	/* update the primary scanout addresses */
 	WREG32(mmGRPH_PRIMARY_SURFACE_ADDRESS_HIGH + amdgpu_crtc->crtc_offset,
 	       upper_32_bits(crtc_base));
+	/* writing to the low address triggers the update */
 	WREG32(mmGRPH_PRIMARY_SURFACE_ADDRESS + amdgpu_crtc->crtc_offset,
-	       (u32)crtc_base);
-
-	/* Wait for update_pending to go high. */
-	for (i = 0; i < adev->usec_timeout; i++) {
-		if (RREG32(mmGRPH_UPDATE + amdgpu_crtc->crtc_offset) &
-				GRPH_UPDATE__GRPH_SURFACE_UPDATE_PENDING_MASK)
-			break;
-		udelay(1);
-	}
-	DRM_DEBUG("Update pending now high. Unlocking vupdate_lock.\n");
-
-	/* Unlock the lock, so double-buffering can take place inside vblank */
-	tmp &= ~GRPH_UPDATE__GRPH_UPDATE_LOCK_MASK;
-	WREG32(mmGRPH_UPDATE + amdgpu_crtc->crtc_offset, tmp);
+	       lower_32_bits(crtc_base));
+	/* post the write */
+	RREG32(mmGRPH_PRIMARY_SURFACE_ADDRESS + amdgpu_crtc->crtc_offset);
 }
 
 static int dce_v8_0_crtc_get_scanoutpos(struct amdgpu_device *adev, int crtc,
@@ -3017,22 +2993,18 @@ static int dce_v8_0_suspend(void *handle)
 
 	amdgpu_atombios_scratch_regs_save(adev);
 
-	dce_v8_0_hpd_fini(adev);
-
-	dce_v8_0_pageflip_interrupt_fini(adev);
-
-	return 0;
+	return dce_v8_0_hw_fini(handle);
 }
 
 static int dce_v8_0_resume(void *handle)
 {
 	struct amdgpu_device *adev = (struct amdgpu_device *)handle;
+	int ret;
+
+	ret = dce_v8_0_hw_init(handle);
 
 	amdgpu_atombios_scratch_regs_restore(adev);
 
-	/* init dig PHYs, disp eng pll */
-	amdgpu_atombios_encoder_init_dig(adev);
-	amdgpu_atombios_crtc_set_disp_eng_pll(adev, adev->clock.default_dispclk);
 	/* turn on the BL */
 	if (adev->mode_info.bl_encoder) {
 		u8 bl_level = amdgpu_display_backlight_get_level(adev,
@@ -3041,12 +3013,7 @@ static int dce_v8_0_resume(void *handle)
 						    bl_level);
 	}
 
-	/* initialize hpd */
-	dce_v8_0_hpd_init(adev);
-
-	dce_v8_0_pageflip_interrupt_init(adev);
-
-	return 0;
+	return ret;
 }
 
 static bool dce_v8_0_is_idle(void *handle)
