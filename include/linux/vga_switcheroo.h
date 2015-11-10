@@ -39,10 +39,6 @@ struct pci_dev;
  * enum vga_switcheroo_state - client power state
  * @VGA_SWITCHEROO_OFF: off
  * @VGA_SWITCHEROO_ON: on
- * @VGA_SWITCHEROO_INIT: client has registered with vga_switcheroo but
- * 	vga_switcheroo is not enabled, i.e. no second client or no handler
- * 	has registered. Only used in vga_switcheroo_get_client_state() which
- * 	in turn is only called from hda_intel.c
  * @VGA_SWITCHEROO_NOT_FOUND: client has not registered with vga_switcheroo.
  * 	Only used in vga_switcheroo_get_client_state() which in turn is only
  * 	called from hda_intel.c
@@ -53,7 +49,6 @@ enum vga_switcheroo_state {
 	VGA_SWITCHEROO_OFF,
 	VGA_SWITCHEROO_ON,
 	/* below are referred only from vga_switcheroo_get_client_state() */
-	VGA_SWITCHEROO_INIT,
 	VGA_SWITCHEROO_NOT_FOUND,
 };
 
@@ -137,7 +132,7 @@ int vga_switcheroo_register_audio_client(struct pci_dev *pdev,
 void vga_switcheroo_client_fb_set(struct pci_dev *dev,
 				  struct fb_info *info);
 
-int vga_switcheroo_register_handler(struct vga_switcheroo_handler *handler);
+int vga_switcheroo_register_handler(const struct vga_switcheroo_handler *handler);
 void vga_switcheroo_unregister_handler(void);
 
 int vga_switcheroo_process_delayed_switch(void);
@@ -155,7 +150,7 @@ static inline void vga_switcheroo_unregister_client(struct pci_dev *dev) {}
 static inline int vga_switcheroo_register_client(struct pci_dev *dev,
 		const struct vga_switcheroo_client_ops *ops, bool driver_power_control) { return 0; }
 static inline void vga_switcheroo_client_fb_set(struct pci_dev *dev, struct fb_info *info) {}
-static inline int vga_switcheroo_register_handler(struct vga_switcheroo_handler *handler) { return 0; }
+static inline int vga_switcheroo_register_handler(const struct vga_switcheroo_handler *handler) { return 0; }
 static inline int vga_switcheroo_register_audio_client(struct pci_dev *pdev,
 	const struct vga_switcheroo_client_ops *ops,
 	enum vga_switcheroo_client_id id) { return 0; }
