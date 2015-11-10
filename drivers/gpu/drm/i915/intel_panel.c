@@ -381,7 +381,7 @@ intel_panel_detect(struct drm_device *dev)
 
 	/* Assume that the BIOS does not lie through the OpRegion... */
 	if (!i915.panel_ignore_lid && dev_priv->opregion.lid_state) {
-		return ioread32(dev_priv->opregion.lid_state) & 0x1 ?
+		return *dev_priv->opregion.lid_state & 0x1 ?
 			connector_status_connected :
 			connector_status_disconnected;
 	}
@@ -731,6 +731,20 @@ static void lpt_disable_backlight(struct intel_connector *connector)
 	u32 tmp;
 
 	intel_panel_actually_set_backlight(connector, 0);
+
+	/*
+	 * Although we don't support or enable CPU PWM with LPT/SPT based
+	 * systems, it may have been enabled prior to loading the
+	 * driver. Disable to avoid warnings on LCPLL disable.
+	 *
+	 * This needs rework if we need to add support for CPU PWM on PCH split
+	 * platforms.
+	 */
+	tmp = I915_READ(BLC_PWM_CPU_CTL2);
+	if (tmp & BLM_PWM_ENABLE) {
+		DRM_DEBUG_KMS("cpu backlight was enabled, disabling\n");
+		I915_WRITE(BLC_PWM_CPU_CTL2, tmp & ~BLM_PWM_ENABLE);
+	}
 
 	tmp = I915_READ(BLC_PWM_PCH_CTL1);
 	I915_WRITE(BLC_PWM_PCH_CTL1, tmp & ~BLM_PCH_PWM_ENABLE);
