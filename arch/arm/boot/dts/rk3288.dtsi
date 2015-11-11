@@ -938,6 +938,7 @@
 			/* 500000 1200000 - See crosbug.com/p/33857 */
 			600000 1250000
 		>;
+		power-domains = <&power RK3288_PD_GPU>;
 		status = "disabled";
 	};
 
