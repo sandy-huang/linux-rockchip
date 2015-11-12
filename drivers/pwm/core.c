@@ -289,6 +289,8 @@ int pwmchip_add_with_polarity(struct pwm_chip *chip,
 		pwm->chip = chip;
 		pwm->pwm = chip->base + i;
 		pwm->hwpwm = i;
+		mutex_init(&pwm->lock);
+
 		pwm_set_default_polarity(pwm, polarity);
 
 		if (chip->ops->reset_state)
@@ -521,16 +523,22 @@ int pwm_set_polarity(struct pwm_device *pwm, enum pwm_polarity polarity)
 	if (!pwm->chip->ops->set_polarity)
 		return -ENOSYS;
 
-	if (pwm_is_enabled(pwm))
-		return -EBUSY;
+	mutex_lock(&pwm->lock);
+
+	if (pwm_is_enabled(pwm)) {
+		err = -EBUSY;
+		goto unlock;
+	}
 
 	err = pwm->chip->ops->set_polarity(pwm->chip, pwm, polarity);
 	if (err)
-		return err;
+		goto unlock;
 
 	pwm->state.polarity = polarity;
 
-	return 0;
+unlock:
+	mutex_unlock(&pwm->lock);
+	return err;
 }
 EXPORT_SYMBOL_GPL(pwm_set_polarity);
 
@@ -550,6 +558,8 @@ int pwm_enable(struct pwm_device *pwm)
 	if (pwm_is_enabled(pwm))
 		return 0;
 
+	mutex_lock(&pwm->lock);
+
 	if (pwm->chip->ops->apply) {
 		struct pwm_state state;
 
@@ -564,6 +574,8 @@ int pwm_enable(struct pwm_device *pwm)
 	if (!err)
 		pwm->state.enabled = true;
 
+	mutex_unlock(&pwm->lock);
+
 	return err;
 }
 EXPORT_SYMBOL_GPL(pwm_enable);
@@ -577,6 +589,8 @@ void pwm_disable(struct pwm_device *pwm)
 	if (!pwm || !pwm_is_enabled(pwm))
 		return;
 
+	mutex_lock(&pwm->lock);
+
 	if (pwm->chip->ops->apply) {
 		struct pwm_state state;
 
@@ -589,6 +603,8 @@ void pwm_disable(struct pwm_device *pwm)
 	}
 
 	pwm->state.enabled = false;
+
+	mutex_unlock(&pwm->lock);
 }
 EXPORT_SYMBOL_GPL(pwm_disable);
 
@@ -849,8 +865,10 @@ struct pwm_device *pwm_get(struct device *dev, const char *con_id)
 		}
 	}
 
-	if (!chosen)
+	if (!chosen) {
+		pwm = ERR_PTR(-ENODEV);
 		goto out;
+	}
 
 	chip = pwmchip_find_by_name(chosen->provider);
 	if (!chip)

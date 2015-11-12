@@ -2,6 +2,7 @@
 #define __LINUX_PWM_H
 
 #include <linux/err.h>
+#include <linux/mutex.h>
 #include <linux/of.h>
 
 struct pwm_device;
@@ -100,6 +101,7 @@ struct pwm_state {
  * @pwm: global index of the PWM device
  * @chip: PWM chip providing this PWM device
  * @chip_data: chip-private data associated with the PWM device
+ * @lock: used to serialize accesses to the PWM device where necessary
  * @state: curent PWM channel state
  * @default_state: default PWM channel state
  */
@@ -110,6 +112,7 @@ struct pwm_device {
 	unsigned int pwm;
 	struct pwm_chip *chip;
 	void *chip_data;
+	struct mutex lock;
 
 	struct pwm_state state;
 	struct pwm_state default_state;
