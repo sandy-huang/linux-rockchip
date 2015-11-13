@@ -493,7 +493,7 @@ static int rockchip_i2s_probe(struct platform_device *pdev)
 		return PTR_ERR(i2s->regmap);
 	}
 
-	if (of_property_read_bool(np, "rockchip,i2s-broken-burst-len")) {
+	if (of_property_read_bool(node, "rockchip,i2s-broken-burst-len")) {
 		i2s->playback_dma_data.maxburst = 1;
 		i2s->capture_dma_data.maxburst = 1;
 	} else {
