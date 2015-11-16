@@ -70,10 +70,12 @@ struct max77693_haptic {
 
 static int max77693_haptic_set_duty_cycle(struct max77693_haptic *haptic)
 {
-	int delta = (haptic->pwm_dev->period + haptic->pwm_duty) / 2;
+	int delta = (pwm_get_default_period((haptic->pwm_dev)) +
+		     haptic->pwm_duty) / 2;
 	int error;
 
-	error = pwm_config(haptic->pwm_dev, delta, haptic->pwm_dev->period);
+	error = pwm_config(haptic->pwm_dev, delta,
+			   pwm_get_default_period((haptic->pwm_dev)));
 	if (error) {
 		dev_err(haptic->dev, "failed to configure pwm: %d\n", error);
 		return error;
@@ -245,7 +247,8 @@ static int max77693_haptic_play_effect(struct input_dev *dev, void *data,
 	 * The formula to convert magnitude to pwm_duty as follows:
 	 * - pwm_duty = (magnitude * pwm_period) / MAX_MAGNITUDE(0xFFFF)
 	 */
-	period_mag_multi = (u64)haptic->pwm_dev->period * haptic->magnitude;
+	period_mag_multi = (u64)pwm_get_default_period((haptic->pwm_dev)) *
+			   haptic->magnitude;
 	haptic->pwm_duty = (unsigned int)(period_mag_multi >>
 						MAX_MAGNITUDE_SHIFT);
 
