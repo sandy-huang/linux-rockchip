@@ -508,10 +508,10 @@ int pwm_enable(struct pwm_device *pwm)
 
 	mutex_lock(&pwm->lock);
 
-	if (!test_and_set_bit(PWMF_ENABLED, &pwm->flags)) {
+	if (!pwm_is_enabled(pwm)) {
 		err = pwm->chip->ops->enable(pwm->chip, pwm);
-		if (err)
-			clear_bit(PWMF_ENABLED, &pwm->flags);
+		if (!err)
+			pwm->state.enabled = true;
 	}
 
 	mutex_unlock(&pwm->lock);
@@ -526,8 +526,17 @@ EXPORT_SYMBOL_GPL(pwm_enable);
  */
 void pwm_disable(struct pwm_device *pwm)
 {
-	if (pwm && test_and_clear_bit(PWMF_ENABLED, &pwm->flags))
+	if (!pwm)
+		return;
+
+	mutex_lock(&pwm->lock);
+
+	if (pwm_is_enabled(pwm)) {
 		pwm->chip->ops->disable(pwm->chip, pwm);
+		pwm->state.enabled = false;
+	}
+
+	mutex_unlock(&pwm->lock);
 }
 EXPORT_SYMBOL_GPL(pwm_disable);
 
