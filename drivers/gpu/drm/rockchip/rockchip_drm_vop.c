@@ -916,25 +916,23 @@ static int vop_update_plane_event(struct drm_plane *plane,
 	 * unreference any previous framebuffers.
 	 */
 	mutex_lock(&vop->vsync_mutex);
-	if (fb != vop_win_last_pending_fb(vop_win)) {
-		ret = drm_vblank_get(plane->dev, vop->pipe);
-		if (ret) {
-			DRM_ERROR("failed to get vblank, %d\n", ret);
-			mutex_unlock(&vop->vsync_mutex);
-			return ret;
-		}
-
-		drm_framebuffer_reference(fb);
-
-		ret = vop_win_queue_fb(vop_win, fb, yrgb_mst, event);
-		if (ret) {
-			drm_vblank_put(plane->dev, vop->pipe);
-			mutex_unlock(&vop->vsync_mutex);
-			return ret;
-		}
-
-		vop->vsync_work_pending = true;
+	ret = drm_vblank_get(plane->dev, vop->pipe);
+	if (ret) {
+		DRM_ERROR("failed to get vblank, %d\n", ret);
+		mutex_unlock(&vop->vsync_mutex);
+		return ret;
 	}
+
+	drm_framebuffer_reference(fb);
+
+	ret = vop_win_queue_fb(vop_win, fb, yrgb_mst, event);
+	if (ret) {
+		drm_vblank_put(plane->dev, vop->pipe);
+		mutex_unlock(&vop->vsync_mutex);
+		return ret;
+	}
+
+	vop->vsync_work_pending = true;
 	mutex_unlock(&vop->vsync_mutex);
 
 	spin_lock(&vop->reg_lock);
@@ -1296,7 +1294,7 @@ static void vop_win_state_complete(struct vop_win *vop_win,
 
 	if (state->event) {
 		spin_lock_irqsave(&drm->event_lock, flags);
-		drm_send_vblank_event(drm, -1, state->event);
+		drm_crtc_send_vblank_event(crtc, state->event);
 		spin_unlock_irqrestore(&drm->event_lock, flags);
 	}
 
