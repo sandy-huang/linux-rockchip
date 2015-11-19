@@ -66,10 +66,6 @@ struct rockchip_usb_phy {
 	bool		uart_enabled;
 };
 
-/*
- * Set siddq to 1 to power down usb phy analog blocks,
- * set to 0 to enable.
- */
 static int rockchip_usb_phy_power(struct rockchip_usb_phy *phy,
 					   bool siddq)
 {
