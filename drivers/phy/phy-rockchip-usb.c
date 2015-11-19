@@ -66,10 +66,6 @@ struct rockchip_usb_phy {
 	bool		uart_enabled;
 };
 
-/*
- * Set siddq to 1 to power down usb phy analog blocks,
- * set to 0 to enable.
- */
 static int rockchip_usb_phy_power(struct rockchip_usb_phy *phy,
 					   bool siddq)
 {
@@ -90,6 +86,7 @@ static void rockchip_usb_phy480m_disable(struct clk_hw *hw)
 						    struct rockchip_usb_phy,
 						    clk480m_hw);
 
+	/* Power down usb phy analog blocks by set siddq 1 */
 	rockchip_usb_phy_power(phy, 1);
 }
 
@@ -99,6 +96,7 @@ static int rockchip_usb_phy480m_enable(struct clk_hw *hw)
 						    struct rockchip_usb_phy,
 						    clk480m_hw);
 
+	/* Power up usb phy analog blocks by set siddq 0 */
 	return rockchip_usb_phy_power(phy, 0);
 }
 
@@ -408,8 +406,10 @@ static int rockchip_usb_phy_probe(struct platform_device *pdev)
 
 	for_each_available_child_of_node(dev->of_node, child) {
 		err = rockchip_usb_phy_init(phy_base, child);
-		if (err)
+		if (err) {
+			of_node_put(child);
 			return err;
+		}
 	}
 
 	phy_provider = devm_of_phy_provider_register(dev, of_phy_simple_xlate);
