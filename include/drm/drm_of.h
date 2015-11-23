@@ -10,7 +10,8 @@ struct device_node;
 extern uint32_t drm_of_find_possible_crtcs(struct drm_device *dev,
 					   struct device_node *port);
 extern int drm_of_component_probe(struct device *dev,
-				  int (*compare_of)(struct device *, void *),
+				  int (*compare_port)(struct device *, void *),
+				  int (*compare_encoder)(struct device *, void *),
 				  const struct component_master_ops *m_ops);
 #else
 static inline uint32_t drm_of_find_possible_crtcs(struct drm_device *dev,
@@ -21,7 +22,8 @@ static inline uint32_t drm_of_find_possible_crtcs(struct drm_device *dev,
 
 static inline int
 drm_of_component_probe(struct device *dev,
-		       int (*compare_of)(struct device *, void *),
+		       int (*compare_port)(struct device *, void *),
+		       int (*compare_encoder)(struct device *, void *),
 		       const struct component_master_ops *m_ops)
 {
 	return -EINVAL;

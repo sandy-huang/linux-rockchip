@@ -77,7 +77,8 @@ EXPORT_SYMBOL(drm_of_find_possible_crtcs);
  * Returns zero if successful, or one of the standard error codes if it fails.
  */
 int drm_of_component_probe(struct device *dev,
-			   int (*compare_of)(struct device *, void *),
+			   int (*compare_port)(struct device *, void *),
+			   int (*compare_encoder)(struct device *, void *),
 			   const struct component_master_ops *m_ops)
 {
 	struct device_node *ep, *port, *remote;
@@ -101,8 +102,12 @@ int drm_of_component_probe(struct device *dev,
 			continue;
 		}
 
-		component_match_add(dev, &match, compare_of, port);
-		of_node_put(port);
+		component_match_add(dev, &match, compare_port, port);
+		/*
+		 * component_match_add keeps a reference to the port
+		 * variable, so we need to keep the reference count
+		 * increment from of_parse_phandle()
+		 */
 	}
 
 	if (i == 0) {
@@ -140,8 +145,12 @@ int drm_of_component_probe(struct device *dev,
 				continue;
 			}
 
-			component_match_add(dev, &match, compare_of, remote);
-			of_node_put(remote);
+			component_match_add(dev, &match, compare_encoder, remote);
+			/*
+			 * component_match_add keeps a reference to the port
+			 * variable, so we need to keep the reference count
+			 * increment from of_graph_get_remote_port_parent()
+			 */
 		}
 		of_node_put(port);
 	}
