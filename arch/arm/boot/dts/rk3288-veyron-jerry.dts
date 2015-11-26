@@ -61,6 +61,7 @@
 		pinctrl-names = "default";
 		pinctrl-0 = <&lcd_enable_h>;
 		regulator-name = "panel_regulator";
+		startup-delay-us = <50000>;
 		vin-supply = <&vcc33_sys>;
 	};
 
@@ -90,6 +91,10 @@
 
 &backlight {
 	power-supply = <&backlight_regulator>;
+};
+
+&edp {
+	analogix,need-force-hpd;
 };
 
 &panel {
