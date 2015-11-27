@@ -1,5 +1,5 @@
 /*
- *Crypto acceleration support for Rockchip RK3288
+ * Crypto acceleration support for Rockchip RK3288
  *
  * Copyright (c) 2015, Fuzhou Rockchip Electronics Co., Ltd
  *
@@ -14,39 +14,21 @@
 #include "rk3288_crypto.h"
 
 #define RK_CRYPTO_DEC			BIT(0)
-#define AES	0
-#define TDES	BIT(16)
 
 static void rk_crypto_complete(struct rk_crypto_info *dev, int err)
 {
-	if (dev->ablk_req->base.complete) {
-		if (err)
-			dev_warn(dev->dev, "[%s:%d] err = %d\n",
-				 __func__, __LINE__, err);
+	if (dev->ablk_req->base.complete)
 		dev->ablk_req->base.complete(&dev->ablk_req->base, err);
-	}
 }
 
-static int rk_handle_req(struct ablkcipher_request *req, int alig_bytes)
-{
-	struct crypto_ablkcipher *tfm = crypto_ablkcipher_reqtfm(req);
-	struct rk_cipher_ctx *ctx = crypto_ablkcipher_ctx(tfm);
-	struct rk_crypto_info *dev = ctx->dev;
-	int err;
-
-	if (!IS_ALIGNED(req->nbytes, alig_bytes))
-		return -EINVAL;
-
-	spin_lock(&dev->lock);
-	err = ablkcipher_enqueue_request(&dev->queue, req);
-	spin_unlock(&dev->lock);
-	tasklet_schedule(&dev->crypto_tasklet);
-	return err;
-}
-
-static void rk_ablk_init(struct rk_crypto_info *dev,
+static int rk_handle_req(struct rk_crypto_info *dev,
 			 struct ablkcipher_request *req)
 {
+	int err;
+
+	if (!IS_ALIGNED(req->nbytes, dev->align_size))
+		return -EINVAL;
+
 	dev->left_bytes = req->nbytes;
 	dev->total = req->nbytes;
 	dev->sg_src = req->src;
@@ -55,6 +37,12 @@ static void rk_ablk_init(struct rk_crypto_info *dev,
 	dev->sg_dst = req->dst;
 	dev->aligned = 1;
 	dev->ablk_req = req;
+
+	spin_lock(&dev->lock);
+	err = ablkcipher_enqueue_request(&dev->queue, req);
+	spin_unlock(&dev->lock);
+	tasklet_schedule(&dev->crypto_tasklet);
+	return err;
 }
 
 static int rk_aes_setkey(struct crypto_ablkcipher *cipher,
@@ -63,21 +51,13 @@ static int rk_aes_setkey(struct crypto_ablkcipher *cipher,
 	struct crypto_tfm *tfm = crypto_ablkcipher_tfm(cipher);
 	struct rk_cipher_ctx *ctx = crypto_tfm_ctx(tfm);
 
-	if (!key) {
-		dev_err(ctx->dev->dev, "[%s:%d] no key error\n",
-			__func__, __LINE__);
-		return -EINVAL;
-	}
-
 	if (keylen != AES_KEYSIZE_128 && keylen != AES_KEYSIZE_192 &&
 	    keylen != AES_KEYSIZE_256) {
 		crypto_ablkcipher_set_flags(cipher, CRYPTO_TFM_RES_BAD_KEY_LEN);
-		dev_err(ctx->dev->dev, "[%s:%d] expect key len = %d\n",
-			__func__, __LINE__, keylen);
 		return -EINVAL;
 	}
 	ctx->keylen = keylen;
-	memcpy(ctx->dev->reg + RK_CRYPTO_AES_KEY_0, key, keylen);
+	memcpy_toio(ctx->dev->reg + RK_CRYPTO_AES_KEY_0, key, keylen);
 	return 0;
 }
 
@@ -88,16 +68,8 @@ static int rk_tdes_setkey(struct crypto_ablkcipher *cipher,
 	struct rk_cipher_ctx *ctx = crypto_tfm_ctx(tfm);
 	u32 tmp[DES_EXPKEY_WORDS];
 
-	if (!key) {
-		dev_err(ctx->dev->dev, "[%s:%d] no key error\n",
-			__func__, __LINE__);
-		return -EINVAL;
-	}
-
 	if (keylen != DES_KEY_SIZE && keylen != DES3_EDE_KEY_SIZE) {
 		crypto_ablkcipher_set_flags(cipher, CRYPTO_TFM_RES_BAD_KEY_LEN);
-		dev_err(ctx->dev->dev, "[%s:%d] expect key len = %d\n",
-			__func__, __LINE__, keylen);
 		return -EINVAL;
 	}
 
@@ -110,7 +82,7 @@ static int rk_tdes_setkey(struct crypto_ablkcipher *cipher,
 	}
 
 	ctx->keylen = keylen;
-	memcpy(ctx->dev->reg + RK_CRYPTO_TDES_KEY1_0, key, keylen);
+	memcpy_toio(ctx->dev->reg + RK_CRYPTO_TDES_KEY1_0, key, keylen);
 	return 0;
 }
 
@@ -120,9 +92,8 @@ static int rk_aes_ecb_encrypt(struct ablkcipher_request *req)
 	struct rk_cipher_ctx *ctx = crypto_ablkcipher_ctx(tfm);
 	struct rk_crypto_info *dev = ctx->dev;
 
-	dev->mode = RK_CRYPTO_AES_ECB_MODE | AES;
-	rk_ablk_init(dev, req);
-	return rk_handle_req(req, dev->align_size);
+	dev->mode = RK_CRYPTO_AES_ECB_MODE;
+	return rk_handle_req(dev, req);
 }
 
 static int rk_aes_ecb_decrypt(struct ablkcipher_request *req)
@@ -131,9 +102,8 @@ static int rk_aes_ecb_decrypt(struct ablkcipher_request *req)
 	struct rk_cipher_ctx *ctx = crypto_ablkcipher_ctx(tfm);
 	struct rk_crypto_info *dev = ctx->dev;
 
-	dev->mode = RK_CRYPTO_AES_ECB_MODE | RK_CRYPTO_DEC | AES;
-	rk_ablk_init(dev, req);
-	return rk_handle_req(req, dev->align_size);
+	dev->mode = RK_CRYPTO_AES_ECB_MODE | RK_CRYPTO_DEC;
+	return rk_handle_req(dev, req);
 }
 
 static int rk_aes_cbc_encrypt(struct ablkcipher_request *req)
@@ -142,9 +112,8 @@ static int rk_aes_cbc_encrypt(struct ablkcipher_request *req)
 	struct rk_cipher_ctx *ctx = crypto_ablkcipher_ctx(tfm);
 	struct rk_crypto_info *dev = ctx->dev;
 
-	dev->mode = RK_CRYPTO_AES_CBC_MODE | AES;
-	rk_ablk_init(dev, req);
-	return rk_handle_req(req, dev->align_size);
+	dev->mode = RK_CRYPTO_AES_CBC_MODE;
+	return rk_handle_req(dev, req);
 }
 
 static int rk_aes_cbc_decrypt(struct ablkcipher_request *req)
@@ -153,9 +122,8 @@ static int rk_aes_cbc_decrypt(struct ablkcipher_request *req)
 	struct rk_cipher_ctx *ctx = crypto_ablkcipher_ctx(tfm);
 	struct rk_crypto_info *dev = ctx->dev;
 
-	dev->mode = RK_CRYPTO_AES_CBC_MODE | RK_CRYPTO_DEC | AES;
-	rk_ablk_init(dev, req);
-	return rk_handle_req(req, dev->align_size);
+	dev->mode = RK_CRYPTO_AES_CBC_MODE | RK_CRYPTO_DEC;
+	return rk_handle_req(dev, req);
 }
 
 static int rk_des_ecb_encrypt(struct ablkcipher_request *req)
@@ -164,9 +132,8 @@ static int rk_des_ecb_encrypt(struct ablkcipher_request *req)
 	struct rk_cipher_ctx *ctx = crypto_ablkcipher_ctx(tfm);
 	struct rk_crypto_info *dev = ctx->dev;
 
-	dev->mode = TDES;
-	rk_ablk_init(dev, req);
-	return rk_handle_req(req, dev->align_size);
+	dev->mode = 0;
+	return rk_handle_req(dev, req);
 }
 
 static int rk_des_ecb_decrypt(struct ablkcipher_request *req)
@@ -175,9 +142,8 @@ static int rk_des_ecb_decrypt(struct ablkcipher_request *req)
 	struct rk_cipher_ctx *ctx = crypto_ablkcipher_ctx(tfm);
 	struct rk_crypto_info *dev = ctx->dev;
 
-	dev->mode = RK_CRYPTO_DEC | TDES;
-	rk_ablk_init(dev, req);
-	return rk_handle_req(req, dev->align_size);
+	dev->mode = RK_CRYPTO_DEC;
+	return rk_handle_req(dev, req);
 }
 
 static int rk_des_cbc_encrypt(struct ablkcipher_request *req)
@@ -186,9 +152,8 @@ static int rk_des_cbc_encrypt(struct ablkcipher_request *req)
 	struct rk_cipher_ctx *ctx = crypto_ablkcipher_ctx(tfm);
 	struct rk_crypto_info *dev = ctx->dev;
 
-	dev->mode = RK_CRYPTO_TDES_CHAINMODE | TDES;
-	rk_ablk_init(dev, req);
-	return rk_handle_req(req, dev->align_size);
+	dev->mode = RK_CRYPTO_TDES_CHAINMODE_CBC;
+	return rk_handle_req(dev, req);
 }
 
 static int rk_des_cbc_decrypt(struct ablkcipher_request *req)
@@ -197,9 +162,8 @@ static int rk_des_cbc_decrypt(struct ablkcipher_request *req)
 	struct rk_cipher_ctx *ctx = crypto_ablkcipher_ctx(tfm);
 	struct rk_crypto_info *dev = ctx->dev;
 
-	dev->mode = RK_CRYPTO_TDES_CHAINMODE | RK_CRYPTO_DEC | TDES;
-	rk_ablk_init(dev, req);
-	return rk_handle_req(req, dev->align_size);
+	dev->mode = RK_CRYPTO_TDES_CHAINMODE_CBC | RK_CRYPTO_DEC;
+	return rk_handle_req(dev, req);
 }
 
 static int rk_des3_ede_ecb_encrypt(struct ablkcipher_request *req)
@@ -208,9 +172,8 @@ static int rk_des3_ede_ecb_encrypt(struct ablkcipher_request *req)
 	struct rk_cipher_ctx *ctx = crypto_ablkcipher_ctx(tfm);
 	struct rk_crypto_info *dev = ctx->dev;
 
-	dev->mode = RK_CRYPTO_TDES_SELECT | TDES;
-	rk_ablk_init(dev, req);
-	return rk_handle_req(req, dev->align_size);
+	dev->mode = RK_CRYPTO_TDES_SELECT;
+	return rk_handle_req(dev, req);
 }
 
 static int rk_des3_ede_ecb_decrypt(struct ablkcipher_request *req)
@@ -219,9 +182,8 @@ static int rk_des3_ede_ecb_decrypt(struct ablkcipher_request *req)
 	struct rk_cipher_ctx *ctx = crypto_ablkcipher_ctx(tfm);
 	struct rk_crypto_info *dev = ctx->dev;
 
-	dev->mode = RK_CRYPTO_TDES_SELECT | RK_CRYPTO_DEC | TDES;
-	rk_ablk_init(dev, req);
-	return rk_handle_req(req, dev->align_size);
+	dev->mode = RK_CRYPTO_TDES_SELECT | RK_CRYPTO_DEC;
+	return rk_handle_req(dev, req);
 }
 
 static int rk_des3_ede_cbc_encrypt(struct ablkcipher_request *req)
@@ -230,9 +192,8 @@ static int rk_des3_ede_cbc_encrypt(struct ablkcipher_request *req)
 	struct rk_cipher_ctx *ctx = crypto_ablkcipher_ctx(tfm);
 	struct rk_crypto_info *dev = ctx->dev;
 
-	dev->mode = RK_CRYPTO_TDES_SELECT | RK_CRYPTO_TDES_CHAINMODE | TDES;
-	rk_ablk_init(dev, req);
-	return rk_handle_req(req, dev->align_size);
+	dev->mode = RK_CRYPTO_TDES_SELECT | RK_CRYPTO_TDES_CHAINMODE_CBC;
+	return rk_handle_req(dev, req);
 }
 
 static int rk_des3_ede_cbc_decrypt(struct ablkcipher_request *req)
@@ -241,41 +202,42 @@ static int rk_des3_ede_cbc_decrypt(struct ablkcipher_request *req)
 	struct rk_cipher_ctx *ctx = crypto_ablkcipher_ctx(tfm);
 	struct rk_crypto_info *dev = ctx->dev;
 
-	dev->mode = RK_CRYPTO_TDES_SELECT | RK_CRYPTO_TDES_CHAINMODE |
-		    RK_CRYPTO_DEC | TDES;
-	rk_ablk_init(dev, req);
-	return rk_handle_req(req, dev->align_size);
+	dev->mode = RK_CRYPTO_TDES_SELECT | RK_CRYPTO_TDES_CHAINMODE_CBC |
+		    RK_CRYPTO_DEC;
+	return rk_handle_req(dev, req);
 }
 
 static void rk_ablk_hw_init(struct rk_crypto_info *dev)
 {
-	struct crypto_ablkcipher *tfm = crypto_ablkcipher_reqtfm(dev->ablk_req);
-	struct rk_cipher_ctx *ctx = crypto_ablkcipher_ctx(tfm);
-	u32 conf_reg = 0;
+	struct crypto_ablkcipher *cipher =
+		crypto_ablkcipher_reqtfm(dev->ablk_req);
+	struct crypto_tfm *tfm = crypto_ablkcipher_tfm(cipher);
+	struct rk_cipher_ctx *ctx = crypto_ablkcipher_ctx(cipher);
+	u32 ivsize, block, conf_reg = 0;
 
-	if (dev->mode & TDES) {
-		dev->mode &= ~TDES;
+	block = crypto_tfm_alg_blocksize(tfm);
+	ivsize = crypto_ablkcipher_ivsize(cipher);
+
+	if (block == DES_BLOCK_SIZE) {
 		dev->mode |= RK_CRYPTO_TDES_FIFO_MODE |
 			     RK_CRYPTO_TDES_BYTESWAP_KEY |
 			     RK_CRYPTO_TDES_BYTESWAP_IV;
 		CRYPTO_WRITE(dev, RK_CRYPTO_TDES_CTRL, dev->mode);
-
-		memcpy(dev->reg + RK_CRYPTO_TDES_IV_0, dev->ablk_req->info, 8);
+		memcpy_toio(dev->reg + RK_CRYPTO_TDES_IV_0,
+			    dev->ablk_req->info, ivsize);
 		conf_reg = RK_CRYPTO_DESSEL;
 	} else {
 		dev->mode |= RK_CRYPTO_AES_FIFO_MODE |
 			     RK_CRYPTO_AES_KEY_CHANGE |
 			     RK_CRYPTO_AES_BYTESWAP_KEY |
 			     RK_CRYPTO_AES_BYTESWAP_IV;
-
 		if (ctx->keylen == AES_KEYSIZE_192)
 			dev->mode |= RK_CRYPTO_AES_192BIT_key;
 		else if (ctx->keylen == AES_KEYSIZE_256)
 			dev->mode |= RK_CRYPTO_AES_256BIT_key;
-
 		CRYPTO_WRITE(dev, RK_CRYPTO_AES_CTRL, dev->mode);
-
-		memcpy(dev->reg + RK_CRYPTO_AES_IV_0, dev->ablk_req->info, 16);
+		memcpy_toio(dev->reg + RK_CRYPTO_AES_IV_0,
+			    dev->ablk_req->info, ivsize);
 	}
 	conf_reg |= RK_CRYPTO_BYTESWAP_BTFIFO |
 		    RK_CRYPTO_BYTESWAP_BRFIFO;
@@ -290,7 +252,7 @@ static void crypto_dma_start(struct rk_crypto_info *dev)
 	CRYPTO_WRITE(dev, RK_CRYPTO_BRDMAL, dev->count / 4);
 	CRYPTO_WRITE(dev, RK_CRYPTO_BTDMAS, dev->addr_out);
 	CRYPTO_WRITE(dev, RK_CRYPTO_CTRL, RK_CRYPTO_BLOCK_START |
-			(RK_CRYPTO_BLOCK_START << 16));
+		     _SBF(RK_CRYPTO_BLOCK_START, 16));
 }
 
 static int rk_set_data_start(struct rk_crypto_info *dev)
@@ -314,6 +276,19 @@ static int rk_ablk_start(struct rk_crypto_info *dev)
 	return err;
 }
 
+static void rk_iv_copyback(struct rk_crypto_info *dev)
+{
+	struct crypto_ablkcipher *tfm = crypto_ablkcipher_reqtfm(dev->ablk_req);
+	u32 ivsize = crypto_ablkcipher_ivsize(tfm);
+
+	if (ivsize == DES_BLOCK_SIZE)
+		memcpy_fromio(dev->ablk_req->info,
+			      dev->reg + RK_CRYPTO_TDES_IV_0, ivsize);
+	else if (ivsize == AES_BLOCK_SIZE)
+		memcpy_fromio(dev->ablk_req->info,
+			      dev->reg + RK_CRYPTO_AES_IV_0, ivsize);
+}
+
 /* return:
  *	true	some err was occurred
  *	fault	no err, continue
@@ -335,7 +310,7 @@ static int rk_ablk_rx(struct rk_crypto_info *dev)
 	if (dev->left_bytes) {
 		if (dev->aligned) {
 			if (sg_is_last(dev->sg_src)) {
-				dev_err(dev->dev, "[%s:%d], lack of data\n",
+				dev_err(dev->dev, "[%s:%d] Lack of data\n",
 					__func__, __LINE__);
 				err = -ENOMEM;
 				goto out_rx;
@@ -345,6 +320,7 @@ static int rk_ablk_rx(struct rk_crypto_info *dev)
 		}
 		err = rk_set_data_start(dev);
 	} else {
+		rk_iv_copyback(dev);
 		/* here show the calculation is over without any err */
 		dev->complete(dev, 0);
 	}

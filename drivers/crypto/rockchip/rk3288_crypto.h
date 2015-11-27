@@ -1,10 +1,8 @@
 #ifndef __RK3288_CRYPTO_H__
 #define __RK3288_CRYPTO_H__
 
-#include <crypto/sha.h>
 #include <crypto/aes.h>
 #include <crypto/des.h>
-#include <crypto/ctr.h>
 #include <crypto/algapi.h>
 #include <linux/interrupt.h>
 #include <linux/delay.h>
@@ -29,7 +27,7 @@
 #define RK_CRYPTO_BCDMA_DONE_ENA	BIT(0)
 
 #define RK_CRYPTO_CTRL			0x0008
-#define RK_CRYPTO_WRITE_MASK		(0xFFFF << 16)
+#define RK_CRYPTO_WRITE_MASK		_SBF(0xFFFF, 16)
 #define RK_CRYPTO_TRNG_FLUSH		BIT(9)
 #define RK_CRYPTO_TRNG_START		BIT(8)
 #define RK_CRYPTO_PKA_FLUSH		BIT(7)
@@ -125,7 +123,7 @@
 #define RK_CRYPTO_TDES_BYTESWAP_DO	BIT(6)
 #define RK_CRYPTO_TDES_BYTESWAP_DI	BIT(5)
 /* 0: ECB, 1: CBC */
-#define RK_CRYPTO_TDES_CHAINMODE	BIT(4)
+#define RK_CRYPTO_TDES_CHAINMODE_CBC	BIT(4)
 /* TDES Key Mode, 0 : EDE, 1 : EEE */
 #define RK_CRYPTO_TDES_EEE		BIT(3)
 /* 0: DES, 1:TDES */
@@ -155,8 +153,6 @@
 		readl_relaxed(((dev)->reg + (offset)))
 #define CRYPTO_WRITE(dev, offset, val)	  \
 		writel_relaxed((val), ((dev)->reg + (offset)))
-/* get register virt address */
-#define CRYPTO_GET_REG_VIRT(dev, offset)   ((dev)->reg + (offset))
 
 struct rk_crypto_info {
 	struct device			*dev;
