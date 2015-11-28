@@ -1,5 +1,5 @@
 /*
- *Crypto acceleration support for Rockchip RK3288
+ * Crypto acceleration support for Rockchip RK3288
  *
  * Copyright (c) 2015, Fuzhou Rockchip Electronics Co., Ltd
  *
@@ -26,26 +26,25 @@ static int rk_crypto_enable_clk(struct rk_crypto_info *dev)
 
 	err = clk_prepare_enable(dev->sclk);
 	if (err) {
-		dev_err(dev->dev, "[%s:%d], Couldn't enable clock 'sclk'\n",
+		dev_err(dev->dev, "[%s:%d], Couldn't enable clock sclk\n",
 			__func__, __LINE__);
 		goto err_return;
 	}
 	err = clk_prepare_enable(dev->aclk);
 	if (err) {
-		dev_err(dev->dev, "[%s:%d], Couldn't enable clock 'aclk'\n",
+		dev_err(dev->dev, "[%s:%d], Couldn't enable clock aclk\n",
 			__func__, __LINE__);
 		goto err_aclk;
 	}
 	err = clk_prepare_enable(dev->hclk);
 	if (err) {
-		dev_err(dev->dev, "[%s:%d], Couldn't enable clock 'hclk'\n",
+		dev_err(dev->dev, "[%s:%d], Couldn't enable clock hclk\n",
 			__func__, __LINE__);
 		goto err_hclk;
 	}
-
 	err = clk_prepare_enable(dev->dmaclk);
 	if (err) {
-		dev_err(dev->dev, "[%s:%d], Couldn't enable clock 'dmaclk'\n",
+		dev_err(dev->dev, "[%s:%d], Couldn't enable clock dmaclk\n",
 			__func__, __LINE__);
 		goto err_dmaclk;
 	}
@@ -166,27 +165,23 @@ static void rk_unload_data(struct rk_crypto_info *dev)
 	}
 }
 
-static irqreturn_t crypto_irq_handle(int irq, void *dev_id)
+static irqreturn_t rk_crypto_irq_handle(int irq, void *dev_id)
 {
 	struct rk_crypto_info *dev  = platform_get_drvdata(dev_id);
 	u32 interrupt_status;
 	int err = 0;
 
 	spin_lock(&dev->lock);
-
-	if (irq == dev->irq) {
-		interrupt_status = CRYPTO_READ(dev, RK_CRYPTO_INTSTS);
-		CRYPTO_WRITE(dev, RK_CRYPTO_INTSTS, interrupt_status);
-		if (interrupt_status & 0x0a) {
-			dev_warn(dev->dev, "DMA Error\n");
-			err = -EFAULT;
-		} else if (interrupt_status & 0x05) {
-			err = dev->update(dev);
-		}
-
-		if (err)
-			dev->complete(dev, err);
+	interrupt_status = CRYPTO_READ(dev, RK_CRYPTO_INTSTS);
+	CRYPTO_WRITE(dev, RK_CRYPTO_INTSTS, interrupt_status);
+	if (interrupt_status & 0x0a) {
+		dev_warn(dev->dev, "DMA Error\n");
+		err = -EFAULT;
+	} else if (interrupt_status & 0x05) {
+		err = dev->update(dev);
 	}
+	if (err)
+		dev->complete(dev, err);
 	spin_unlock(&dev->lock);
 	return IRQ_HANDLED;
 }
@@ -195,7 +190,6 @@ static void rk_crypto_tasklet_cb(unsigned long data)
 {
 	struct rk_crypto_info *dev = (struct rk_crypto_info *)data;
 	struct crypto_async_request *async_req, *backlog;
-	struct rk_cipher_reqctx *ablk_reqctx;
 	int err = 0;
 
 	spin_lock(&dev->lock);
@@ -211,10 +205,8 @@ static void rk_crypto_tasklet_cb(unsigned long data)
 		backlog = NULL;
 	}
 
-	if (crypto_tfm_alg_type(async_req->tfm) == CRYPTO_ALG_TYPE_ABLKCIPHER) {
+	if (crypto_tfm_alg_type(async_req->tfm) == CRYPTO_ALG_TYPE_ABLKCIPHER)
 		dev->ablk_req = ablkcipher_request_cast(async_req);
-		ablk_reqctx   = ablkcipher_request_ctx(dev->ablk_req);
-	}
 	err = dev->start(dev);
 	if (err)
 		dev->complete(dev, err);
@@ -256,6 +248,13 @@ static void rk_crypto_unregister(void)
 		crypto_unregister_alg(&rk_cipher_algs[i]->alg);
 }
 
+static void rk_crypto_action(void *data)
+{
+	struct rk_crypto_info *crypto_info = data;
+
+	reset_control_assert(crypto_info->rst);
+}
+
 static const struct of_device_id crypto_of_id_table[] = {
 	{ .compatible = "rockchip,rk3288-crypto" },
 	{}
@@ -286,37 +285,43 @@ static int rk_crypto_probe(struct platform_device *pdev)
 	usleep_range(10, 20);
 	reset_control_deassert(crypto_info->rst);
 
+	err = devm_add_action(dev, rk_crypto_action, crypto_info);
+	if (err) {
+		reset_control_assert(crypto_info->rst);
+		goto err_crypto;
+	}
+
 	spin_lock_init(&crypto_info->lock);
 
 	res = platform_get_resource(pdev, IORESOURCE_MEM, 0);
 	crypto_info->reg = devm_ioremap_resource(&pdev->dev, res);
 	if (IS_ERR(crypto_info->reg)) {
 		err = PTR_ERR(crypto_info->reg);
-		goto err_ioremap;
+		goto err_crypto;
 	}
 
 	crypto_info->aclk = devm_clk_get(&pdev->dev, "aclk");
 	if (IS_ERR(crypto_info->aclk)) {
 		err = PTR_ERR(crypto_info->aclk);
-		goto err_ioremap;
+		goto err_crypto;
 	}
 
 	crypto_info->hclk = devm_clk_get(&pdev->dev, "hclk");
 	if (IS_ERR(crypto_info->hclk)) {
 		err = PTR_ERR(crypto_info->hclk);
-		goto err_ioremap;
+		goto err_crypto;
 	}
 
 	crypto_info->sclk = devm_clk_get(&pdev->dev, "sclk");
 	if (IS_ERR(crypto_info->sclk)) {
 		err = PTR_ERR(crypto_info->sclk);
-		goto err_ioremap;
+		goto err_crypto;
 	}
 
 	crypto_info->dmaclk = devm_clk_get(&pdev->dev, "apb_pclk");
 	if (IS_ERR(crypto_info->dmaclk)) {
 		err = PTR_ERR(crypto_info->dmaclk);
-		goto err_ioremap;
+		goto err_crypto;
 	}
 
 	crypto_info->irq = platform_get_irq(pdev, 0);
@@ -324,15 +329,16 @@ static int rk_crypto_probe(struct platform_device *pdev)
 		dev_warn(crypto_info->dev,
 			 "control Interrupt is not available.\n");
 		err = crypto_info->irq;
-		goto err_ioremap;
+		goto err_crypto;
 	}
 
-	err = devm_request_irq(&pdev->dev, crypto_info->irq, crypto_irq_handle,
-			       IRQF_SHARED, "rk-crypto", pdev);
+	err = devm_request_irq(&pdev->dev, crypto_info->irq,
+			       rk_crypto_irq_handle, IRQF_SHARED,
+			       "rk-crypto", pdev);
 
 	if (err) {
 		dev_err(crypto_info->dev, "irq request failed.\n");
-		goto err_ioremap;
+		goto err_crypto;
 	}
 
 	crypto_info->dev = &pdev->dev;
@@ -350,16 +356,14 @@ static int rk_crypto_probe(struct platform_device *pdev)
 	err = rk_crypto_register(crypto_info);
 	if (err) {
 		dev_err(dev, "err in register alg");
-		goto err_reg_alg;
+		goto err_register_alg;
 	}
 
 	dev_info(dev, "Crypto Accelerator successfully registered\n");
 	return 0;
 
-err_reg_alg:
-	free_irq(crypto_info->irq, crypto_info);
-err_ioremap:
-	reset_control_assert(crypto_info->rst);
+err_register_alg:
+	tasklet_kill(&crypto_info->crypto_tasklet);
 err_crypto:
 	return err;
 }
@@ -369,10 +373,7 @@ static int rk_crypto_remove(struct platform_device *pdev)
 	struct rk_crypto_info *crypto_tmp = platform_get_drvdata(pdev);
 
 	rk_crypto_unregister();
-	reset_control_assert(crypto_tmp->rst);
 	tasklet_kill(&crypto_tmp->crypto_tasklet);
-	free_irq(crypto_tmp->irq, crypto_tmp);
-
 	return 0;
 }
 
