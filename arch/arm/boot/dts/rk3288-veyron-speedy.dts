@@ -93,8 +93,7 @@
 };
 
 &edp {
-	pinctrl-names = "default";
-	pinctrl-0 = <&edp_hpd>;
+	analogix,need-force-hpd;
 };
 
 &panel {
