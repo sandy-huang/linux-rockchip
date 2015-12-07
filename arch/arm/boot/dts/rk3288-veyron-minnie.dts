@@ -233,11 +233,6 @@
 	power-supply= <&panel_regulator>;
 };
 
-&panel {
-	compatible = "auo,b101ean01", "simple-panel";
-	power-supply= <&panel_regulator>;
-};
-
 &rk808 {
 	pinctrl-names = "default";
 	pinctrl-0 = <&pmic_int_l &dvs_1 &dvs_2>;
