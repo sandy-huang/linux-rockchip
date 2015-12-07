@@ -1013,6 +1013,8 @@ static void analogix_dp_bridge_enable(struct drm_bridge *bridge)
 	if (dp->dpms_mode == DRM_MODE_DPMS_ON)
 		return;
 
+	pm_runtime_get_sync(dp->dev);
+
 	if (dp->plat_data->panel) {
 		if (drm_panel_prepare(dp->plat_data->panel)) {
 			DRM_ERROR("failed to setup the panel\n");
@@ -1023,7 +1025,6 @@ static void analogix_dp_bridge_enable(struct drm_bridge *bridge)
 	if (dp->plat_data->power_on)
 		dp->plat_data->power_on(dp->plat_data);
 
-	clk_prepare_enable(dp->clock);
 	phy_power_on(dp->phy);
 	analogix_dp_init_dp(dp);
 	enable_irq(dp->irq);
@@ -1049,7 +1050,6 @@ static void analogix_dp_bridge_disable(struct drm_bridge *bridge)
 	disable_irq(dp->irq);
 	flush_work(&dp->hotplug_work);
 	phy_power_off(dp->phy);
-	clk_disable_unprepare(dp->clock);
 
 	if (dp->plat_data->power_off)
 		dp->plat_data->power_off(dp->plat_data);
@@ -1058,6 +1058,8 @@ static void analogix_dp_bridge_disable(struct drm_bridge *bridge)
 		if (drm_panel_unprepare(dp->plat_data->panel))
 			DRM_ERROR("failed to turnoff the panel\n");
 	}
+
+	pm_runtime_put_sync(dp->dev);
 
 	dp->dpms_mode = DRM_MODE_DPMS_OFF;
 }
@@ -1188,7 +1190,7 @@ static int analogix_dp_dt_parse_pdata(struct analogix_dp_device *dp)
 	struct device_node *dp_node = dp->dev->of_node;
 	struct video_info *video_info = &dp->video_info;
 
-	switch (dp->plat_data && dp->plat_data->dev_type) {
+	switch (dp->plat_data->dev_type) {
 	case RK3288_DP:
 		/*
 		 * Like Rk3288 DisplayPort TRM indicate that "Main link
@@ -1313,6 +1315,8 @@ int analogix_dp_bind(struct device *dev, struct drm_device *drm_dev,
 
 	INIT_WORK(&dp->hotplug_work, analogix_dp_hotplug);
 
+	pm_runtime_enable(dev);
+
 	phy_power_on(dp->phy);
 
 	analogix_dp_init_dp(dp);
@@ -1321,7 +1325,7 @@ int analogix_dp_bind(struct device *dev, struct drm_device *drm_dev,
 			       irq_flags, "analogix-dp", dp);
 	if (ret) {
 		dev_err(&pdev->dev, "failed to request irq\n");
-		return ret;
+		goto err_disable_pm_runtime;
 	}
 	disable_irq(dp->irq);
 
@@ -1332,10 +1336,15 @@ int analogix_dp_bind(struct device *dev, struct drm_device *drm_dev,
 	if (ret) {
 		DRM_ERROR("failed to create bridge (%d)\n", ret);
 		drm_encoder_cleanup(dp->encoder);
-		return ret;
+		goto err_disable_pm_runtime;
 	}
 
 	return 0;
+
+err_disable_pm_runtime:
+	pm_runtime_disable(dev);
+
+	return ret;
 }
 EXPORT_SYMBOL_GPL(analogix_dp_bind);
 
@@ -1345,15 +1354,16 @@ void analogix_dp_unbind(struct device *dev, struct device *master,
 	struct analogix_dp_device *dp = dev_get_drvdata(dev);
 
 	analogix_dp_bridge_disable(dp->bridge);
+	pm_runtime_disable(dev);
 }
 EXPORT_SYMBOL_GPL(analogix_dp_unbind);
 
-#ifdef CONFIG_PM_SLEEP
+#ifdef CONFIG_PM
 int analogix_dp_suspend(struct device *dev)
 {
 	struct analogix_dp_device *dp = dev_get_drvdata(dev);
 
-	analogix_dp_bridge_disable(dp->bridge);
+	clk_disable_unprepare(dp->clock);
 	return 0;
 }
 EXPORT_SYMBOL_GPL(analogix_dp_suspend);
@@ -1361,8 +1371,14 @@ EXPORT_SYMBOL_GPL(analogix_dp_suspend);
 int analogix_dp_resume(struct device *dev)
 {
 	struct analogix_dp_device *dp = dev_get_drvdata(dev);
+	int ret;
 
-	analogix_dp_bridge_enable(dp->bridge);
+	ret = clk_prepare_enable(dp->clock);
+	if (ret < 0) {
+		DRM_ERROR("Failed to prepare_enable the clock clk [%d]\n", ret);
+		return ret;
+	}
+
 	return 0;
 }
 EXPORT_SYMBOL_GPL(analogix_dp_resume);

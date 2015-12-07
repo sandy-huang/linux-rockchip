@@ -282,8 +282,9 @@ static const struct component_ops exynos_dp_ops = {
 static int exynos_dp_probe(struct platform_device *pdev)
 {
 	struct device *dev = &pdev->dev;
-	struct device_node *panel_node, *bridge_node, *endpoint;
+	struct device_node *panel_node = NULL, *bridge_node, *endpoint = NULL;
 	struct exynos_dp_device *dp;
+	int ret;
 
 	dp = devm_kzalloc(&pdev->dev, sizeof(struct exynos_dp_device),
 			  GFP_KERNEL);
@@ -303,7 +304,23 @@ static int exynos_dp_probe(struct platform_device *pdev)
 		of_node_put(panel_node);
 		if (!dp->plat_data.panel)
 			return -EPROBE_DEFER;
+	} else {
+		endpoint = of_graph_get_next_endpoint(dev->of_node, NULL);
+		if (endpoint) {
+			panel_node = of_graph_get_remote_port_parent(endpoint);
+			if (panel_node) {
+				dp->plat_data.panel = of_drm_find_panel(panel_node);
+				of_node_put(panel_node);
+				if (!dp->plat_data.panel)
+					return -EPROBE_DEFER;
+			} else {
+				DRM_ERROR("no port node for panel device.\n");
+				return -EINVAL;
+			}
+		}
 	}
+
+	panel_node = !endpoint ? NULL : panel_node;
 
 	endpoint = of_graph_get_next_endpoint(dev->of_node, NULL);
 	if (endpoint) {
@@ -314,7 +331,8 @@ static int exynos_dp_probe(struct platform_device *pdev)
 			if (!dp->ptn_bridge)
 				return -EPROBE_DEFER;
 		} else {
-			return -EPROBE_DEFER;
+			DRM_ERROR("no port node for bridge device.\n");
+			return -EINVAL;
 		}
 	}
 
@@ -328,6 +346,22 @@ static int exynos_dp_remove(struct platform_device *pdev)
 	return 0;
 }
 
+#ifdef CONFIG_PM
+static int exynos_dp_suspend(struct device *dev)
+{
+	return analogix_dp_suspend(dev);
+}
+
+static int exynos_dp_resume(struct device *dev)
+{
+	return analogix_dp_resume(dev);
+}
+#endif
+
+static const struct dev_pm_ops exynos_dp_pm_ops = {
+	SET_RUNTIME_PM_OPS(exynos_dp_suspend, exynos_dp_resume, NULL)
+};
+
 static const struct of_device_id exynos_dp_match[] = {
 	{ .compatible = "samsung,exynos5-dp" },
 	{},
@@ -340,6 +374,7 @@ struct platform_driver dp_driver = {
 	.driver		= {
 		.name	= "exynos-dp",
 		.owner	= THIS_MODULE,
+		.pm	= &exynos_dp_pm_ops,
 		.of_match_table = exynos_dp_match,
 	},
 };
