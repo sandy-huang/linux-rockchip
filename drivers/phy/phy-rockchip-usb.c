@@ -414,6 +414,9 @@ static int rockchip_usb_phy_probe(struct platform_device *pdev)
 
 	phy_provider = devm_of_phy_provider_register(dev, of_phy_simple_xlate);
 	return PTR_ERR_OR_ZERO(phy_provider);
+put_child:
+	of_node_put(child);
+	return err;
 }
 
 static const struct of_device_id rockchip_usb_phy_dt_ids[] = {
