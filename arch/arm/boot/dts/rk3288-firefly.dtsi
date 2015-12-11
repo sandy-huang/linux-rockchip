@@ -484,6 +484,11 @@
 	};
 };
 
+&power {
+	assigned-clocks = <&cru SCLK_EDP_24M>;
+	assigned-clock-parents = <&xin24m>;
+};
+
 &saradc {
 	vref-supply = <&vcc_18>;
 	status = "okay";
