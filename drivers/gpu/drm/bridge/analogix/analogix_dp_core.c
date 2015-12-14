@@ -72,7 +72,7 @@ static int analogix_dp_detect_hpd(struct analogix_dp_device *dp)
 	 * return failed when hpd plug in detect failed, DT property
 	 * "need-force-hpd" would indicate whether driver need this.
 	 */
-	if (!dp->need_force_hpd)
+	if (!dp->force_hpd)
 		return -ETIMEDOUT;
 
 	/*
@@ -848,47 +848,40 @@ static void analogix_dp_enable_scramble(struct analogix_dp_device *dp,
 	}
 }
 
-static irqreturn_t analogix_dp_irq_handler(int irq, void *arg)
+static irqreturn_t analogix_dp_hardirq(int irq, void *arg)
 {
 	struct analogix_dp_device *dp = arg;
-
+	irqreturn_t ret = IRQ_NONE;
 	enum dp_irq_type irq_type;
 
 	irq_type = analogix_dp_get_irq_type(dp);
-	switch (irq_type) {
-	case DP_IRQ_TYPE_HP_CABLE_IN:
-		dev_dbg(dp->dev, "Received irq - cable in\n");
-		schedule_work(&dp->hotplug_work);
-		analogix_dp_clear_hotplug_interrupts(dp);
-		break;
-	case DP_IRQ_TYPE_HP_CABLE_OUT:
-		dev_dbg(dp->dev, "Received irq - cable out\n");
-		analogix_dp_clear_hotplug_interrupts(dp);
-		break;
-	case DP_IRQ_TYPE_HP_CHANGE:
-		/*
-		 * We get these change notifications once in a while, but there
-		 * is nothing we can do with them. Just ignore it for now and
-		 * only handle cable changes.
-		 */
-		dev_dbg(dp->dev, "Received irq - hotplug change; ignoring.\n");
-		analogix_dp_clear_hotplug_interrupts(dp);
-		break;
-	default:
-		dev_err(dp->dev, "Received irq - unknown type!\n");
-		break;
+	if (irq_type != DP_IRQ_TYPE_UNKNOWN) {
+		analogix_dp_mute_hpd_interrupt(dp);
+		ret = IRQ_WAKE_THREAD;
 	}
-	return IRQ_HANDLED;
+
+	return ret;
 }
 
-static void analogix_dp_hotplug(struct work_struct *work)
+static irqreturn_t analogix_dp_irq_thread(int irq, void *arg)
 {
-	struct analogix_dp_device *dp;
+	struct analogix_dp_device *dp = arg;
+	enum dp_irq_type irq_type;
 
-	dp = container_of(work, struct analogix_dp_device, hotplug_work);
+	irq_type = analogix_dp_get_irq_type(dp);
+	if (irq_type & DP_IRQ_TYPE_HP_CABLE_IN ||
+	    irq_type & DP_IRQ_TYPE_HP_CABLE_OUT) {
+		dev_dbg(dp->dev, "Detected cable status changed!\n");
+		if (dp->drm_dev)
+			drm_helper_hpd_irq_event(dp->drm_dev);
+	}
 
-	if (dp->drm_dev)
-		drm_helper_hpd_irq_event(dp->drm_dev);
+	if (irq_type != DP_IRQ_TYPE_UNKNOWN) {
+		analogix_dp_clear_hotplug_interrupts(dp);
+		analogix_dp_unmute_hpd_interrupt(dp);
+	}
+
+	return IRQ_HANDLED;
 }
 
 static void analogix_dp_commit(struct analogix_dp_device *dp)
@@ -1015,13 +1008,6 @@ static void analogix_dp_bridge_enable(struct drm_bridge *bridge)
 
 	pm_runtime_get_sync(dp->dev);
 
-	if (dp->plat_data->panel) {
-		if (drm_panel_prepare(dp->plat_data->panel)) {
-			DRM_ERROR("failed to setup the panel\n");
-			return;
-		}
-	}
-
 	if (dp->plat_data->power_on)
 		dp->plat_data->power_on(dp->plat_data);
 
@@ -1048,16 +1034,10 @@ static void analogix_dp_bridge_disable(struct drm_bridge *bridge)
 	}
 
 	disable_irq(dp->irq);
-	flush_work(&dp->hotplug_work);
 	phy_power_off(dp->phy);
 
 	if (dp->plat_data->power_off)
 		dp->plat_data->power_off(dp->plat_data);
-
-	if (dp->plat_data->panel) {
-		if (drm_panel_unprepare(dp->plat_data->panel))
-			DRM_ERROR("failed to turnoff the panel\n");
-	}
 
 	pm_runtime_put_sync(dp->dev);
 
@@ -1278,8 +1258,7 @@ int analogix_dp_bind(struct device *dev, struct drm_device *drm_dev,
 	if (IS_ERR(dp->reg_base))
 		return PTR_ERR(dp->reg_base);
 
-	dp->need_force_hpd =
-		of_property_read_bool(dev->of_node, "analogix,need-force-hpd");
+	dp->force_hpd = of_property_read_bool(dev->of_node, "force-hpd");
 
 	dp->hpd_gpio = of_get_named_gpio(dev->of_node, "hpd-gpios", 0);
 	if (!gpio_is_valid(dp->hpd_gpio))
@@ -1313,16 +1292,23 @@ int analogix_dp_bind(struct device *dev, struct drm_device *drm_dev,
 		return -ENODEV;
 	}
 
-	INIT_WORK(&dp->hotplug_work, analogix_dp_hotplug);
-
 	pm_runtime_enable(dev);
 
 	phy_power_on(dp->phy);
 
+	if (dp->plat_data->panel) {
+		if (drm_panel_prepare(dp->plat_data->panel)) {
+			DRM_ERROR("failed to setup the panel\n");
+			return -EBUSY;
+		}
+	}
+
 	analogix_dp_init_dp(dp);
 
-	ret = devm_request_irq(&pdev->dev, dp->irq, analogix_dp_irq_handler,
-			       irq_flags, "analogix-dp", dp);
+	ret = devm_request_threaded_irq(&pdev->dev, dp->irq,
+					analogix_dp_hardirq,
+					analogix_dp_irq_thread,
+					irq_flags, "analogix-dp", dp);
 	if (ret) {
 		dev_err(&pdev->dev, "failed to request irq\n");
 		goto err_disable_pm_runtime;
@@ -1354,6 +1340,12 @@ void analogix_dp_unbind(struct device *dev, struct device *master,
 	struct analogix_dp_device *dp = dev_get_drvdata(dev);
 
 	analogix_dp_bridge_disable(dp->bridge);
+
+	if (dp->plat_data->panel) {
+		if (drm_panel_unprepare(dp->plat_data->panel))
+			DRM_ERROR("failed to turnoff the panel\n");
+	}
+
 	pm_runtime_disable(dev);
 }
 EXPORT_SYMBOL_GPL(analogix_dp_unbind);
@@ -1364,6 +1356,12 @@ int analogix_dp_suspend(struct device *dev)
 	struct analogix_dp_device *dp = dev_get_drvdata(dev);
 
 	clk_disable_unprepare(dp->clock);
+
+	if (dp->plat_data->panel) {
+		if (drm_panel_unprepare(dp->plat_data->panel))
+			DRM_ERROR("failed to turnoff the panel\n");
+	}
+
 	return 0;
 }
 EXPORT_SYMBOL_GPL(analogix_dp_suspend);
@@ -1377,6 +1375,13 @@ int analogix_dp_resume(struct device *dev)
 	if (ret < 0) {
 		DRM_ERROR("Failed to prepare_enable the clock clk [%d]\n", ret);
 		return ret;
+	}
+
+	if (dp->plat_data->panel) {
+		if (drm_panel_prepare(dp->plat_data->panel)) {
+			DRM_ERROR("failed to setup the panel\n");
+			return -EBUSY;
+		}
 	}
 
 	return 0;
