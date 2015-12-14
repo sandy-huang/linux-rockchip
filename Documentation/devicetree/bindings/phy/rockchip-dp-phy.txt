@@ -1,4 +1,4 @@
-Rockchip Soc Seroes Display Port PHY
+Rockchip specific extensions to the Analogix Display Port PHY
 ------------------------------------
 
 Required properties:
