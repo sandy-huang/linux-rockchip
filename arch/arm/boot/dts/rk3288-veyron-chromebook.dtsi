@@ -198,6 +198,10 @@
 	};
 };
 
+&pwm0 {
+	status = "okay";
+};
+
 &rk808 {
 	vcc11-supply = <&vcc_5v>;
 
@@ -249,10 +253,6 @@
 		vcc-supply = <&vcc33_io>;
 		wakeup-source;
 	};
-};
-
-&pwm0 {
-	status = "okay";
 };
 
 &vopl {

@@ -101,10 +101,6 @@
 	temperature = <70000>;
 };
 
-&edp {
-	analogix,need-force-hpd;
-};
-
 &panel {
 	power-supply= <&panel_regulator>;
 };

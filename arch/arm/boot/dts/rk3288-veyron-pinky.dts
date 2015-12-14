@@ -69,7 +69,7 @@
 	/delete-property/pinctrl-names;
 	/delete-property/pinctrl-0;
 
-	analogix,need-force-hpd;
+	force-hpd;
 };
 
 &gpio_keys {

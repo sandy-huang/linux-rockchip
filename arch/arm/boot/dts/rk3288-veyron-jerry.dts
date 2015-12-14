@@ -93,10 +93,6 @@
 	power-supply = <&backlight_regulator>;
 };
 
-&edp {
-	analogix,need-force-hpd;
-};
-
 &panel {
 	power-supply= <&panel_regulator>;
 };
