@@ -101,6 +101,13 @@
 	temperature = <70000>;
 };
 
+&edp {
+	/delete-property/pinctrl-names;
+	/delete-property/pinctrl-0;
+
+	force-hpd;
+};
+
 &panel {
 	power-supply= <&panel_regulator>;
 };
