@@ -55,6 +55,21 @@ struct rockchip_usb_phy_base {
 	const struct rockchip_usb_phy_pdata *pdata;
 };
 
+struct rockchip_usb_phys {
+	int reg;
+	const char *pll_name;
+};
+
+struct rockchip_usb_phy_pdata {
+	struct rockchip_usb_phys *phys;
+};
+
+struct rockchip_usb_phy_base {
+	struct device *dev;
+	struct regmap *reg_base;
+	const struct rockchip_usb_phy_pdata *pdata;
+};
+
 struct rockchip_usb_phy {
 	struct rockchip_usb_phy_base *base;
 	struct device_node *np;
@@ -131,15 +146,23 @@ static int rockchip_usb_phy_power_off(struct phy *_phy)
 
 	clk_disable_unprepare(phy->clk480m);
 
-	return 0;
+	/* Power up usb phy analog blocks by set siddq 0 */
+	return rockchip_usb_phy_power(phy, 0);
 }
 
-static int rockchip_usb_phy_power_on(struct phy *_phy)
+static int rockchip_usb_phy480m_is_enabled(struct clk_hw *hw)
 {
 	struct rockchip_usb_phy *phy = phy_get_drvdata(_phy);
 
 	if (phy->uart_enabled)
 		return -EBUSY;
+
+	return clk_prepare_enable(phy->clk480m);
+}
+
+static int rockchip_usb_phy_power_on(struct phy *_phy)
+{
+	struct rockchip_usb_phy *phy = phy_get_drvdata(_phy);
 
 	return clk_prepare_enable(phy->clk480m);
 }
@@ -414,9 +437,6 @@ static int rockchip_usb_phy_probe(struct platform_device *pdev)
 
 	phy_provider = devm_of_phy_provider_register(dev, of_phy_simple_xlate);
 	return PTR_ERR_OR_ZERO(phy_provider);
-put_child:
-	of_node_put(child);
-	return err;
 }
 
 static const struct of_device_id rockchip_usb_phy_dt_ids[] = {

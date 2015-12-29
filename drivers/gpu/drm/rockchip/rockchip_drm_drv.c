@@ -65,11 +65,11 @@ void rockchip_drm_dma_detach_device(struct drm_device *drm_dev,
 }
 EXPORT_SYMBOL_GPL(rockchip_drm_dma_detach_device);
 
-int rockchip_register_crtc_funcs(struct drm_device *dev,
-				 const struct rockchip_crtc_funcs *crtc_funcs,
-				 int pipe)
+int rockchip_register_crtc_funcs(struct drm_crtc *crtc,
+				 const struct rockchip_crtc_funcs *crtc_funcs)
 {
-	struct rockchip_drm_private *priv = dev->dev_private;
+	int pipe = drm_crtc_index(crtc);
+	struct rockchip_drm_private *priv = crtc->dev->dev_private;
 
 	if (pipe > ROCKCHIP_MAX_CRTC)
 		return -EINVAL;
@@ -80,9 +80,10 @@ int rockchip_register_crtc_funcs(struct drm_device *dev,
 }
 EXPORT_SYMBOL_GPL(rockchip_register_crtc_funcs);
 
-void rockchip_unregister_crtc_funcs(struct drm_device *dev, int pipe)
+void rockchip_unregister_crtc_funcs(struct drm_crtc *crtc)
 {
-	struct rockchip_drm_private *priv = dev->dev_private;
+	int pipe = drm_crtc_index(crtc);
+	struct rockchip_drm_private *priv = crtc->dev->dev_private;
 
 	if (pipe > ROCKCHIP_MAX_CRTC)
 		return;
@@ -139,6 +140,9 @@ static int rockchip_drm_load(struct drm_device *drm_dev, unsigned long flags)
 	private = devm_kzalloc(drm_dev->dev, sizeof(*private), GFP_KERNEL);
 	if (!private)
 		return -ENOMEM;
+
+	mutex_init(&private->commit.lock);
+	INIT_WORK(&private->commit.work, rockchip_drm_atomic_work);
 
 	drm_dev->dev_private = private;
 
@@ -213,6 +217,8 @@ static int rockchip_drm_load(struct drm_device *drm_dev, unsigned long flags)
 	 */
 	drm_dev->vblank_disable_allowed = true;
 
+	drm_mode_config_reset(drm_dev);
+
 	ret = rockchip_drm_fbdev_init(drm_dev);
 	if (ret)
 		goto err_vblank_cleanup;
@@ -276,7 +282,8 @@ const struct vm_operations_struct rockchip_drm_vm_ops = {
 };
 
 static struct drm_driver rockchip_drm_driver = {
-	.driver_features	= DRIVER_MODESET | DRIVER_GEM | DRIVER_PRIME,
+	.driver_features	= DRIVER_MODESET | DRIVER_GEM |
+				  DRIVER_PRIME | DRIVER_ATOMIC,
 	.load			= rockchip_drm_load,
 	.unload			= rockchip_drm_unload,
 	.lastclose		= rockchip_drm_lastclose,
@@ -420,10 +427,6 @@ static int rockchip_drm_bind(struct device *dev)
 	drm = drm_dev_alloc(&rockchip_drm_driver, dev);
 	if (!drm)
 		return -ENOMEM;
-
-	ret = drm_dev_set_unique(drm, "%s", dev_name(dev));
-	if (ret)
-		goto err_free;
 
 	ret = drm_dev_register(drm, 0);
 	if (ret)
