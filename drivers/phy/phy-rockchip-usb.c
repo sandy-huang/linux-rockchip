@@ -44,6 +44,8 @@ struct rockchip_usb_phys {
 
 struct rockchip_usb_phy_pdata {
 	struct rockchip_usb_phys *phys;
+	int (*init_usb_uart)(struct regmap *grf);
+	int usb_uart_phy;
 };
 
 struct rockchip_usb_phy_base {
@@ -128,18 +130,7 @@ static int rockchip_usb_phy_power_off(struct phy *_phy)
 
 	clk_disable_unprepare(phy->clk480m);
 
-	/* Power up usb phy analog blocks by set siddq 0 */
-	return rockchip_usb_phy_power(phy, 0);
-}
-
-static int rockchip_usb_phy480m_is_enabled(struct clk_hw *hw)
-{
-	struct rockchip_usb_phy *phy = phy_get_drvdata(_phy);
-
-	if (phy->uart_enabled)
-		return -EBUSY;
-
-	return clk_prepare_enable(phy->clk480m);
+	return 0;
 }
 
 static int rockchip_usb_phy_power_on(struct phy *_phy)
