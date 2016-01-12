@@ -50,7 +50,7 @@ Required properties for dp-controller:
 		from general PHY binding: Should be "dp".
 
 Optional properties for dp-controller:
-	- display-timings: timings for the connected panel as described by
+8	- display-timings: timings for the connected panel as described by
 		Documentation/devicetree/bindings/display/panel/display-timing.txt
 
 For the below properties, please refer to Analogix DP binding document:
@@ -58,7 +58,7 @@ For the below properties, please refer to Analogix DP binding document:
 	-phys (required)
 	-phy-names (required)
 	-hpd-gpios (optional)
-	-force-hpd (optional)
+	-analogix,need-force-hpd (optional)
 	-video interfaces (optional)
 
 Deprecated properties for DisplayPort:

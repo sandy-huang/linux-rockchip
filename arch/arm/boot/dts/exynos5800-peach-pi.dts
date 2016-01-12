@@ -151,7 +151,7 @@
 	samsung,color-depth = <1>;
 	samsung,link-rate = <0x0a>;
 	samsung,lane-count = <2>;
-	hpd-gpios = <&gpx2 6 GPIO_ACTIVE_HIGH>;
+	hpd-gpio = <&gpx2 6 GPIO_ACTIVE_HIGH>;
 
 	ports {
 		port {

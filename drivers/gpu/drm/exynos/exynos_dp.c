@@ -20,7 +20,6 @@
 #include <video/of_videomode.h>
 
 #include <drm/drmP.h>
-#include <drm/drm_atomic_helper.h>
 #include <drm/drm_crtc.h>
 #include <drm/drm_crtc_helper.h>
 #include <drm/drm_panel.h>
@@ -70,13 +69,12 @@ static int exynos_dp_poweroff(struct analogix_dp_plat_data *plat_data)
 	return exynos_dp_crtc_clock_enable(plat_data, false);
 }
 
-static int exynos_dp_get_modes(struct drm_connector *connector)
+static int exynos_dp_get_modes(struct analogix_dp_plat_data *plat_data)
 {
-	struct exynos_dp_device *dp = to_dp(connector);
+	struct exynos_dp_device *dp = to_dp(plat_data);
+	struct drm_connector *connector = &dp->connector;
 	struct drm_display_mode *mode;
 	int num_modes = 0;
-
-	num_modes += analogix_dp_get_modes(dp->dev);
 
 	if (dp->plat_data.panel)
 		return num_modes;
@@ -100,50 +98,15 @@ static int exynos_dp_get_modes(struct drm_connector *connector)
 	return num_modes + 1;
 }
 
-static struct drm_encoder *
-exynos_dp_best_encoder(struct drm_connector *connector)
-{
-	struct exynos_dp_device *dp = to_dp(connector);
-
-	return &dp->encoder;
-}
-
-static struct drm_connector_helper_funcs exynos_dp_connector_helper_funcs = {
-	.get_modes = exynos_dp_get_modes,
-	.best_encoder = exynos_dp_best_encoder,
-};
-
-static enum drm_connector_status
-exynos_dp_detect(struct drm_connector *connector, bool force)
-{
-	struct exynos_dp_device *dp = to_dp(connector);
-
-	return analogix_dp_detect(dp->dev, force);
-}
-
-static void exynos_dp_connector_destroy(struct drm_connector *connector)
-{
-	drm_connector_unregister(connector);
-	drm_connector_cleanup(connector);
-}
-
-static struct drm_connector_funcs exynos_dp_connector_funcs = {
-	.dpms = drm_atomic_helper_connector_dpms,
-	.fill_modes = drm_helper_probe_single_connector_modes,
-	.detect = exynos_dp_detect,
-	.destroy = exynos_dp_connector_destroy,
-	.reset = drm_atomic_helper_connector_reset,
-	.atomic_duplicate_state = drm_atomic_helper_connector_duplicate_state,
-	.atomic_destroy_state = drm_atomic_helper_connector_destroy_state,
-};
-
 static int exynos_dp_bridge_attach(struct analogix_dp_plat_data *plat_data,
-				   struct drm_bridge *bridge)
+				   struct drm_bridge *bridge,
+				   struct drm_connector *connector)
 {
 	struct exynos_dp_device *dp = to_dp(plat_data);
-	struct drm_connector *connector = &dp->connector;
 	struct drm_encoder *encoder = &dp->encoder;
 	int ret;
+
+	drm_connector_register(connector);
 
 	/* Pre-empt DP connector creation if there's a bridge */
 	if (dp->ptn_bridge) {
@@ -156,22 +119,6 @@ static int exynos_dp_bridge_attach(struct analogix_dp_plat_data *plat_data,
 			return ret;
 		}
 	}
-
-	connector->polled = DRM_CONNECTOR_POLL_HPD;
-
-	ret = drm_connector_init(dp->drm_dev, connector,
-				 &exynos_dp_connector_funcs,
-				 DRM_MODE_CONNECTOR_eDP);
-	if (ret) {
-		DRM_ERROR("Failed to initialize connector with drm\n");
-		return ret;
-	}
-
-	drm_connector_helper_add(connector, &exynos_dp_connector_helper_funcs);
-	drm_connector_register(connector);
-	drm_mode_connector_attach_encoder(connector, encoder);
-
-	dp->plat_data.connector = connector;
 
 	return 0;
 }
@@ -189,22 +136,19 @@ static void exynos_dp_mode_set(struct drm_encoder *encoder,
 {
 }
 
-static void exynos_dp_enable(struct drm_encoder *encoder)
+static void exynos_dp_nop(struct drm_encoder *encoder)
 {
+	/* do nothing */
 }
 
-static void exynos_dp_disable(struct drm_encoder *encoder)
-{
-}
-
-static struct drm_encoder_helper_funcs exynos_dp_encoder_helper_funcs = {
+static const struct drm_encoder_helper_funcs exynos_dp_encoder_helper_funcs = {
 	.mode_fixup = exynos_dp_mode_fixup,
 	.mode_set = exynos_dp_mode_set,
-	.enable = exynos_dp_enable,
-	.disable = exynos_dp_disable,
+	.enable = exynos_dp_nop,
+	.disable = exynos_dp_nop,
 };
 
-static struct drm_encoder_funcs exynos_dp_encoder_funcs = {
+static const struct drm_encoder_funcs exynos_dp_encoder_funcs = {
 	.destroy = drm_encoder_cleanup,
 };
 
@@ -242,6 +186,7 @@ static int exynos_dp_bind(struct device *dev, struct device *master, void *data)
 	dp->plat_data.power_on = exynos_dp_poweron;
 	dp->plat_data.power_off = exynos_dp_poweroff;
 	dp->plat_data.attach = exynos_dp_bridge_attach;
+	dp->plat_data.get_modes = exynos_dp_get_modes;
 
 	if (!dp->plat_data.panel && !dp->ptn_bridge) {
 		ret = exynos_dp_dt_parse_panel(dp);
@@ -259,7 +204,7 @@ static int exynos_dp_bind(struct device *dev, struct device *master, void *data)
 	DRM_DEBUG_KMS("possible_crtcs = 0x%x\n", encoder->possible_crtcs);
 
 	drm_encoder_init(drm_dev, encoder, &exynos_dp_encoder_funcs,
-			 DRM_MODE_ENCODER_TMDS);
+			 DRM_MODE_ENCODER_TMDS, NULL);
 
 	drm_encoder_helper_add(encoder, &exynos_dp_encoder_helper_funcs);
 
@@ -284,7 +229,6 @@ static int exynos_dp_probe(struct platform_device *pdev)
 	struct device *dev = &pdev->dev;
 	struct device_node *panel_node = NULL, *bridge_node, *endpoint = NULL;
 	struct exynos_dp_device *dp;
-	int ret;
 
 	dp = devm_kzalloc(&pdev->dev, sizeof(struct exynos_dp_device),
 			  GFP_KERNEL);
