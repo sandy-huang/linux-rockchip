@@ -42,24 +42,6 @@ struct rockchip_usb_phys {
 	const char *pll_name;
 };
 
-struct rockchip_usb_phy_base;
-struct rockchip_usb_phy_pdata {
-	struct rockchip_usb_phys *phys;
-	int (*init_usb_uart)(struct regmap *grf);
-	int usb_uart_phy;
-};
-
-struct rockchip_usb_phy_base {
-	struct device *dev;
-	struct regmap *reg_base;
-	const struct rockchip_usb_phy_pdata *pdata;
-};
-
-struct rockchip_usb_phys {
-	int reg;
-	const char *pll_name;
-};
-
 struct rockchip_usb_phy_pdata {
 	struct rockchip_usb_phys *phys;
 };
