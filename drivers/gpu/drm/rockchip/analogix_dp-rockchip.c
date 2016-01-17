@@ -108,7 +108,7 @@ static void rockchip_dp_drm_encoder_mode_set(struct drm_encoder *encoder,
 	/* do nothing */
 }
 
-static void rockchip_dp_drm_encoder_prepare(struct drm_encoder *encoder)
+static void rockchip_dp_drm_encoder_enable(struct drm_encoder *encoder)
 {
 	struct rockchip_dp_device *dp = to_dp(encoder);
 	int ret;
@@ -161,8 +161,7 @@ static void rockchip_dp_drm_encoder_nop(struct drm_encoder *encoder)
 static const struct drm_encoder_helper_funcs rockchip_dp_encoder_helper_funcs = {
 	.mode_fixup = rockchip_dp_drm_encoder_mode_fixup,
 	.mode_set = rockchip_dp_drm_encoder_mode_set,
-	.prepare = rockchip_dp_drm_encoder_prepare,
-	.commit = rockchip_dp_drm_encoder_nop,
+	.enable = rockchip_dp_drm_encoder_enable,
 	.disable = rockchip_dp_drm_encoder_nop,
 };
 
