@@ -45,7 +45,6 @@ struct rockchip_dp_device {
 	struct drm_device        *drm_dev;
 	struct device            *dev;
 	struct drm_encoder       encoder;
-	struct drm_connector     connector;
 	struct drm_display_mode  mode;
 
 	struct clk               *pclk;
@@ -93,74 +92,6 @@ static int rockchip_dp_powerdown(struct analogix_dp_plat_data *plat_data)
 	return 0;
 }
 
-static int rockchip_dp_get_modes(struct drm_connector *connector)
-{
-	struct rockchip_dp_device *dp = to_dp(connector);
-
-	return analogix_dp_get_modes(dp->dev);
-}
-
-static struct drm_encoder *
-rockchip_dp_best_encoder(struct drm_connector *connector)
-{
-	struct rockchip_dp_device *dp = to_dp(connector);
-
-	return &dp->encoder;
-}
-
-static struct drm_connector_helper_funcs rockchip_dp_connector_helper_funcs = {
-	.get_modes = rockchip_dp_get_modes,
-	.best_encoder = rockchip_dp_best_encoder,
-};
-
-static enum drm_connector_status
-rockchip_dp_detect(struct drm_connector *connector, bool force)
-{
-	struct rockchip_dp_device *dp = to_dp(connector);
-
-	return analogix_dp_detect(dp->dev, force);
-}
-
-static void rockchip_dp_connector_destroy(struct drm_connector *connector)
-{
-	drm_connector_unregister(connector);
-	drm_connector_cleanup(connector);
-}
-
-static struct drm_connector_funcs rockchip_dp_connector_funcs = {
-	.dpms = drm_helper_connector_dpms,
-	.fill_modes = drm_helper_probe_single_connector_modes,
-	.detect = rockchip_dp_detect,
-	.destroy = rockchip_dp_connector_destroy,
-};
-
-static int rockchip_dp_bridge_attach(struct analogix_dp_plat_data *plat_data,
-				     struct drm_bridge *bridge)
-{
-	struct rockchip_dp_device *dp = to_dp(plat_data);
-	struct drm_connector *connector = &dp->connector;
-	struct drm_encoder *encoder = &dp->encoder;
-	int ret;
-
-	connector->polled = DRM_CONNECTOR_POLL_HPD;
-
-	ret = drm_connector_init(dp->drm_dev, connector,
-				 &rockchip_dp_connector_funcs,
-				 DRM_MODE_CONNECTOR_eDP);
-	if (ret) {
-		DRM_ERROR("Failed to initialize connector with drm\n");
-		return ret;
-	}
-
-	drm_connector_helper_add(connector,
-				 &rockchip_dp_connector_helper_funcs);
-	drm_mode_connector_attach_encoder(connector, encoder);
-
-	dp->plat_data.connector = connector;
-
-	return 0;
-}
-
 static bool
 rockchip_dp_drm_encoder_mode_fixup(struct drm_encoder *encoder,
 				   const struct drm_display_mode *mode,
@@ -177,11 +108,10 @@ static void rockchip_dp_drm_encoder_mode_set(struct drm_encoder *encoder,
 	/* do nothing */
 }
 
-static void rockchip_dp_drm_encoder_prepare(struct drm_encoder *encoder)
+static void rockchip_dp_drm_encoder_enable(struct drm_encoder *encoder)
 {
 	struct rockchip_dp_device *dp = to_dp(encoder);
-	struct drm_connector *cn = &dp->connector;
-	int ret = -1;
+	int ret;
 	u32 val;
 
 	/*
@@ -197,10 +127,9 @@ static void rockchip_dp_drm_encoder_prepare(struct drm_encoder *encoder)
 	 * But if I configure CTRC to RGBaaa, and eDP driver still keep
 	 * RGB666 input video mode, then screen would works prefect.
 	 */
-	if (cn->display_info.color_formats & DRM_COLOR_FORMAT_RGB444)
-		ret = rockchip_drm_crtc_mode_config(encoder->crtc,
-					DRM_MODE_CONNECTOR_eDP,
-					10, DRM_COLOR_FORMAT_RGB444);
+	ret = rockchip_drm_crtc_mode_config(encoder->crtc,
+					    DRM_MODE_CONNECTOR_eDP,
+					    ROCKCHIP_OUT_MODE_AAAA);
 	if (ret < 0) {
 		dev_err(dp->dev, "Could not set crtc mode config (%d)\n", ret);
 		return;
@@ -229,11 +158,10 @@ static void rockchip_dp_drm_encoder_nop(struct drm_encoder *encoder)
 	/* do nothing */
 }
 
-static struct drm_encoder_helper_funcs rockchip_dp_encoder_helper_funcs = {
+static const struct drm_encoder_helper_funcs rockchip_dp_encoder_helper_funcs = {
 	.mode_fixup = rockchip_dp_drm_encoder_mode_fixup,
 	.mode_set = rockchip_dp_drm_encoder_mode_set,
-	.prepare = rockchip_dp_drm_encoder_prepare,
-	.commit = rockchip_dp_drm_encoder_nop,
+	.enable = rockchip_dp_drm_encoder_enable,
 	.disable = rockchip_dp_drm_encoder_nop,
 };
 
@@ -242,7 +170,7 @@ static void rockchip_dp_drm_encoder_destroy(struct drm_encoder *encoder)
 	drm_encoder_cleanup(encoder);
 }
 
-static struct drm_encoder_funcs rockchip_dp_encoder_funcs = {
+static const struct drm_encoder_funcs rockchip_dp_encoder_funcs = {
 	.destroy = rockchip_dp_drm_encoder_destroy,
 };
 
@@ -297,7 +225,7 @@ static int rockchip_dp_drm_create_encoder(struct rockchip_dp_device *dp)
 	DRM_DEBUG_KMS("possible_crtcs = 0x%x\n", encoder->possible_crtcs);
 
 	ret = drm_encoder_init(drm_dev, encoder, &rockchip_dp_encoder_funcs,
-			       DRM_MODE_ENCODER_TMDS);
+			       DRM_MODE_ENCODER_TMDS, NULL);
 	if (ret) {
 		DRM_ERROR("failed to initialize encoder with drm\n");
 		return ret;
@@ -339,7 +267,6 @@ static int rockchip_dp_bind(struct device *dev, struct device *master,
 	dp->plat_data.dev_type = RK3288_DP;
 	dp->plat_data.power_on = rockchip_dp_poweron;
 	dp->plat_data.power_off = rockchip_dp_powerdown;
-	dp->plat_data.attach = rockchip_dp_bridge_attach;
 
 	return analogix_dp_bind(dev, dp->drm_dev, &dp->plat_data);
 }

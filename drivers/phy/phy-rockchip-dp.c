@@ -9,13 +9,13 @@
  * the Free Software Foundation; either version 2 of the License.
  */
 
+#include <linux/clk.h>
+#include <linux/mfd/syscon.h>
 #include <linux/module.h>
 #include <linux/of.h>
-#include <linux/clk.h>
 #include <linux/phy/phy.h>
-#include <linux/regmap.h>
-#include <linux/mfd/syscon.h>
 #include <linux/platform_device.h>
+#include <linux/regmap.h>
 
 #define GRF_SOC_CON12                           0x0274
 

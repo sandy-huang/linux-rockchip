@@ -23,6 +23,7 @@
 #include <linux/phy/phy.h>
 
 #include <drm/drmP.h>
+#include <drm/drm_atomic_helper.h>
 #include <drm/drm_crtc.h>
 #include <drm/drm_crtc_helper.h>
 #include <drm/drm_panel.h>
@@ -30,6 +31,8 @@
 #include <drm/bridge/analogix_dp.h>
 
 #include "analogix_dp_core.h"
+
+#define to_dp(nm)	container_of(nm, struct analogix_dp_device, nm)
 
 struct bridge_init {
 	struct i2c_client *client;
@@ -669,7 +672,7 @@ static void analogix_dp_get_max_rx_lane_count(struct analogix_dp_device *dp,
 
 static void analogix_dp_init_training(struct analogix_dp_device *dp,
 				      enum link_lane_count_type max_lane,
-				      enum link_rate_type max_rate)
+				      int max_rate)
 {
 	/*
 	 * MACRO_RST must be applied after the PLL_LOCK to avoid
@@ -681,12 +684,12 @@ static void analogix_dp_init_training(struct analogix_dp_device *dp,
 	analogix_dp_get_max_rx_bandwidth(dp, &dp->link_train.link_rate);
 	analogix_dp_get_max_rx_lane_count(dp, &dp->link_train.lane_count);
 
-	if ((dp->link_train.link_rate != LINK_RATE_1_62GBPS) &&
-	    (dp->link_train.link_rate != LINK_RATE_2_70GBPS) &&
-	    (dp->link_train.link_rate != LINK_RATE_5_40GBPS)) {
+	if ((dp->link_train.link_rate != DP_LINK_BW_1_62) &&
+	    (dp->link_train.link_rate != DP_LINK_BW_2_7) &&
+	    (dp->link_train.link_rate != DP_LINK_BW_5_4)) {
 		dev_err(dp->dev, "Rx Max Link Rate is abnormal :%x !\n",
 			dp->link_train.link_rate);
-		dp->link_train.link_rate = LINK_RATE_1_62GBPS;
+		dp->link_train.link_rate = DP_LINK_BW_1_62;
 	}
 
 	if (dp->link_train.lane_count == 0) {
@@ -920,49 +923,72 @@ static void analogix_dp_commit(struct analogix_dp_device *dp)
 	analogix_dp_start_video(dp);
 }
 
-enum drm_connector_status analogix_dp_detect(struct device *dev, bool force)
+int analogix_dp_get_modes(struct drm_connector *connector)
 {
-	struct analogix_dp_device *dp = dev_get_drvdata(dev);
+	struct analogix_dp_device *dp = to_dp(connector);
+	struct edid *edid = (struct edid *)dp->edid;
+	int num_modes = 0;
+
+	if (analogix_dp_handle_edid(dp) == 0) {
+		drm_mode_connector_update_edid_property(&dp->connector, edid);
+		num_modes += drm_add_edid_modes(&dp->connector, edid);
+	}
+
+	if (dp->plat_data->panel)
+		num_modes += drm_panel_get_modes(dp->plat_data->panel);
+
+	if (dp->plat_data->get_modes)
+		num_modes += dp->plat_data->get_modes(dp->plat_data);
+
+	return num_modes;
+}
+
+static struct drm_encoder *
+analogix_dp_best_encoder(struct drm_connector *connector)
+{
+	struct analogix_dp_device *dp = to_dp(connector);
+
+	return dp->encoder;
+}
+
+static const struct drm_connector_helper_funcs analogix_dp_connector_helper_funcs = {
+	.get_modes = analogix_dp_get_modes,
+	.best_encoder = analogix_dp_best_encoder,
+};
+
+enum drm_connector_status
+analogix_dp_detect(struct drm_connector *connector, bool force)
+{
+	struct analogix_dp_device *dp = to_dp(connector);
 
 	if (analogix_dp_detect_hpd(dp))
 		return connector_status_disconnected;
 
 	return connector_status_connected;
 }
-EXPORT_SYMBOL_GPL(analogix_dp_detect);
 
-int analogix_dp_get_modes(struct device *dev)
+static void analogix_dp_connector_destroy(struct drm_connector *connector)
 {
-	struct analogix_dp_device *dp = dev_get_drvdata(dev);
-	struct edid *edid = (struct edid *)dp->edid;
-	int num_modes = 0;
+	drm_connector_unregister(connector);
+	drm_connector_cleanup(connector);
 
-	if (dp->plat_data && dp->plat_data->panel) {
-		if (drm_panel_prepare(dp->plat_data->panel)) {
-			DRM_ERROR("failed to setup the panel\n");
-			return -EINVAL;
-		}
-	}
-
-	if (analogix_dp_handle_edid(dp)) {
-		dev_err(dp->dev, "unable to handle edid\n");
-		return -EINVAL;
-	}
-
-	drm_mode_connector_update_edid_property(dp->connector, edid);
-	num_modes += drm_add_edid_modes(dp->connector, edid);
-
-	if (dp->plat_data->panel)
-		num_modes += drm_panel_get_modes(dp->plat_data->panel);
-
-	return num_modes;
 }
-EXPORT_SYMBOL_GPL(analogix_dp_get_modes);
+
+static struct drm_connector_funcs analogix_dp_connector_funcs = {
+	.dpms = drm_atomic_helper_connector_dpms,
+	.fill_modes = drm_helper_probe_single_connector_modes,
+	.detect = analogix_dp_detect,
+	.destroy = analogix_dp_connector_destroy,
+	.reset = drm_atomic_helper_connector_reset,
+	.atomic_duplicate_state = drm_atomic_helper_connector_duplicate_state,
+	.atomic_destroy_state = drm_atomic_helper_connector_destroy_state,
+};
 
 static int analogix_dp_bridge_attach(struct drm_bridge *bridge)
 {
 	struct analogix_dp_device *dp = bridge->driver_private;
 	struct drm_encoder *encoder = dp->encoder;
+	struct drm_connector *connector = &dp->connector;
 	int ret;
 
 	if (!bridge->encoder) {
@@ -970,7 +996,19 @@ static int analogix_dp_bridge_attach(struct drm_bridge *bridge)
 		return -ENODEV;
 	}
 
-	encoder->bridge = bridge;
+	connector->polled = DRM_CONNECTOR_POLL_HPD;
+
+	ret = drm_connector_init(dp->drm_dev, connector,
+				 &analogix_dp_connector_funcs,
+				 DRM_MODE_CONNECTOR_eDP);
+	if (ret) {
+		DRM_ERROR("Failed to initialize connector with drm\n");
+		return ret;
+	}
+
+	drm_connector_helper_add(connector,
+				 &analogix_dp_connector_helper_funcs);
+	drm_mode_connector_attach_encoder(connector, encoder);
 
 	/*
 	 * NOTE: the connector registration is implemented in analogix
@@ -979,17 +1017,15 @@ static int analogix_dp_bridge_attach(struct drm_bridge *bridge)
 	 * point after plat attached.
 	 */
 	 if (dp->plat_data->attach) {
-		 ret = dp->plat_data->attach(dp->plat_data, bridge);
+		 ret = dp->plat_data->attach(dp->plat_data, bridge, connector);
 		 if (ret) {
 			 DRM_ERROR("Failed at platform attch func\n");
 			 return ret;
 		 }
 	}
 
-	dp->connector = dp->plat_data->connector;
-
 	if (dp->plat_data->panel) {
-		ret = drm_panel_attach(dp->plat_data->panel, dp->connector);
+		ret = drm_panel_attach(dp->plat_data->panel, &dp->connector);
 		if (ret) {
 			DRM_ERROR("Failed to attach panel\n");
 			return ret;
@@ -1049,7 +1085,7 @@ static void analogix_dp_bridge_mode_set(struct drm_bridge *bridge,
 					struct drm_display_mode *mode)
 {
 	struct analogix_dp_device *dp = bridge->driver_private;
-	struct drm_display_info *display_info = &dp->connector->display_info;
+	struct drm_display_info *display_info = &dp->connector.display_info;
 	struct video_info *video = &dp->video_info;
 	struct device_node *dp_node = dp->dev->of_node;
 	int vic;

@@ -24,7 +24,7 @@ Required properties:
 
 - ports: there are 2 port nodes with endpoint definitions as defined in
   Documentation/devicetree/bindings/media/video-interfaces.txt.
-    Port 0: contained 2 endpoints, connecting to the ouput of vop.
+    Port 0: contained 2 endpoints, connecting to the output of vop.
     Port 1: contained 1 endpoint, connecting to the input of panel.
 
 For the below properties, please refer to Analogix DP binding document:

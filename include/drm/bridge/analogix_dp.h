@@ -26,11 +26,10 @@ struct analogix_dp_plat_data {
 
 	int (*power_on)(struct analogix_dp_plat_data *);
 	int (*power_off)(struct analogix_dp_plat_data *);
-	int (*attach)(struct analogix_dp_plat_data *, struct drm_bridge *);
+	int (*attach)(struct analogix_dp_plat_data *, struct drm_bridge *,
+		      struct drm_connector *);
+	int (*get_modes)(struct analogix_dp_plat_data *);
 };
-
-enum drm_connector_status analogix_dp_detect(struct device *dev, bool force);
-int analogix_dp_get_modes(struct device *dev);
 
 int analogix_dp_resume(struct device *dev);
 int analogix_dp_suspend(struct device *dev);

@@ -54,11 +54,44 @@
 
 static const char dwc2_driver_name[] = "dwc2";
 
+static const struct dwc2_core_params params_hi6220 = {
+	.otg_cap			= 2,	/* No HNP/SRP capable */
+	.otg_ver			= 0,	/* 1.3 */
+	.dma_enable			= 1,
+	.dma_desc_enable		= 0,
+	.dma_desc_fs_enable		= 0,
+	.speed				= 0,	/* High Speed */
+	.enable_dynamic_fifo		= 1,
+	.en_multiple_tx_fifo		= 1,
+	.host_rx_fifo_size		= 512,
+	.host_nperio_tx_fifo_size	= 512,
+	.host_perio_tx_fifo_size	= 512,
+	.max_transfer_size		= 65535,
+	.max_packet_count		= 511,
+	.host_channels			= 16,
+	.phy_type			= 1,	/* UTMI */
+	.phy_utmi_width			= 8,
+	.phy_ulpi_ddr			= 0,	/* Single */
+	.phy_ulpi_ext_vbus		= 0,
+	.i2c_enable			= 0,
+	.ulpi_fs_ls			= 0,
+	.host_support_fs_ls_low_power	= 0,
+	.host_ls_low_power_phy_clk	= 0,	/* 48 MHz */
+	.ts_dline			= 0,
+	.reload_ctl			= 0,
+	.ahbcfg				= GAHBCFG_HBSTLEN_INCR16 <<
+					  GAHBCFG_HBSTLEN_SHIFT,
+	.uframe_sched			= 0,
+	.external_id_pin_ctl		= -1,
+	.hibernation			= -1,
+};
+
 static const struct dwc2_core_params params_bcm2835 = {
 	.otg_cap			= 0,	/* HNP/SRP capable */
 	.otg_ver			= 0,	/* 1.3 */
 	.dma_enable			= 1,
 	.dma_desc_enable		= 0,
+	.dma_desc_fs_enable		= 0,
 	.speed				= 0,	/* High Speed */
 	.enable_dynamic_fifo		= 1,
 	.en_multiple_tx_fifo		= 1,
@@ -89,6 +122,7 @@ static const struct dwc2_core_params params_rk3066 = {
 	.otg_ver			= -1,
 	.dma_enable			= -1,
 	.dma_desc_enable		= 0,
+	.dma_desc_fs_enable		= 0,
 	.speed				= -1,
 	.enable_dynamic_fifo		= 1,
 	.en_multiple_tx_fifo		= -1,
@@ -114,6 +148,71 @@ static const struct dwc2_core_params params_rk3066 = {
 	.external_id_pin_ctl		= -1,
 	.hibernation			= -1,
 };
+
+/*
+ * Check the dr_mode against the module configuration and hardware
+ * capabilities.
+ *
+ * The hardware, module, and dr_mode, can each be set to host, device,
+ * or otg. Check that all these values are compatible and adjust the
+ * value of dr_mode if possible.
+ *
+ *                      actual
+ *    HW  MOD dr_mode   dr_mode
+ *  ------------------------------
+ *   HST  HST  any    :  HST
+ *   HST  DEV  any    :  ---
+ *   HST  OTG  any    :  HST
+ *
+ *   DEV  HST  any    :  ---
+ *   DEV  DEV  any    :  DEV
+ *   DEV  OTG  any    :  DEV
+ *
+ *   OTG  HST  any    :  HST
+ *   OTG  DEV  any    :  DEV
+ *   OTG  OTG  any    :  dr_mode
+ */
+static int dwc2_get_dr_mode(struct dwc2_hsotg *hsotg)
+{
+	enum usb_dr_mode mode;
+
+	hsotg->dr_mode = usb_get_dr_mode(hsotg->dev);
+	if (hsotg->dr_mode == USB_DR_MODE_UNKNOWN)
+		hsotg->dr_mode = USB_DR_MODE_OTG;
+
+	mode = hsotg->dr_mode;
+
+	if (dwc2_hw_is_device(hsotg)) {
+		if (IS_ENABLED(CONFIG_USB_DWC2_HOST)) {
+			dev_err(hsotg->dev,
+				"Controller does not support host mode.\n");
+			return -EINVAL;
+		}
+		mode = USB_DR_MODE_PERIPHERAL;
+	} else if (dwc2_hw_is_host(hsotg)) {
+		if (IS_ENABLED(CONFIG_USB_DWC2_PERIPHERAL)) {
+			dev_err(hsotg->dev,
+				"Controller does not support device mode.\n");
+			return -EINVAL;
+		}
+		mode = USB_DR_MODE_HOST;
+	} else {
+		if (IS_ENABLED(CONFIG_USB_DWC2_HOST))
+			mode = USB_DR_MODE_HOST;
+		else if (IS_ENABLED(CONFIG_USB_DWC2_PERIPHERAL))
+			mode = USB_DR_MODE_PERIPHERAL;
+	}
+
+	if (mode != hsotg->dr_mode) {
+		dev_warn(hsotg->dev,
+			"Configuration mismatch. dr_mode forced to %s\n",
+			mode == USB_DR_MODE_HOST ? "host" : "device");
+
+		hsotg->dr_mode = mode;
+	}
+
+	return 0;
+}
 
 static int __dwc2_lowlevel_hw_enable(struct dwc2_hsotg *hsotg)
 {
@@ -327,6 +426,7 @@ static void dwc2_driver_shutdown(struct platform_device *dev)
 
 static const struct of_device_id dwc2_of_match_table[] = {
 	{ .compatible = "brcm,bcm2835-usb", .data = &params_bcm2835 },
+	{ .compatible = "hisilicon,hi6220-usb", .data = &params_hi6220 },
 	{ .compatible = "rockchip,rk3066-usb", .data = &params_rk3066 },
 	{ .compatible = "snps,dwc2", .data = NULL },
 	{ .compatible = "samsung,s3c6400-hsotg", .data = NULL},
@@ -366,8 +466,10 @@ static int dwc2_driver_probe(struct platform_device *dev)
 		/*
 		 * Disable descriptor dma mode by default as the HW can support
 		 * it, but does not support it for SPLIT transactions.
+		 * Disable it for FS devices as well.
 		 */
 		defparams.dma_desc_enable = 0;
+		defparams.dma_desc_fs_enable = 0;
 	}
 
 	hsotg = devm_kzalloc(&dev->dev, sizeof(*hsotg), GFP_KERNEL);
@@ -392,19 +494,6 @@ static int dwc2_driver_probe(struct platform_device *dev)
 
 	dev_dbg(&dev->dev, "mapped PA %08lx to VA %p\n",
 		(unsigned long)res->start, hsotg->regs);
-
-	hsotg->dr_mode = usb_get_dr_mode(&dev->dev);
-	if (IS_ENABLED(CONFIG_USB_DWC2_HOST) &&
-			hsotg->dr_mode != USB_DR_MODE_HOST) {
-		hsotg->dr_mode = USB_DR_MODE_HOST;
-		dev_warn(hsotg->dev,
-			"Configuration mismatch. Forcing host mode\n");
-	} else if (IS_ENABLED(CONFIG_USB_DWC2_PERIPHERAL) &&
-			hsotg->dr_mode != USB_DR_MODE_PERIPHERAL) {
-		hsotg->dr_mode = USB_DR_MODE_PERIPHERAL;
-		dev_warn(hsotg->dev,
-			"Configuration mismatch. Forcing peripheral mode\n");
-	}
 
 	retval = dwc2_lowlevel_hw_init(hsotg);
 	if (retval)
@@ -437,13 +526,19 @@ static int dwc2_driver_probe(struct platform_device *dev)
 	if (retval)
 		return retval;
 
-	/* Detect config values from hardware */
+	retval = dwc2_get_dr_mode(hsotg);
+	if (retval)
+		return retval;
+
+	/* Reset the controller and detect hardware config values */
 	retval = dwc2_get_hwparams(hsotg);
 	if (retval)
 		goto error;
 
 	/* Validate parameter values */
 	dwc2_set_parameters(hsotg, params);
+
+	dwc2_force_dr_mode(hsotg);
 
 	if (hsotg->dr_mode != USB_DR_MODE_HOST) {
 		retval = dwc2_gadget_init(hsotg, hsotg->irq);

@@ -16,9 +16,9 @@
 #include <drm/drm_crtc.h>
 #include <drm/drm_dp_helper.h>
 
-#define DP_TIMEOUT_LOOP_COUNT 100
-#define MAX_CR_LOOP 5
-#define MAX_EQ_LOOP 5
+#define DP_TIMEOUT_LOOP_COUNT		100
+#define MAX_CR_LOOP			5
+#define MAX_EQ_LOOP			5
 
 /* I2C EDID Chip ID, Slave Address */
 #define I2C_EDID_DEVICE_ADDR			0x50
@@ -41,12 +41,6 @@
 #define DPCD_PRE_EMPHASIS_GET(x)		(((x) >> 3) & 0x3)
 #define DPCD_VOLTAGE_SWING_SET(x)		(((x) & 0x3) << 0)
 #define DPCD_VOLTAGE_SWING_GET(x)		(((x) >> 0) & 0x3)
-
-enum link_rate_type {
-	LINK_RATE_1_62GBPS = DP_LINK_BW_1_62,
-	LINK_RATE_2_70GBPS = DP_LINK_BW_2_7,
-	LINK_RATE_5_40GBPS = DP_LINK_BW_5_4,
-};
 
 enum link_lane_count_type {
 	LANE_COUNT1 = 1,
@@ -151,7 +145,7 @@ struct video_info {
 	enum color_coefficient ycbcr_coeff;
 	enum color_depth color_depth;
 
-	enum link_rate_type max_link_rate;
+	int max_link_rate;
 	enum link_lane_count_type max_lane_count;
 };
 
@@ -168,7 +162,7 @@ struct link_train {
 
 struct analogix_dp_device {
 	struct drm_encoder	*encoder;
-	struct drm_connector	*connector;
+	struct drm_connector	connector;
 	struct device		*dev;
 	struct drm_device	*drm_dev;
 	struct drm_bridge	*bridge;
