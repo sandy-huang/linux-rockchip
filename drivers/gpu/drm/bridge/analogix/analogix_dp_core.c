@@ -73,7 +73,7 @@ static int analogix_dp_detect_hpd(struct analogix_dp_device *dp)
 	/*
 	 * Some edp screen do not have hpd signal, so we can't just
 	 * return failed when hpd plug in detect failed, DT property
-	 * "need-force-hpd" would indicate whether driver need this.
+	 * "force-hpd" would indicate whether driver need this.
 	 */
 	if (!dp->force_hpd)
 		return -ETIMEDOUT;
@@ -971,10 +971,9 @@ static void analogix_dp_connector_destroy(struct drm_connector *connector)
 {
 	drm_connector_unregister(connector);
 	drm_connector_cleanup(connector);
-
 }
 
-static struct drm_connector_funcs analogix_dp_connector_funcs = {
+static const struct drm_connector_funcs analogix_dp_connector_funcs = {
 	.dpms = drm_atomic_helper_connector_dpms,
 	.fill_modes = drm_helper_probe_single_connector_modes,
 	.detect = analogix_dp_detect,

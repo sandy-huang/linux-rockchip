@@ -264,7 +264,8 @@ static int exynos_dp_probe(struct platform_device *pdev)
 		}
 	}
 
-	panel_node = !endpoint ? NULL : panel_node;
+	if (endpoint)
+		goto out;
 
 	endpoint = of_graph_get_next_endpoint(dev->of_node, NULL);
 	if (endpoint) {
@@ -274,12 +275,11 @@ static int exynos_dp_probe(struct platform_device *pdev)
 			of_node_put(bridge_node);
 			if (!dp->ptn_bridge)
 				return -EPROBE_DEFER;
-		} else {
-			DRM_ERROR("no port node for bridge device.\n");
-			return -EINVAL;
-		}
+		} else
+			return -EPROBE_DEFER;
 	}
 
+out:
 	return component_add(&pdev->dev, &exynos_dp_ops);
 }
 
