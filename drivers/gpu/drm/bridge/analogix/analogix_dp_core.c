@@ -971,6 +971,7 @@ static void analogix_dp_connector_destroy(struct drm_connector *connector)
 {
 	drm_connector_unregister(connector);
 	drm_connector_cleanup(connector);
+
 }
 
 static const struct drm_connector_funcs analogix_dp_connector_funcs = {
