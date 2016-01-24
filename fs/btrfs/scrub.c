@@ -2813,7 +2813,7 @@ out:
 
 static inline int scrub_calc_parity_bitmap_len(int nsectors)
 {
-	return DIV_ROUND_UP(nsectors, BITS_PER_LONG) * (BITS_PER_LONG / 8);
+	return DIV_ROUND_UP(nsectors, BITS_PER_LONG) * sizeof(long);
 }
 
 static void scrub_parity_get(struct scrub_parity *sparity)
@@ -3458,7 +3458,7 @@ static noinline_for_stack int scrub_chunk(struct scrub_ctx *sctx,
 		return ret;
 	}
 
-	map = (struct map_lookup *)em->bdev;
+	map = em->map_lookup;
 	if (em->start != chunk_offset)
 		goto out;
 
@@ -4279,7 +4279,7 @@ static int copy_nocow_pages_for_inode(u64 inum, u64 offset, u64 root,
 		return PTR_ERR(inode);
 
 	/* Avoid truncate/dio/punch hole.. */
-	mutex_lock(&inode->i_mutex);
+	inode_lock(inode);
 	inode_dio_wait(inode);
 
 	physical_for_dev_replace = nocow_ctx->physical_for_dev_replace;
@@ -4358,7 +4358,7 @@ next_page:
 	}
 	ret = COPY_COMPLETE;
 out:
-	mutex_unlock(&inode->i_mutex);
+	inode_unlock(inode);
 	iput(inode);
 	return ret;
 }
