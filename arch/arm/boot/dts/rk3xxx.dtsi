@@ -81,7 +81,6 @@
 			arm,pl330-broken-no-flushp;
 			clocks = <&cru ACLK_DMA1>;
 			clock-names = "apb_pclk";
-			arm,pl330-broken-no-flushp;
 		};
 
 		dmac1_ns: dma-controller@2001c000 {
@@ -93,7 +92,6 @@
 			arm,pl330-broken-no-flushp;
 			clocks = <&cru ACLK_DMA1>;
 			clock-names = "apb_pclk";
-			arm,pl330-broken-no-flushp;
 			status = "disabled";
 		};
 
@@ -106,7 +104,6 @@
 			arm,pl330-broken-no-flushp;
 			clocks = <&cru ACLK_DMA2>;
 			clock-names = "apb_pclk";
-			arm,pl330-broken-no-flushp;
 		};
 	};
 
