@@ -227,7 +227,7 @@ static const struct component_ops exynos_dp_ops = {
 static int exynos_dp_probe(struct platform_device *pdev)
 {
 	struct device *dev = &pdev->dev;
-	struct device_node *panel_node = NULL, *bridge_node, *endpoint = NULL;
+	struct device_node *np = NULL, *endpoint = NULL;
 	struct exynos_dp_device *dp;
 
 	dp = devm_kzalloc(&pdev->dev, sizeof(struct exynos_dp_device),
@@ -242,41 +242,37 @@ static int exynos_dp_probe(struct platform_device *pdev)
 	 */
 	platform_set_drvdata(pdev, dp);
 
-	panel_node = of_parse_phandle(dev->of_node, "panel", 0);
-	if (panel_node) {
-		dp->plat_data.panel = of_drm_find_panel(panel_node);
-		of_node_put(panel_node);
+	/* This is for the backward compatibility. */
+	np = of_parse_phandle(dev->of_node, "panel", 0);
+	if (np) {
+		dp->plat_data.panel = of_drm_find_panel(np);
+		of_node_put(np);
 		if (!dp->plat_data.panel)
 			return -EPROBE_DEFER;
-	} else {
-		endpoint = of_graph_get_next_endpoint(dev->of_node, NULL);
-		if (endpoint) {
-			panel_node = of_graph_get_remote_port_parent(endpoint);
-			if (panel_node) {
-				dp->plat_data.panel = of_drm_find_panel(panel_node);
-				of_node_put(panel_node);
-				if (!dp->plat_data.panel)
-					return -EPROBE_DEFER;
-			} else {
-				DRM_ERROR("no port node for panel device.\n");
-				return -EINVAL;
-			}
-		}
-	}
-
-	if (endpoint)
 		goto out;
+	}
 
 	endpoint = of_graph_get_next_endpoint(dev->of_node, NULL);
 	if (endpoint) {
-		bridge_node = of_graph_get_remote_port_parent(endpoint);
-		if (bridge_node) {
-			dp->ptn_bridge = of_drm_find_bridge(bridge_node);
-			of_node_put(bridge_node);
-			if (!dp->ptn_bridge)
-				return -EPROBE_DEFER;
-		} else
-			return -EPROBE_DEFER;
+		np = of_graph_get_remote_port_parent(endpoint);
+		if (np) {
+			/* The remote port can be either a panel or a bridge */
+			dp->plat_data.panel = of_drm_find_panel(np);
+			if (!dp->plat_data.panel) {
+				dp->ptn_bridge = of_drm_find_bridge(np);
+				if (!dp->ptn_bridge) {
+					of_node_put(np);
+					return -EPROBE_DEFER;
+				}
+			}
+			of_node_put(np);
+		} else {
+			DRM_ERROR("no remote endpoint device node found.\n");
+			return -EINVAL;
+		}
+	} else {
+		DRM_ERROR("no port endpoint subnode found.\n");
+		return -EINVAL;
 	}
 
 out:
