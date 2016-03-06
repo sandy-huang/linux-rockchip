@@ -135,7 +135,7 @@ static void rockchip_dp_drm_encoder_enable(struct drm_encoder *encoder)
 		return;
 	}
 
-	ret = rockchip_drm_encoder_get_mux_id(dp->dev->of_node, encoder);
+	ret = drm_of_encoder_active_endpoint_id(dp->dev->of_node, encoder);
 	if (ret < 0)
 		return;
 
