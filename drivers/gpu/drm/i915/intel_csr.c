@@ -179,7 +179,8 @@ static const struct stepping_info kbl_stepping_info[] = {
 static const struct stepping_info skl_stepping_info[] = {
 	{'A', '0'}, {'B', '0'}, {'C', '0'},
 	{'D', '0'}, {'E', '0'}, {'F', '0'},
-	{'G', '0'}, {'H', '0'}, {'I', '0'}
+	{'G', '0'}, {'H', '0'}, {'I', '0'},
+	{'J', '0'}, {'K', '0'}
 };
 
 static const struct stepping_info bxt_stepping_info[] = {
@@ -242,6 +243,8 @@ void intel_csr_load_program(struct drm_i915_private *dev_priv)
 		I915_WRITE(dev_priv->csr.mmioaddr[i],
 			   dev_priv->csr.mmiodata[i]);
 	}
+
+	dev_priv->csr.dc_state = 0;
 }
 
 static uint32_t *parse_csr_fw(struct drm_i915_private *dev_priv,

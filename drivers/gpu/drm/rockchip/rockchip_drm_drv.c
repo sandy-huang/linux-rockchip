@@ -415,6 +415,36 @@ int rockchip_drm_encoder_get_mux_id(struct device_node *node,
 }
 EXPORT_SYMBOL_GPL(rockchip_drm_encoder_get_mux_id);
 
+static int compare_of(struct device *dev, void *data)
+{
+	struct device_node *np = data;
+
+	return dev->of_node == np;
+}
+
+static void rockchip_add_endpoints(struct device *dev,
+				   struct component_match **match,
+				   struct device_node *port)
+{
+	struct device_node *ep, *remote;
+
+	for_each_child_of_node(port, ep) {
+		remote = of_graph_get_remote_port_parent(ep);
+		if (!remote || !of_device_is_available(remote)) {
+			of_node_put(remote);
+			continue;
+		} else if (!of_device_is_available(remote->parent)) {
+			dev_warn(dev, "parent device of %s is not available\n",
+				 remote->full_name);
+			of_node_put(remote);
+			continue;
+		}
+
+		component_match_add(dev, match, compare_of, remote);
+		of_node_put(remote);
+	}
+}
+
 static int rockchip_drm_bind(struct device *dev)
 {
 	struct drm_device *drm;
