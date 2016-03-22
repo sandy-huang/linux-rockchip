@@ -151,7 +151,7 @@ S:	Maintained
 F:	drivers/scsi/53c700*
 
 6LOWPAN GENERIC (BTLE/IEEE 802.15.4)
-M:	Alexander Aring <alex.aring@gmail.com>
+M:	Alexander Aring <aar@pengutronix.de>
 M:	Jukka Rissanen <jukka.rissanen@linux.intel.com>
 L:	linux-bluetooth@vger.kernel.org
 L:	linux-wpan@vger.kernel.org
@@ -679,11 +679,19 @@ F:	drivers/gpu/drm/radeon/radeon_kfd.c
 F:	drivers/gpu/drm/radeon/radeon_kfd.h
 F:	include/uapi/linux/kfd_ioctl.h
 
+AMD SEATTLE DEVICE TREE SUPPORT
+M:	Brijesh Singh <brijeshkumar.singh@amd.com>
+M:	Suravee Suthikulpanit <suravee.suthikulpanit@amd.com>
+M:	Tom Lendacky <thomas.lendacky@amd.com>
+S:	Supported
+F:	arch/arm64/boot/dts/amd/
+
 AMD XGBE DRIVER
 M:	Tom Lendacky <thomas.lendacky@amd.com>
 L:	netdev@vger.kernel.org
 S:	Supported
 F:	drivers/net/ethernet/amd/xgbe/
+F:	arch/arm64/boot/dts/amd/amd-seattle-xgbe*.dtsi
 
 AMS (Apple Motion Sensor) DRIVER
 M:	Michael Hanselmann <linux-kernel@hansmi.ch>
@@ -956,6 +964,16 @@ F:	arch/arm/mach-alpine/
 F:	arch/arm/boot/dts/alpine*
 F:	arch/arm64/boot/dts/al/
 F:	drivers/*/*alpine*
+
+ARM/ARTPEC MACHINE SUPPORT
+M:	Jesper Nilsson <jesper.nilsson@axis.com>
+M:	Lars Persson <lars.persson@axis.com>
+M:	Niklas Cassel <niklas.cassel@axis.com>
+S:	Maintained
+L:	linux-arm-kernel@axis.com
+F:	arch/arm/mach-artpec
+F:	arch/arm/boot/dts/artpec6*
+F:	drivers/clk/clk-artpec6.c
 
 ARM/ATMEL AT91RM9200, AT91SAM9 AND SAMA5 SOC SUPPORT
 M:	Nicolas Ferre <nicolas.ferre@atmel.com>
@@ -1303,6 +1321,7 @@ F:	arch/arm/mach-mvebu/
 F:	drivers/rtc/rtc-armada38x.c
 F:	arch/arm/boot/dts/armada*
 F:	arch/arm/boot/dts/kirkwood*
+F:	arch/arm64/boot/dts/marvell/armada*
 
 
 ARM/Marvell Berlin SoC support
@@ -1521,6 +1540,7 @@ F:	arch/arm/mach-s5p*/
 F:	arch/arm/mach-exynos*/
 F:	drivers/*/*s3c2410*
 F:	drivers/*/*/*s3c2410*
+F:	drivers/soc/samsung/*
 F:	drivers/spi/spi-s3c*
 F:	sound/soc/samsung/*
 F:	Documentation/arm/Samsung/
@@ -2182,7 +2202,8 @@ M:	Marek Lindner <mareklindner@neomailbox.ch>
 M:	Simon Wunderlich <sw@simonwunderlich.de>
 M:	Antonio Quartulli <a@unstable.cc>
 L:	b.a.t.m.a.n@lists.open-mesh.org
-W:	http://www.open-mesh.org/
+W:	https://www.open-mesh.org/
+Q:	https://patchwork.open-mesh.org/project/batman/list/
 S:	Maintained
 F:	net/batman-adv/
 
@@ -2411,8 +2432,9 @@ F:	arch/arm/boot/dts/bcm470*
 
 BROADCOM BCM63XX ARM ARCHITECTURE
 M:	Florian Fainelli <f.fainelli@gmail.com>
-L:	linux-arm-kernel@lists.infradead.org
-T:	git git://github.com/broadcom/arm-bcm63xx.git
+L:	linux-arm-kernel@lists.infradead.org (moderated for non-subscribers)
+L:	bcm-kernel-feedback-list@broadcom.com
+T:	git git://github.com/broadcom/stblinux.git
 S:	Maintained
 F:	arch/arm/mach-bcm/bcm63xx.c
 F:	arch/arm/include/debug/bcm63xx.S
@@ -2453,6 +2475,7 @@ F:	include/linux/bcm963xx_nvram.h
 F:	include/linux/bcm963xx_tag.h
 
 BROADCOM TG3 GIGABIT ETHERNET DRIVER
+M:	Siva Reddy Kallam <siva.kallam@broadcom.com>
 M:	Prashant Sreedharan <prashant@broadcom.com>
 M:	Michael Chan <mchan@broadcom.com>
 L:	netdev@vger.kernel.org
@@ -2543,6 +2566,13 @@ M:	Florian Fainelli <f.fainelli@gmail.com>
 L:	netdev@vger.kernel.org
 S:	Supported
 F:	drivers/net/ethernet/broadcom/bcmsysport.*
+
+BROADCOM VULCAN ARM64 SOC
+M:	Jayachandran C. <jchandra@broadcom.com>
+L:	linux-arm-kernel@lists.infradead.org (moderated for non-subscribers)
+L:	bcm-kernel-feedback-list@broadcom.com
+S:	Maintained
+F:	arch/arm64/boot/dts/broadcom/vulcan*
 
 BROCADE BFA FC SCSI DRIVER
 M:	Anil Gurumurthy <anil.gurumurthy@qlogic.com>
@@ -3529,6 +3559,14 @@ F:	include/linux/device-mapper.h
 F:	include/linux/dm-*.h
 F:	include/uapi/linux/dm-*.h
 
+DEVLINK
+M:	Jiri Pirko <jiri@mellanox.com>
+L:	netdev@vger.kernel.org
+S:	Supported
+F:	net/core/devlink.c
+F:	include/net/devlink.h
+F:	include/uapi/linux/devlink.h
+
 DIALOG SEMICONDUCTOR DRIVERS
 M:	Support Opensource <support.opensource@diasemi.com>
 W:	http://www.dialog-semiconductor.com/products
@@ -4247,13 +4285,6 @@ ENE KB2426 (ENE0100/ENE020XX) INFRARED RECEIVER
 M:	Maxim Levitsky <maximlevitsky@gmail.com>
 S:	Maintained
 F:	drivers/media/rc/ene_ir.*
-
-ENHANCED ERROR HANDLING (EEH)
-M:	Gavin Shan <shangw@linux.vnet.ibm.com>
-L:	linuxppc-dev@lists.ozlabs.org
-S:	Supported
-F:	Documentation/powerpc/eeh-pci-error-recovery.txt
-F:	arch/powerpc/kernel/eeh*.c
 
 EPSON S1D13XXX FRAMEBUFFER DRIVER
 M:	Kristoffer Ericson <kristoffer.ericson@gmail.com>
@@ -5455,10 +5486,11 @@ S:	Supported
 F:	drivers/idle/i7300_idle.c
 
 IEEE 802.15.4 SUBSYSTEM
-M:	Alexander Aring <alex.aring@gmail.com>
+M:	Alexander Aring <aar@pengutronix.de>
 L:	linux-wpan@vger.kernel.org
-W:	https://github.com/linux-wpan
-T:	git git://github.com/linux-wpan/linux-wpan-next.git
+W:	http://wpan.cakelab.org/
+T:	git git://git.kernel.org/pub/scm/linux/kernel/git/bluetooth/bluetooth.git
+T:	git git://git.kernel.org/pub/scm/linux/kernel/git/bluetooth/bluetooth-next.git
 S:	Maintained
 F:	net/ieee802154/
 F:	net/mac802154/
@@ -7051,6 +7083,13 @@ F:	include/uapi/linux/meye.h
 F:	include/uapi/linux/ivtv*
 F:	include/uapi/linux/uvcvideo.h
 
+MEDIATEK ETHERNET DRIVER
+M:	Felix Fietkau <nbd@openwrt.org>
+M:	John Crispin <blogic@openwrt.org>
+L:	netdev@vger.kernel.org
+S:	Maintained
+F:	drivers/net/ethernet/mediatek/
+
 MEDIATEK MT7601U WIRELESS LAN DRIVER
 M:	Jakub Kicinski <kubakici@wp.pl>
 L:	linux-wireless@vger.kernel.org
@@ -7548,7 +7587,6 @@ F:	net/netrom/
 
 NETRONOME ETHERNET DRIVERS
 M:	Jakub Kicinski <jakub.kicinski@netronome.com>
-M:	Rolf Neugebauer <rolf.neugebauer@netronome.com>
 L:	oss-drivers@netronome.com
 S:	Maintained
 F:	drivers/net/ethernet/netronome/
@@ -7685,7 +7723,6 @@ F:	net/nfc/
 F:	include/net/nfc/
 F:	include/uapi/linux/nfc.h
 F:	drivers/nfc/
-F:	include/linux/platform_data/microread.h
 F:	include/linux/platform_data/nfcmrvl.h
 F:	include/linux/platform_data/nxp-nci.h
 F:	include/linux/platform_data/pn544.h
@@ -7836,6 +7873,11 @@ L:	alsa-devel@alsa-project.org (moderated for non-subscribers)
 S:	Maintained
 F:	sound/soc/codecs/tfa9879*
 
+OBJTOOL
+M:	Josh Poimboeuf <jpoimboe@redhat.com>
+S:	Supported
+F:	tools/objtool/
+
 OMAP SUPPORT
 M:	Tony Lindgren <tony@atomide.com>
 L:	linux-omap@vger.kernel.org
@@ -7886,7 +7928,7 @@ S:	Maintained
 F:	arch/arm/*omap*/*clock*
 
 OMAP POWER MANAGEMENT SUPPORT
-M:	Kevin Hilman <khilman@deeprootsystems.com>
+M:	Kevin Hilman <khilman@kernel.org>
 L:	linux-omap@vger.kernel.org
 S:	Maintained
 F:	arch/arm/*omap*/*pm*
@@ -7990,7 +8032,7 @@ F:	arch/arm/*omap*/usb*
 OMAP GPIO DRIVER
 M:	Grygorii Strashko <grygorii.strashko@ti.com>
 M:	Santosh Shilimkar <ssantosh@kernel.org>
-M:	Kevin Hilman <khilman@deeprootsystems.com>
+M:	Kevin Hilman <khilman@kernel.org>
 L:	linux-omap@vger.kernel.org
 S:	Maintained
 F:	Documentation/devicetree/bindings/gpio/gpio-omap.txt
@@ -8306,6 +8348,15 @@ M:	Linas Vepstas <linasvepstas@gmail.com>
 L:	linux-pci@vger.kernel.org
 S:	Supported
 F:	Documentation/PCI/pci-error-recovery.txt
+
+PCI ENHANCED ERROR HANDLING (EEH) FOR POWERPC
+M:	Russell Currey <ruscur@russell.cc>
+L:	linuxppc-dev@lists.ozlabs.org
+S:	Supported
+F:	Documentation/powerpc/eeh-pci-error-recovery.txt
+F:	arch/powerpc/kernel/eeh*.c
+F:	arch/powerpc/platforms/*/eeh*.c
+F:	arch/powerpc/include/*/eeh*.h
 
 PCI SUBSYSTEM
 M:	Bjorn Helgaas <bhelgaas@google.com>
@@ -9146,10 +9197,14 @@ S:	Maintained
 F:	drivers/net/ethernet/rdc/r6040.c
 
 RDS - RELIABLE DATAGRAM SOCKETS
-M:	Chien Yen <chien.yen@oracle.com>
+M:	Santosh Shilimkar <santosh.shilimkar@oracle.com>
+L:	netdev@vger.kernel.org
+L:	linux-rdma@vger.kernel.org
 L:	rds-devel@oss.oracle.com (moderated for non-subscribers)
+W:	https://oss.oracle.com/projects/rds/
 S:	Supported
 F:	net/rds/
+F:	Documentation/networking/rds.txt
 
 READ-COPY UPDATE (RCU)
 M:	"Paul E. McKenney" <paulmck@linux.vnet.ibm.com>
@@ -9550,6 +9605,7 @@ F:	drivers/media/i2c/s5k5baf.c
 
 SAMSUNG S3FWRN5 NFC DRIVER
 M:	Robert Baldyga <r.baldyga@samsung.com>
+M:	Krzysztof Opasiak <k.opasiak@samsung.com>
 L:	linux-nfc@lists.01.org (moderated for non-subscribers)
 S:	Supported
 F:	drivers/nfc/s3fwrn5
@@ -9780,10 +9836,12 @@ S:	Maintained
 F:	drivers/mmc/host/sdricoh_cs.c
 
 SECURE DIGITAL HOST CONTROLLER INTERFACE (SDHCI) DRIVER
+M:	Adrian Hunter <adrian.hunter@intel.com>
 L:	linux-mmc@vger.kernel.org
-S:	Orphan
-F:	drivers/mmc/host/sdhci.*
-F:	drivers/mmc/host/sdhci-pltfm.[ch]
+T:	git git://git.infradead.org/users/ahunter/linux-sdhci.git
+S:	Maintained
+F:	drivers/mmc/host/sdhci*
+F:	include/linux/mmc/sdhci*
 
 SECURE COMPUTING
 M:	Kees Cook <keescook@chromium.org>
@@ -10033,7 +10091,7 @@ F:	arch/arm/mach-s3c24xx/bast-irq.c
 
 TI DAVINCI MACHINE SUPPORT
 M:	Sekhar Nori <nsekhar@ti.com>
-M:	Kevin Hilman <khilman@deeprootsystems.com>
+M:	Kevin Hilman <khilman@kernel.org>
 T:	git git://gitorious.org/linux-davinci/linux-davinci.git
 Q:	http://patchwork.kernel.org/project/linux-davinci/list/
 S:	Supported
@@ -10235,7 +10293,7 @@ F:	drivers/media/pci/solo6x10/
 SOFTWARE RAID (Multiple Disks) SUPPORT
 M:	Shaohua Li <shli@kernel.org>
 L:	linux-raid@vger.kernel.org
-T:	git git://neil.brown.name/md
+T:	git git://git.kernel.org/pub/scm/linux/kernel/git/shli/md.git
 S:	Supported
 F:	drivers/md/
 F:	include/linux/raid/
@@ -11413,6 +11471,13 @@ S:	Maintained
 F:	drivers/usb/host/isp116x*
 F:	include/linux/usb/isp116x.h
 
+USB LAN78XX ETHERNET DRIVER
+M:	Woojung Huh <woojung.huh@microchip.com>
+M:	Microchip Linux Driver Support <UNGLinuxDriver@microchip.com>
+L:	netdev@vger.kernel.org
+S:	Maintained
+F:	drivers/net/usb/lan78xx.*
+
 USB MASS STORAGE DRIVER
 M:	Matthew Dharm <mdharm-usb@one-eyed-alien.net>
 L:	linux-usb@vger.kernel.org
@@ -11942,6 +12007,12 @@ WINBOND CIR DRIVER
 M:	David Härdeman <david@hardeman.nu>
 S:	Maintained
 F:	drivers/media/rc/winbond-cir.c
+
+WINSYSTEMS EBC-C384 WATCHDOG DRIVER
+M:	William Breathitt Gray <vilhelm.gray@gmail.com>
+L:	linux-watchdog@vger.kernel.org
+S:	Maintained
+F:	drivers/watchdog/ebc-c384_wdt.c
 
 WINSYSTEMS WS16C48 GPIO DRIVER
 M:	William Breathitt Gray <vilhelm.gray@gmail.com>
