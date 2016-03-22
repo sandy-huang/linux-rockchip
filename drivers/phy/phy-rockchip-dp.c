@@ -104,12 +104,12 @@ static int rockchip_dp_phy_probe(struct platform_device *pdev)
 		return ret;
 	}
 
-	dp->grf = -ENODEV;
+	dp->grf = ERR_PTR(-ENODEV);
 	if (dev->parent && dev->parent->of_node)
 		dp->grf = syscon_node_to_regmap(dev->parent->of_node);
 
 	/* try the fallback using the rockchip,grf property */
-	if (IS_ERR(dp->grf)) {
+	if (IS_ERR(dp->grf))
 		dp->grf = syscon_regmap_lookup_by_phandle(np, "rockchip,grf");
 
 	if (IS_ERR(dp->grf)) {
