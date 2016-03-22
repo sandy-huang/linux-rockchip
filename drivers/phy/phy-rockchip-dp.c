@@ -1,7 +1,7 @@
 /*
  * Rockchip DP PHY driver
  *
- * Copyright (C) 2015 FuZhou Rockchip Co., Ltd.
+ * Copyright (C) 2016 FuZhou Rockchip Co., Ltd.
  * Author: Yakir Yang <ykk@@rock-chips.com>
  *
  * This program is free software; you can redistribute it and/or modify
@@ -86,9 +86,6 @@ static int rockchip_dp_phy_probe(struct platform_device *pdev)
 	if (!np)
 		return -ENODEV;
 
-	if (!dev->parent || !dev->parent->of_node)
-		return -ENODEV;
-
 	dp = devm_kzalloc(dev, sizeof(*dp), GFP_KERNEL);
 	if (IS_ERR(dp))
 		return -ENOMEM;
@@ -107,9 +104,16 @@ static int rockchip_dp_phy_probe(struct platform_device *pdev)
 		return ret;
 	}
 
-	dp->grf = syscon_node_to_regmap(dev->parent->of_node);
+	dp->grf = -ENODEV;
+	if (dev->parent && dev->parent->of_node)
+		dp->grf = syscon_node_to_regmap(dev->parent->of_node);
+
+	/* try the fallback using the rockchip,grf property */
 	if (IS_ERR(dp->grf)) {
-		dev_err(dev, "rk3288-dp needs to be a child of the GRF\n");
+		dp->grf = syscon_regmap_lookup_by_phandle(np, "rockchip,grf");
+
+	if (IS_ERR(dp->grf)) {
+		dev_err(dev, "rk3288-dp needs the General Register Files syscon\n");
 		return PTR_ERR(dp->grf);
 	}
 

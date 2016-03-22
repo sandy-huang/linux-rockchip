@@ -1635,30 +1635,25 @@ static u32 gfx_v7_0_get_rb_active_bitmap(struct amdgpu_device *adev)
 static void gfx_v7_0_setup_rb(struct amdgpu_device *adev)
 {
 	int i, j;
-	u32 data, tmp, num_rbs = 0;
+	u32 data;
 	u32 active_rbs = 0;
+	u32 rb_bitmap_width_per_sh = adev->gfx.config.max_backends_per_se /
+					adev->gfx.config.max_sh_per_se;
 
 	mutex_lock(&adev->grbm_idx_mutex);
 	for (i = 0; i < adev->gfx.config.max_shader_engines; i++) {
 		for (j = 0; j < adev->gfx.config.max_sh_per_se; j++) {
 			gfx_v7_0_select_se_sh(adev, i, j);
 			data = gfx_v7_0_get_rb_active_bitmap(adev);
-			if (adev->asic_type == CHIP_HAWAII)
-				active_rbs |= data << ((i * adev->gfx.config.max_sh_per_se + j) *
-						       HAWAII_RB_BITMAP_WIDTH_PER_SH);
-			else
-				active_rbs |= data << ((i * adev->gfx.config.max_sh_per_se + j) *
-						       CIK_RB_BITMAP_WIDTH_PER_SH);
+			active_rbs |= data << ((i * adev->gfx.config.max_sh_per_se + j) *
+					       rb_bitmap_width_per_sh);
 		}
 	}
 	gfx_v7_0_select_se_sh(adev, 0xffffffff, 0xffffffff);
 	mutex_unlock(&adev->grbm_idx_mutex);
 
 	adev->gfx.config.backend_enable_mask = active_rbs;
-	tmp = active_rbs;
-	while (tmp >>= 1)
-		num_rbs++;
-	adev->gfx.config.num_rbs = num_rbs;
+	adev->gfx.config.num_rbs = hweight32(active_rbs);
 }
 
 /**
@@ -1930,6 +1925,25 @@ static void gfx_v7_0_ring_emit_hdp_flush(struct amdgpu_ring *ring)
 }
 
 /**
+ * gfx_v7_0_ring_emit_hdp_invalidate - emit an hdp invalidate on the cp
+ *
+ * @adev: amdgpu_device pointer
+ * @ridx: amdgpu ring index
+ *
+ * Emits an hdp invalidate on the cp.
+ */
+static void gfx_v7_0_ring_emit_hdp_invalidate(struct amdgpu_ring *ring)
+{
+	amdgpu_ring_write(ring, PACKET3(PACKET3_WRITE_DATA, 3));
+	amdgpu_ring_write(ring, (WRITE_DATA_ENGINE_SEL(0) |
+				 WRITE_DATA_DST_SEL(0) |
+				 WR_CONFIRM));
+	amdgpu_ring_write(ring, mmHDP_DEBUG0);
+	amdgpu_ring_write(ring, 0);
+	amdgpu_ring_write(ring, 1);
+}
+
+/**
  * gfx_v7_0_ring_emit_fence_gfx - emit a fence on the gfx ring
  *
  * @adev: amdgpu_device pointer
@@ -2046,8 +2060,7 @@ static void gfx_v7_0_ring_emit_ib_gfx(struct amdgpu_ring *ring,
 	else
 		header = PACKET3(PACKET3_INDIRECT_BUFFER, 2);
 
-	control |= ib->length_dw |
-		(ib->vm ? (ib->vm->ids[ring->idx].id << 24) : 0);
+	control |= ib->length_dw | (ib->vm_id << 24);
 
 	amdgpu_ring_write(ring, header);
 	amdgpu_ring_write(ring,
@@ -2075,8 +2088,7 @@ static void gfx_v7_0_ring_emit_ib_compute(struct amdgpu_ring *ring,
 
 	header = PACKET3(PACKET3_INDIRECT_BUFFER, 2);
 
-	control |= ib->length_dw |
-			   (ib->vm ? (ib->vm->ids[ring->idx].id << 24) : 0);
+	control |= ib->length_dw | (ib->vm_id << 24);
 
 	amdgpu_ring_write(ring, header);
 	amdgpu_ring_write(ring,
@@ -2124,8 +2136,7 @@ static int gfx_v7_0_ring_test_ib(struct amdgpu_ring *ring)
 	ib.ptr[2] = 0xDEADBEEF;
 	ib.length_dw = 3;
 
-	r = amdgpu_ib_schedule(ring, 1, &ib, AMDGPU_FENCE_OWNER_UNDEFINED,
-			       NULL, &f);
+	r = amdgpu_ib_schedule(ring, 1, &ib, NULL, &f);
 	if (r)
 		goto err2;
 
@@ -2152,7 +2163,8 @@ static int gfx_v7_0_ring_test_ib(struct amdgpu_ring *ring)
 
 err2:
 	fence_put(f);
-	amdgpu_ib_free(adev, &ib);
+	amdgpu_ib_free(adev, &ib, NULL);
+	fence_put(f);
 err1:
 	amdgpu_gfx_scratch_free(adev, scratch);
 	return r;
@@ -3030,6 +3042,26 @@ static int gfx_v7_0_cp_resume(struct amdgpu_device *adev)
 	return 0;
 }
 
+/**
+ * gfx_v7_0_ring_emit_vm_flush - cik vm flush using the CP
+ *
+ * @ring: the ring to emmit the commands to
+ *
+ * Sync the command pipeline with the PFP. E.g. wait for everything
+ * to be completed.
+ */
+static void gfx_v7_0_ring_emit_pipeline_sync(struct amdgpu_ring *ring)
+{
+	int usepfp = (ring->type == AMDGPU_RING_TYPE_GFX);
+	if (usepfp) {
+		/* synce CE with ME to prevent CE fetch CEIB before context switch done */
+		amdgpu_ring_write(ring, PACKET3(PACKET3_SWITCH_BUFFER, 0));
+		amdgpu_ring_write(ring, 0);
+		amdgpu_ring_write(ring, PACKET3(PACKET3_SWITCH_BUFFER, 0));
+		amdgpu_ring_write(ring, 0);
+	}
+}
+
 /*
  * vm
  * VMID 0 is the physical GPU addresses as used by the kernel.
@@ -3060,14 +3092,6 @@ static void gfx_v7_0_ring_emit_vm_flush(struct amdgpu_ring *ring,
 	amdgpu_ring_write(ring, seq);
 	amdgpu_ring_write(ring, 0xffffffff);
 	amdgpu_ring_write(ring, 4); /* poll interval */
-
-	if (usepfp) {
-		/* synce CE with ME to prevent CE fetch CEIB before context switch done */
-		amdgpu_ring_write(ring, PACKET3(PACKET3_SWITCH_BUFFER, 0));
-		amdgpu_ring_write(ring, 0);
-		amdgpu_ring_write(ring, PACKET3(PACKET3_SWITCH_BUFFER, 0));
-		amdgpu_ring_write(ring, 0);
-	}
 
 	amdgpu_ring_write(ring, PACKET3(PACKET3_WRITE_DATA, 3));
 	amdgpu_ring_write(ring, (WRITE_DATA_ENGINE_SEL(usepfp) |
@@ -3838,8 +3862,7 @@ static u32 gfx_v7_0_get_cu_active_bitmap(struct amdgpu_device *adev)
 	data &= CC_GC_SHADER_ARRAY_CONFIG__INACTIVE_CUS_MASK;
 	data >>= CC_GC_SHADER_ARRAY_CONFIG__INACTIVE_CUS__SHIFT;
 
-	mask = gfx_v7_0_create_bitmask(adev->gfx.config.max_backends_per_se /
-				       adev->gfx.config.max_sh_per_se);
+	mask = gfx_v7_0_create_bitmask(adev->gfx.config.max_cu_per_sh);
 
 	return (~data) & mask;
 }
@@ -5150,9 +5173,11 @@ static const struct amdgpu_ring_funcs gfx_v7_0_ring_funcs_gfx = {
 	.parse_cs = NULL,
 	.emit_ib = gfx_v7_0_ring_emit_ib_gfx,
 	.emit_fence = gfx_v7_0_ring_emit_fence_gfx,
+	.emit_pipeline_sync = gfx_v7_0_ring_emit_pipeline_sync,
 	.emit_vm_flush = gfx_v7_0_ring_emit_vm_flush,
 	.emit_gds_switch = gfx_v7_0_ring_emit_gds_switch,
 	.emit_hdp_flush = gfx_v7_0_ring_emit_hdp_flush,
+	.emit_hdp_invalidate = gfx_v7_0_ring_emit_hdp_invalidate,
 	.test_ring = gfx_v7_0_ring_test_ring,
 	.test_ib = gfx_v7_0_ring_test_ib,
 	.insert_nop = amdgpu_ring_insert_nop,
@@ -5166,9 +5191,11 @@ static const struct amdgpu_ring_funcs gfx_v7_0_ring_funcs_compute = {
 	.parse_cs = NULL,
 	.emit_ib = gfx_v7_0_ring_emit_ib_compute,
 	.emit_fence = gfx_v7_0_ring_emit_fence_compute,
+	.emit_pipeline_sync = gfx_v7_0_ring_emit_pipeline_sync,
 	.emit_vm_flush = gfx_v7_0_ring_emit_vm_flush,
 	.emit_gds_switch = gfx_v7_0_ring_emit_gds_switch,
 	.emit_hdp_flush = gfx_v7_0_ring_emit_hdp_flush,
+	.emit_hdp_invalidate = gfx_v7_0_ring_emit_hdp_invalidate,
 	.test_ring = gfx_v7_0_ring_test_ring,
 	.test_ib = gfx_v7_0_ring_test_ib,
 	.insert_nop = amdgpu_ring_insert_nop,
@@ -5249,6 +5276,8 @@ int gfx_v7_0_get_cu_info(struct amdgpu_device *adev,
 
 	if (!adev || !cu_info)
 		return -EINVAL;
+
+	memset(cu_info, 0, sizeof(*cu_info));
 
 	mutex_lock(&adev->grbm_idx_mutex);
 	for (i = 0; i < adev->gfx.config.max_shader_engines; i++) {

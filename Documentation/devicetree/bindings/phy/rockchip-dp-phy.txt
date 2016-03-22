@@ -10,6 +10,9 @@ Required properties:
 	Required elements: "24m"
 - #phy-cells : from the generic PHY bindings, must be 0;
 
+Optional properties:
+- rockchip,grf: phandle to the syscon managing the "general register files"
+
 Example:
 
 grf: syscon@ff770000 {

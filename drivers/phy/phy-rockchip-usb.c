@@ -42,6 +42,7 @@ struct rockchip_usb_phys {
 	const char *pll_name;
 };
 
+struct rockchip_usb_phy_base;
 struct rockchip_usb_phy_pdata {
 	struct rockchip_usb_phys *phys;
 	int (*init_usb_uart)(struct regmap *grf);
@@ -136,6 +137,9 @@ static int rockchip_usb_phy_power_off(struct phy *_phy)
 static int rockchip_usb_phy_power_on(struct phy *_phy)
 {
 	struct rockchip_usb_phy *phy = phy_get_drvdata(_phy);
+
+	if (phy->uart_enabled)
+		return -EBUSY;
 
 	return clk_prepare_enable(phy->clk480m);
 }
@@ -431,6 +435,7 @@ static struct platform_driver rockchip_usb_driver = {
 
 module_platform_driver(rockchip_usb_driver);
 
+#ifndef MODULE
 static int __init rockchip_init_usb_uart(void)
 {
 	const struct of_device_id *match;
@@ -482,6 +487,7 @@ static int __init rockchip_usb_uart(char *buf)
 	return 0;
 }
 early_param("rockchip.usb_uart", rockchip_usb_uart);
+#endif
 
 MODULE_AUTHOR("Yunzhi Li <lyz@rock-chips.com>");
 MODULE_DESCRIPTION("Rockchip USB 2.0 PHY driver");
