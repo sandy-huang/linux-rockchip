@@ -958,7 +958,7 @@ struct kbase_device {
 
 
 	/* defaults for new context created for this device */
-	u32 infinite_cache_active_default;
+	bool infinite_cache_active_default;
 
 	/* system coherency mode  */
 	u32 system_coherency;
@@ -1097,7 +1097,7 @@ struct kbase_context {
 	bool pulled;
 	/* true if infinite cache is to be enabled for new allocations. Existing
 	 * allocations will not change. bool stored as a u32 per Linux API */
-	u32 infinite_cache_active;
+	bool infinite_cache_active;
 	/* Bitmask of slots that can be pulled from */
 	u32 slots_pullable;
 
