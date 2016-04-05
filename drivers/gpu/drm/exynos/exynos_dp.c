@@ -14,10 +14,11 @@
 #include <linux/platform_device.h>
 #include <linux/err.h>
 #include <linux/clk.h>
-#include <linux/component.h>
 #include <linux/of_graph.h>
+#include <linux/component.h>
 #include <video/of_display_timing.h>
 #include <video/of_videomode.h>
+#include <video/videomode.h>
 
 #include <drm/drmP.h>
 #include <drm/drm_crtc.h>
@@ -38,7 +39,7 @@ struct exynos_dp_device {
 	struct drm_device          *drm_dev;
 	struct device              *dev;
 
-	struct exynos_drm_panel_info priv;
+	struct videomode           vm;
 	struct analogix_dp_plat_data plat_data;
 };
 
@@ -85,9 +86,7 @@ static int exynos_dp_get_modes(struct analogix_dp_plat_data *plat_data)
 		return num_modes;
 	}
 
-	drm_display_mode_from_videomode(&dp->priv.vm, mode);
-	mode->width_mm = dp->priv.width_mm;
-	mode->height_mm = dp->priv.height_mm;
+	drm_display_mode_from_videomode(&dp->vm, mode);
 	connector->display_info.width_mm = mode->width_mm;
 	connector->display_info.height_mm = mode->height_mm;
 
@@ -123,13 +122,6 @@ static int exynos_dp_bridge_attach(struct analogix_dp_plat_data *plat_data,
 	return 0;
 }
 
-static bool exynos_dp_mode_fixup(struct drm_encoder *encoder,
-				 const struct drm_display_mode *mode,
-				 struct drm_display_mode *adjusted_mode)
-{
-	return true;
-}
-
 static void exynos_dp_mode_set(struct drm_encoder *encoder,
 			       struct drm_display_mode *mode,
 			       struct drm_display_mode *adjusted_mode)
@@ -142,7 +134,6 @@ static void exynos_dp_nop(struct drm_encoder *encoder)
 }
 
 static const struct drm_encoder_helper_funcs exynos_dp_encoder_helper_funcs = {
-	.mode_fixup = exynos_dp_mode_fixup,
 	.mode_set = exynos_dp_mode_set,
 	.enable = exynos_dp_nop,
 	.disable = exynos_dp_nop,
@@ -156,8 +147,7 @@ static int exynos_dp_dt_parse_panel(struct exynos_dp_device *dp)
 {
 	int ret;
 
-	ret = of_get_videomode(dp->dev->of_node, &dp->priv.vm,
-			       OF_USE_NATIVE_MODE);
+	ret = of_get_videomode(dp->dev->of_node, &dp->vm, OF_USE_NATIVE_MODE);
 	if (ret) {
 		DRM_ERROR("failed: of_get_videomode() : %d\n", ret);
 		return ret;
