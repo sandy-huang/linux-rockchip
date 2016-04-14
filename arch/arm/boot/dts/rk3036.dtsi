@@ -63,11 +63,6 @@
 		spi = &spi;
 	};
 
-	memory {
-		device_type = "memory";
-		reg = <0x60000000 0x40000000>;
-	};
-
 	cpus {
 		#address-cells = <1>;
 		#size-cells = <0>;
@@ -119,6 +114,11 @@
 		interrupt-affinity = <&cpu0>, <&cpu1>;
 	};
 
+	display-subsystem {
+		compatible = "rockchip,display-subsystem";
+		ports = <&vop_out>;
+	};
+
 	timer {
 		compatible = "arm,armv7-timer";
 		arm,cpu-registers-not-fw-configured;
@@ -158,22 +158,16 @@
 		resets = <&cru SRST_LCDC1_A>, <&cru SRST_LCDC1_H>, <&cru SRST_LCDC1_D>;
 		reset-names = "axi", "ahb", "dclk";
 		iommus = <&vop_mmu>;
-
 		status = "disabled";
 
 		vop_out: port {
 			#address-cells = <1>;
 			#size-cells = <0>;
 			vop_out_hdmi: endpoint@0 {
-				reg = <1>;
+				reg = <0>;
 				remote-endpoint = <&hdmi_in_vop>;
 			};
 		};
-	};
-
-	display-subsystem {
-		compatible = "rockchip,display-subsystem";
-		ports = <&vop_out>;
 	};
 
 	vop_mmu: iommu@10118300 {
@@ -273,7 +267,6 @@
 		compatible = "rockchip,rk3036-dw-mshc", "rockchip,rk3288-dw-mshc";
 		reg = <0x1021c000 0x4000>;
 		interrupts = <GIC_SPI 16 IRQ_TYPE_LEVEL_HIGH>;
-		broken-cd;
 		bus-width = <8>;
 		cap-mmc-highspeed;
 		clock-frequency = <37500000>;
