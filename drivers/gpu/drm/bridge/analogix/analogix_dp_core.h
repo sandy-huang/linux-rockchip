@@ -16,9 +16,9 @@
 #include <drm/drm_crtc.h>
 #include <drm/drm_dp_helper.h>
 
-#define DP_TIMEOUT_LOOP_COUNT		100
-#define MAX_CR_LOOP			5
-#define MAX_EQ_LOOP			5
+#define DP_TIMEOUT_LOOP_COUNT 100
+#define MAX_CR_LOOP 5
+#define MAX_EQ_LOOP 5
 
 /* I2C EDID Chip ID, Slave Address */
 #define I2C_EDID_DEVICE_ADDR			0x50
@@ -162,9 +162,9 @@ struct link_train {
 
 struct analogix_dp_device {
 	struct drm_encoder	*encoder;
-	struct drm_connector	connector;
 	struct device		*dev;
 	struct drm_device	*drm_dev;
+	struct drm_connector	connector;
 	struct drm_bridge	*bridge;
 	struct clk		*clock;
 	unsigned int		irq;
