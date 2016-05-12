@@ -34,7 +34,6 @@ struct clk;
 #define HIWORD_UPDATE(val, mask, shift) \
 		((val) << (shift) | (mask) << ((shift) + 16))
 
-/* register positions shared by RK2928, RK3036, RK3066, RK3188, RK3228, RK3399 */
 #define RK2928_PLL_CON(x)		((x) * 0x4)
 #define RK2928_MODE_CON		0x40
 #define RK2928_CLKSEL_CON(x)	((x) * 0x4 + 0x44)
@@ -253,7 +252,7 @@ struct rockchip_cpuclk_rate_table {
 };
 
 /**
- * struct rockchip_cpuclk_reg_data - describes register offsets and masks of the cpuclock
+ * struct rockchip_cpuclk_reg_data - register offsets and masks of the cpuclock
  * @core_reg:		register offset of the core settings register
  * @div_core_shift:	core divider offset used to divide the pll value
  * @div_core_mask:	core divider mask
@@ -601,7 +600,6 @@ struct rockchip_clk_provider *rockchip_clk_init(struct device_node *np,
 			void __iomem *base, unsigned long nr_clks);
 void rockchip_clk_of_add_provider(struct device_node *np,
 				struct rockchip_clk_provider *ctx);
-struct regmap *rockchip_clk_get_grf(struct rockchip_clk_provider *ctx);
 void rockchip_clk_add_lookup(struct rockchip_clk_provider *ctx,
 			     struct clk *clk, unsigned int id);
 void rockchip_clk_register_branches(struct rockchip_clk_provider *ctx,
