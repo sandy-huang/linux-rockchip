@@ -7839,6 +7839,9 @@ static int g4x_crtc_compute_clock(struct intel_crtc *crtc,
 		limit = &intel_limits_i9xx_sdvo;
 	}
 
+	pipe_config->gmch_pfit.control = tmp;
+	pipe_config->gmch_pfit.pgm_ratios = I915_READ(PFIT_PGM_RATIOS);
+
 	if (!crtc_state->clock_set &&
 	    !g4x_find_best_dpll(limit, crtc_state, crtc_state->port_clock,
 				refclk, NULL, &crtc_state->dpll)) {
@@ -9638,6 +9641,8 @@ static void broadwell_set_cdclk(struct drm_device *dev, int cdclk)
 	mutex_lock(&dev_priv->rps.hw_lock);
 	sandybridge_pcode_write(dev_priv, HSW_PCODE_DE_WRITE_FREQ_REQ, data);
 	mutex_unlock(&dev_priv->rps.hw_lock);
+
+	I915_WRITE(CDCLK_FREQ, DIV_ROUND_CLOSEST(cdclk, 1000) - 1);
 
 	intel_update_cdclk(dev);
 
