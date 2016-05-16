@@ -1,8 +1,8 @@
 /*
- * Google Veyron (and derivatives) fragment for the
- * max98090 audio codec and analog headphone jack.
+ * Google Veyron (and derivatives) fragment for the  max98090 audio
+ * codec and analog headphone jack.
  *
- * Copyright 2015 Google, Inc
+ * Copyright 2016 Google, Inc
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 2 as
@@ -12,33 +12,14 @@
 / {
 	sound {
 		compatible = "rockchip,rockchip-audio-max98090";
+		pinctrl-names = "default";
+		pinctrl-0 = <&mic_det>, <&hp_det>;
 		rockchip,model = "ROCKCHIP-I2S";
 		rockchip,i2s-controller = <&i2s>;
 		rockchip,audio-codec = <&max98090>;
 		rockchip,hp-det-gpios = <&gpio6 5 GPIO_ACTIVE_HIGH>;
 		rockchip,mic-det-gpios = <&gpio6 11 GPIO_ACTIVE_LOW>;
 		rockchip,headset-codec = <&headsetcodec>;
-		pinctrl-names = "default";
-		pinctrl-0 = <&mic_det>, <&hp_det>;
-	};
-
-	io-domains {
-		audio-supply = <&vcc18_codec>;
-	};
-};
-
-&rk808 {
-	vcc10-supply = <&vcc33_sys>;
-
-	regulators {
-		vcc18_codec: LDO_REG6 {
-			regulator-always-on;
-			regulator-boot-on;
-			regulator-min-microvolt = <1800000>;
-			regulator-max-microvolt = <1800000>;
-			regulator-name = "vcc18_codec";
-			regulator-suspend-mem-disabled;
-		};
 	};
 };
 
@@ -48,6 +29,8 @@
 		reg = <0x10>;
 		interrupt-parent = <&gpio6>;
 		interrupts = <7 IRQ_TYPE_EDGE_FALLING>;
+		clock-names = "mclk";
+		clocks = <&cru SCLK_I2S0_OUT>;
 		pinctrl-names = "default";
 		pinctrl-0 = <&int_codec>;
 	};
@@ -62,6 +45,31 @@
 		pinctrl-names = "default";
 		pinctrl-0 = <&ts3a227e_int_l>;
 		ti,micbias = <7>;		/* MICBIAS = 2.8V */
+	};
+};
+
+&i2s {
+	status = "okay";
+};
+
+&io_domains {
+	audio-supply = <&vcc18_codec>;
+};
+
+&rk808 {
+	vcc10-supply = <&vcc33_sys>;
+
+	regulators {
+		vcc18_codec: LDO_REG6 {
+			regulator-name = "vcc18_codec";
+			regulator-always-on;
+			regulator-boot-on;
+			regulator-min-microvolt = <1800000>;
+			regulator-max-microvolt = <1800000>;
+			regulator-state-mem {
+				regulator-off-in-suspend;
+			};
+		};
 	};
 };
 
