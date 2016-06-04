@@ -52,16 +52,15 @@ struct  intel_hw_status_page {
 /* seqno size is actually only a uint32, but since we plan to use MI_FLUSH_DW to
  * do the writes, and that must have qw aligned offsets, simply pretend it's 8b.
  */
-#define i915_semaphore_seqno_size sizeof(uint64_t)
+#define gen8_semaphore_seqno_size sizeof(uint64_t)
+#define GEN8_SEMAPHORE_OFFSET(__from, __to)			     \
+	(((__from) * I915_NUM_ENGINES  + (__to)) * gen8_semaphore_seqno_size)
 #define GEN8_SIGNAL_OFFSET(__ring, to)			     \
 	(i915_gem_obj_ggtt_offset(dev_priv->semaphore_obj) + \
-	((__ring)->id * I915_NUM_ENGINES * i915_semaphore_seqno_size) +	\
-	(i915_semaphore_seqno_size * (to)))
-
+	 GEN8_SEMAPHORE_OFFSET((__ring)->id, (to)))
 #define GEN8_WAIT_OFFSET(__ring, from)			     \
 	(i915_gem_obj_ggtt_offset(dev_priv->semaphore_obj) + \
-	((from) * I915_NUM_ENGINES * i915_semaphore_seqno_size) + \
-	(i915_semaphore_seqno_size * (__ring)->id))
+	 GEN8_SEMAPHORE_OFFSET(from, (__ring)->id))
 
 #define GEN8_RING_SEMAPHORE_INIT(e) do { \
 	if (!dev_priv->semaphore_obj) { \
@@ -88,6 +87,7 @@ enum intel_ring_hangcheck_action {
 struct intel_ring_hangcheck {
 	u64 acthd;
 	u32 seqno;
+	unsigned user_interrupts;
 	int score;
 	enum intel_ring_hangcheck_action action;
 	int deadlock;
@@ -108,8 +108,6 @@ struct intel_ringbuffer {
 	int size;
 	int effective_size;
 	int reserved_size;
-	int reserved_tail;
-	bool reserved_in_use;
 
 	/** We track the position of the requests in the ring buffer, and
 	 * when each is retired we increment last_retired_head as the GPU
@@ -156,7 +154,8 @@ struct  intel_engine_cs {
 #define I915_NUM_ENGINES 5
 #define _VCS(n) (VCS + (n))
 	unsigned int exec_id;
-	unsigned int guc_id;
+	unsigned int hw_id;
+	unsigned int guc_id; /* XXX same as hw_id? */
 	u32		mmio_base;
 	struct		drm_device *dev;
 	struct intel_ringbuffer *buffer;
@@ -194,8 +193,8 @@ struct  intel_engine_cs {
 	 * seen value is good enough. Note that the seqno will always be
 	 * monotonic, even if not coherent.
 	 */
-	u32		(*get_seqno)(struct intel_engine_cs *ring,
-				     bool lazy_coherency);
+	void		(*irq_seqno_barrier)(struct intel_engine_cs *ring);
+	u32		(*get_seqno)(struct intel_engine_cs *ring);
 	void		(*set_seqno)(struct intel_engine_cs *ring,
 				     u32 seqno);
 	int		(*dispatch_execbuffer)(struct drm_i915_gem_request *req,
@@ -266,9 +265,11 @@ struct  intel_engine_cs {
 	} semaphore;
 
 	/* Execlists */
-	spinlock_t execlist_lock;
+	struct tasklet_struct irq_tasklet;
+	spinlock_t execlist_lock; /* used inside tasklet, use spin_lock_bh */
 	struct list_head execlist_queue;
 	struct list_head execlist_retired_req_list;
+	unsigned int fw_domains;
 	unsigned int next_context_status_buffer;
 	unsigned int idle_lite_restore_wa;
 	bool disable_lite_restore_wa;
@@ -305,6 +306,7 @@ struct  intel_engine_cs {
 	 * inspecting request list.
 	 */
 	u32 last_submitted_seqno;
+	unsigned user_interrupts;
 
 	bool gpu_caches_dirty;
 
@@ -383,17 +385,16 @@ intel_ring_sync_index(struct intel_engine_cs *engine,
 static inline void
 intel_flush_status_page(struct intel_engine_cs *engine, int reg)
 {
-	drm_clflush_virt_range(&engine->status_page.page_addr[reg],
-			       sizeof(uint32_t));
+	mb();
+	clflush(&engine->status_page.page_addr[reg]);
+	mb();
 }
 
 static inline u32
-intel_read_status_page(struct intel_engine_cs *engine,
-		       int reg)
+intel_read_status_page(struct intel_engine_cs *engine, int reg)
 {
 	/* Ensure that the compiler doesn't optimize away the load. */
-	barrier();
-	return engine->status_page.page_addr[reg];
+	return READ_ONCE(engine->status_page.page_addr[reg]);
 }
 
 static inline void
@@ -457,7 +458,6 @@ static inline void intel_ring_advance(struct intel_engine_cs *engine)
 }
 int __intel_ring_space(int head, int tail, int size);
 void intel_ring_update_space(struct intel_ringbuffer *ringbuf);
-int intel_ring_space(struct intel_ringbuffer *ringbuf);
 bool intel_engine_stopped(struct intel_engine_cs *engine);
 
 int __must_check intel_engine_idle(struct intel_engine_cs *engine);
