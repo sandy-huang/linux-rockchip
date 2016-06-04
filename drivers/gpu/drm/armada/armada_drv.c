@@ -113,7 +113,6 @@ static int armada_drm_load(struct drm_device *dev, unsigned long flags)
 		goto err_comp;
 
 	dev->irq_enabled = true;
-	dev->vblank_disable_allowed = 1;
 
 	ret = armada_fbdev_init(dev);
 	if (ret)
@@ -272,8 +271,7 @@ static int armada_drm_probe(struct platform_device *pdev)
 	struct device *dev = &pdev->dev;
 	int ret;
 
-	ret = drm_of_component_probe(dev, compare_dev_name, compare_dev_name,
-				     &armada_master_ops);
+	ret = drm_of_component_probe(dev, compare_dev_name, &armada_master_ops);
 	if (ret != -EINVAL)
 		return ret;
 

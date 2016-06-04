@@ -504,7 +504,7 @@ static u32 i9xx_get_backlight(struct intel_connector *connector)
 	if (panel->backlight.combination_mode) {
 		u8 lbpc;
 
-		pci_read_config_byte(dev_priv->dev->pdev, PCI_LBPC, &lbpc);
+		pci_read_config_byte(dev_priv->dev->pdev, LBPC, &lbpc);
 		val *= lbpc;
 	}
 
@@ -592,7 +592,7 @@ static void i9xx_set_backlight(struct intel_connector *connector, u32 level)
 
 		lbpc = level * 0xfe / panel->backlight.max + 1;
 		level /= lbpc;
-		pci_write_config_byte(dev_priv->dev->pdev, PCI_LBPC, lbpc);
+		pci_write_config_byte(dev_priv->dev->pdev, LBPC, lbpc);
 	}
 
 	if (IS_GEN4(dev_priv)) {
@@ -1637,6 +1637,12 @@ static int pwm_setup_backlight(struct intel_connector *connector,
 		panel->backlight.pwm = NULL;
 		return -ENODEV;
 	}
+
+	/*
+	 * FIXME: pwm_apply_args() should be removed when switching to
+	 * the atomic PWM API.
+	 */
+	pwm_apply_args(panel->backlight.pwm);
 
 	retval = pwm_config(panel->backlight.pwm, CRC_PMIC_PWM_PERIOD_NS,
 			    CRC_PMIC_PWM_PERIOD_NS);

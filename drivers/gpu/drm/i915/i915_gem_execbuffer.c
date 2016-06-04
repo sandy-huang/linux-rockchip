@@ -313,7 +313,8 @@ relocate_entry_gtt(struct drm_i915_gem_object *obj,
 		   uint64_t target_offset)
 {
 	struct drm_device *dev = obj->base.dev;
-	struct drm_i915_private *dev_priv = dev->dev_private;
+	struct drm_i915_private *dev_priv = to_i915(dev);
+	struct i915_ggtt *ggtt = &dev_priv->ggtt;
 	uint64_t delta = relocation_target(reloc, target_offset);
 	uint64_t offset;
 	void __iomem *reloc_page;
@@ -330,7 +331,7 @@ relocate_entry_gtt(struct drm_i915_gem_object *obj,
 	/* Map the page containing the relocation we're going to perform.  */
 	offset = i915_gem_obj_ggtt_offset(obj);
 	offset += reloc->offset;
-	reloc_page = io_mapping_map_atomic_wc(dev_priv->ggtt.mappable,
+	reloc_page = io_mapping_map_atomic_wc(ggtt->mappable,
 					      offset & PAGE_MASK);
 	iowrite32(lower_32_bits(delta), reloc_page + offset_in_page(offset));
 
@@ -340,7 +341,7 @@ relocate_entry_gtt(struct drm_i915_gem_object *obj,
 		if (offset_in_page(offset) == 0) {
 			io_mapping_unmap_atomic(reloc_page);
 			reloc_page =
-				io_mapping_map_atomic_wc(dev_priv->ggtt.mappable,
+				io_mapping_map_atomic_wc(ggtt->mappable,
 							 offset);
 		}
 
@@ -488,7 +489,7 @@ i915_gem_execbuffer_relocate_entry(struct drm_i915_gem_object *obj,
 		ret = relocate_entry_cpu(obj, reloc, target_offset);
 	else if (obj->map_and_fenceable)
 		ret = relocate_entry_gtt(obj, reloc, target_offset);
-	else if (cpu_has_clflush)
+	else if (static_cpu_has(X86_FEATURE_CLFLUSH))
 		ret = relocate_entry_clflush(obj, reloc, target_offset);
 	else {
 		WARN_ONCE(1, "Impossible case in relocation handling\n");
@@ -514,7 +515,7 @@ i915_gem_execbuffer_relocate_vma(struct i915_vma *vma,
 	struct drm_i915_gem_exec_object2 *entry = vma->exec_entry;
 	int remain, ret;
 
-	user_relocs = to_user_ptr(entry->relocs_ptr);
+	user_relocs = u64_to_user_ptr(entry->relocs_ptr);
 
 	remain = entry->relocation_count;
 	while (remain) {
@@ -535,9 +536,7 @@ i915_gem_execbuffer_relocate_vma(struct i915_vma *vma,
 				return ret;
 
 			if (r->presumed_offset != offset &&
-			    __copy_to_user_inatomic(&user_relocs->presumed_offset,
-						    &r->presumed_offset,
-						    sizeof(r->presumed_offset))) {
+			    __put_user(r->presumed_offset, &user_relocs->presumed_offset)) {
 				return -EFAULT;
 			}
 
@@ -868,7 +867,7 @@ i915_gem_execbuffer_relocate_slow(struct drm_device *dev,
 		u64 invalid_offset = (u64)-1;
 		int j;
 
-		user_relocs = to_user_ptr(exec[i].relocs_ptr);
+		user_relocs = u64_to_user_ptr(exec[i].relocs_ptr);
 
 		if (copy_from_user(reloc+total, user_relocs,
 				   exec[i].relocation_count * sizeof(*reloc))) {
@@ -1013,7 +1012,7 @@ validate_exec_list(struct drm_device *dev,
 		invalid_flags |= EXEC_OBJECT_NEEDS_GTT;
 
 	for (i = 0; i < count; i++) {
-		char __user *ptr = to_user_ptr(exec[i].relocs_ptr);
+		char __user *ptr = u64_to_user_ptr(exec[i].relocs_ptr);
 		int length; /* limited by fault_in_pages_readable() */
 
 		if (exec[i].flags & invalid_flags)
@@ -1136,7 +1135,7 @@ i915_gem_execbuffer_move_to_active(struct list_head *vmas,
 	}
 }
 
-void
+static void
 i915_gem_execbuffer_retire_commands(struct i915_execbuffer_params *params)
 {
 	/* Unconditionally force add_request to emit a full flush. */
@@ -1321,7 +1320,6 @@ i915_gem_ringbuffer_submission(struct i915_execbuffer_params *params,
 	trace_i915_gem_ring_dispatch(params->request, params->dispatch_flags);
 
 	i915_gem_execbuffer_move_to_active(vmas, params->request);
-	i915_gem_execbuffer_retire_commands(params);
 
 	return 0;
 }
@@ -1431,7 +1429,8 @@ i915_gem_do_execbuffer(struct drm_device *dev, void *data,
 		       struct drm_i915_gem_execbuffer2 *args,
 		       struct drm_i915_gem_exec_object2 *exec)
 {
-	struct drm_i915_private *dev_priv = dev->dev_private;
+	struct drm_i915_private *dev_priv = to_i915(dev);
+	struct i915_ggtt *ggtt = &dev_priv->ggtt;
 	struct drm_i915_gem_request *req = NULL;
 	struct eb_vmas *eb;
 	struct drm_i915_gem_object *batch_obj;
@@ -1504,7 +1503,7 @@ i915_gem_do_execbuffer(struct drm_device *dev, void *data,
 	if (ctx->ppgtt)
 		vm = &ctx->ppgtt->base;
 	else
-		vm = &dev_priv->ggtt.base;
+		vm = &ggtt->base;
 
 	memset(&params_master, 0x00, sizeof(params_master));
 
@@ -1622,7 +1621,7 @@ i915_gem_do_execbuffer(struct drm_device *dev, void *data,
 
 	ret = i915_gem_request_add_to_client(req, file);
 	if (ret)
-		goto err_batch_unpin;
+		goto err_request;
 
 	/*
 	 * Save assorted stuff away to pass through to *_submission().
@@ -1639,6 +1638,8 @@ i915_gem_do_execbuffer(struct drm_device *dev, void *data,
 	params->request                 = req;
 
 	ret = dev_priv->gt.execbuf_submit(params, args, &eb->vmas);
+err_request:
+	i915_gem_execbuffer_retire_commands(params);
 
 err_batch_unpin:
 	/*
@@ -1654,14 +1655,6 @@ err:
 	/* the request owns the ref now */
 	i915_gem_context_unreference(ctx);
 	eb_destroy(eb);
-
-	/*
-	 * If the request was created but not successfully submitted then it
-	 * must be freed again. If it was submitted then it is being tracked
-	 * on the active request list and no clean up is required here.
-	 */
-	if (ret && !IS_ERR_OR_NULL(req))
-		i915_gem_request_cancel(req);
 
 	mutex_unlock(&dev->struct_mutex);
 
@@ -1702,7 +1695,7 @@ i915_gem_execbuffer(struct drm_device *dev, void *data,
 		return -ENOMEM;
 	}
 	ret = copy_from_user(exec_list,
-			     to_user_ptr(args->buffers_ptr),
+			     u64_to_user_ptr(args->buffers_ptr),
 			     sizeof(*exec_list) * args->buffer_count);
 	if (ret != 0) {
 		DRM_DEBUG("copy %d exec entries failed %d\n",
@@ -1738,7 +1731,7 @@ i915_gem_execbuffer(struct drm_device *dev, void *data,
 	ret = i915_gem_do_execbuffer(dev, data, file, &exec2, exec2_list);
 	if (!ret) {
 		struct drm_i915_gem_exec_object __user *user_exec_list =
-			to_user_ptr(args->buffers_ptr);
+			u64_to_user_ptr(args->buffers_ptr);
 
 		/* Copy the new buffer offsets back to the user's exec list. */
 		for (i = 0; i < args->buffer_count; i++) {
@@ -1781,18 +1774,16 @@ i915_gem_execbuffer2(struct drm_device *dev, void *data,
 		return -EINVAL;
 	}
 
-	exec2_list = kmalloc(sizeof(*exec2_list)*args->buffer_count,
-			     GFP_TEMPORARY | __GFP_NOWARN | __GFP_NORETRY);
-	if (exec2_list == NULL)
-		exec2_list = drm_malloc_ab(sizeof(*exec2_list),
-					   args->buffer_count);
+	exec2_list = drm_malloc_gfp(args->buffer_count,
+				    sizeof(*exec2_list),
+				    GFP_TEMPORARY);
 	if (exec2_list == NULL) {
 		DRM_DEBUG("Failed to allocate exec list for %d buffers\n",
 			  args->buffer_count);
 		return -ENOMEM;
 	}
 	ret = copy_from_user(exec2_list,
-			     to_user_ptr(args->buffers_ptr),
+			     u64_to_user_ptr(args->buffers_ptr),
 			     sizeof(*exec2_list) * args->buffer_count);
 	if (ret != 0) {
 		DRM_DEBUG("copy %d exec entries failed %d\n",
@@ -1805,7 +1796,7 @@ i915_gem_execbuffer2(struct drm_device *dev, void *data,
 	if (!ret) {
 		/* Copy the new buffer offsets back to the user's exec list. */
 		struct drm_i915_gem_exec_object2 __user *user_exec_list =
-				   to_user_ptr(args->buffers_ptr);
+				   u64_to_user_ptr(args->buffers_ptr);
 		int i;
 
 		for (i = 0; i < args->buffer_count; i++) {
