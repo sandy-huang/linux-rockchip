@@ -92,6 +92,42 @@
 		vin-supply = <&vcc_io>;
 	};
 
+	vcc_host_5v: usb-host-regulator {
+		compatible = "regulator-fixed";
+		enable-active-high;
+		gpio = <&gpio0 14 GPIO_ACTIVE_HIGH>;
+		pinctrl-names = "default";
+		pinctrl-0 = <&host_vbus_drv>;
+		regulator-name = "vcc_host_5v";
+		regulator-min-microvolt = <5000000>;
+		regulator-max-microvolt = <5000000>;
+		vin-supply = <&vcc_sys>;
+	};
+
+	vcc_otg_5v: usb-otg-regulator {
+		compatible = "regulator-fixed";
+		enable-active-high;
+		gpio = <&gpio0 12 GPIO_ACTIVE_HIGH>;
+		pinctrl-names = "default";
+		pinctrl-0 = <&otg_vbus_drv>;
+		regulator-name = "vcc_otg_5v";
+		regulator-min-microvolt = <5000000>;
+		regulator-max-microvolt = <5000000>;
+		vin-supply = <&vcc_sys>;
+	};
+
+	vcc_sata_5v: usb-sata-regulator {
+		compatible = "regulator-fixed";
+		enable-active-high;
+		gpio = <&gpio7 12 GPIO_ACTIVE_HIGH>;
+		pinctrl-names = "default";
+		pinctrl-0 = <&sata_pwr>;
+		regulator-name = "vcc_sata_5v";
+		regulator-min-microvolt = <5000000>;
+		regulator-max-microvolt = <5000000>;
+		vin-supply = <&vcc_sys>;
+	};
+
 	vcc_sd: sdmmc-regulator {
 		compatible = "regulator-fixed";
 		gpio = <&gpio7 11 GPIO_ACTIVE_LOW>;
@@ -440,6 +476,10 @@
 };
 
 &pinctrl {
+	pcfg_output_high: pcfg-output-high {
+		output-high;
+	};
+
 	ak8963 {
 		comp_int: comp-int {
 			rockchip,pins = <8 1 RK_FUNC_GPIO &pcfg_pull_up>;
@@ -479,6 +519,32 @@
 	sdmmc {
 		sdmmc_pwr: sdmmc-pwr {
 			rockchip,pins = <7 11 RK_FUNC_GPIO &pcfg_pull_none>;
+		};
+	};
+
+	usb_host0 {
+		sata_pwr: sata-pwr {
+			rockchip,pins = <7 12 RK_FUNC_GPIO &pcfg_pull_none>;
+		};
+
+		sata_reset: sata-reset {
+			rockchip,pins = <0 13 RK_FUNC_GPIO &pcfg_output_high>;
+		};
+	};
+
+	usb_host1 {
+		host_vbus_drv: host-vbus-drv {
+			rockchip,pins = <0 14 RK_FUNC_GPIO &pcfg_pull_none>;
+		};
+
+		usbhub_rst: usbhub-rst {
+			rockchip,pins = <7 3 RK_FUNC_GPIO &pcfg_output_high>;
+		};
+	};
+
+	usb_otg {
+		otg_vbus_drv: otg-vbus-drv {
+			rockchip,pins = <0 12 RK_FUNC_GPIO &pcfg_pull_none>;
 		};
 	};
 };
@@ -526,5 +592,35 @@
 };
 
 &usbphy {
+	status = "okay";
+};
+
+&usbphy0 {
+	phy-supply = <&vcc_otg_5v>;
+};
+
+&usbphy1 {
+	phy-supply = <&vcc_sata_5v>;
+};
+
+&usbphy2 {
+	phy-supply = <&vcc_host_5v>;
+};
+
+/* usb-sata bridge */
+&usb_host0_ehci {
+	pinctrl-names = "default";
+	pinctrl-0 = <&sata_reset>;
+	status = "okay";
+};
+
+/* usb-hub providing 3 ports */
+&usb_host1 {
+	pinctrl-names = "default";
+	pinctrl-0 = <&usbhub_rst>;
+	status = "okay";
+};
+
+&usb_otg {
 	status = "okay";
 };
