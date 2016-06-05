@@ -612,6 +612,17 @@
 	pinctrl-names = "default";
 	pinctrl-0 = <&sata_reset>;
 	status = "okay";
+
+/*
+for later, once usb power-sequences are in the kernel
+	#address-cells = <1>;
+	#size-cells = <0>;
+
+	sata: sata-bridge@1 {
+		/* JMicron JM20329 SATA Bridge */
+		compatible = "usb152d,2329";
+		reg = <1>;
+	}; */
 };
 
 /* usb-hub providing 3 ports */
@@ -619,6 +630,15 @@
 	pinctrl-names = "default";
 	pinctrl-0 = <&usbhub_rst>;
 	status = "okay";
+
+/*
+	#address-cells = <1>;
+	#size-cells = <0>;
+
+	usb_hub: terminus@1 {
+		compatible = "usb1a40,101";
+		reg = <1>;
+	}; */
 };
 
 &usb_otg {
