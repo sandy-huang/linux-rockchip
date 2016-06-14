@@ -619,7 +619,7 @@ for later, once usb power-sequences are in the kernel
 	#size-cells = <0>;
 
 	sata: sata-bridge@1 {
-		/* JMicron JM20329 SATA Bridge */
+		// JMicron JM20329 SATA Bridge
 		compatible = "usb152d,2329";
 		reg = <1>;
 	}; */
