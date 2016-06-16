@@ -276,6 +276,9 @@ static int rockchip_usb2phy_init(struct phy *phy)
 	struct rockchip_usb2phy *rphy = dev_get_drvdata(phy->dev.parent);
 	int ret;
 
+	if (!rport->port_cfg)
+		return 0;
+
 	if (rport->port_id == USB2PHY_PORT_HOST) {
 		/* clear linestate and enable linestate detect irq */
 		mutex_lock(&rport->mutex);
@@ -305,6 +308,9 @@ static int rockchip_usb2phy_resume(struct phy *phy)
 	struct rockchip_usb2phy *rphy = dev_get_drvdata(phy->dev.parent);
 	int ret;
 
+	if (!rport->port_cfg)
+		return 0;
+
 	dev_dbg(&rport->phy->dev, "port resume\n");
 
 	ret = clk_prepare_enable(rphy->clk480m);
@@ -325,6 +331,9 @@ static int rockchip_usb2phy_suspend(struct phy *phy)
 	struct rockchip_usb2phy *rphy = dev_get_drvdata(phy->dev.parent);
 	int ret;
 
+	if (!rport->port_cfg)
+		return 0;
+
 	dev_dbg(&rport->phy->dev, "port suspend\n");
 
 	ret = property_enable(rphy, &rport->port_cfg->phy_sus, true);
@@ -339,6 +348,9 @@ static int rockchip_usb2phy_suspend(struct phy *phy)
 static int rockchip_usb2phy_exit(struct phy *phy)
 {
 	struct rockchip_usb2phy_port *rport = phy_get_drvdata(phy);
+
+	if (!rport->port_cfg)
+		return 0;
 
 	if (rport->port_id == USB2PHY_PORT_HOST)
 		cancel_delayed_work_sync(&rport->sm_work);
@@ -582,6 +594,7 @@ static int rockchip_usb2phy_probe(struct platform_device *pdev)
 		}
 
 		rport->phy = phy;
+		phy_set_drvdata(rport->phy, rport);
 
 		/* initialize otg/host port separately */
 		if (!of_node_cmp(child_np->name, "host-port")) {
@@ -590,8 +603,6 @@ static int rockchip_usb2phy_probe(struct platform_device *pdev)
 			if (ret)
 				goto put_child;
 		}
-
-		phy_set_drvdata(rport->phy, rport);
 
 		/* to prevent out of boundary */
 		if (++index >= rphy->phy_cfg->num_ports)
@@ -605,6 +616,25 @@ put_child:
 	of_node_put(child_np);
 	return ret;
 }
+
+static const struct rockchip_usb2phy_cfg rk3036_phy_cfgs[] = {
+	{
+		.reg = 0x17c,
+		.num_ports	= 2,
+		.clkout_ctl	= { 0x17c, 11, 11, 1, 0 },
+		.port_cfgs	= {
+			[USB2PHY_PORT_HOST] = {
+				.phy_sus	= { 0x194, 8, 0, 0, 0x1d1 },
+				.ls_det_en	= { 0x194, 14, 14, 0, 1 },
+				.ls_det_st	= { 0x194, 15, 15, 0, 1 },
+				.ls_det_clr	= { 0x194, 15, 15, 0, 1 },
+				.utmi_ls	= { 0x14c, 15, 14, 0, 1 },
+				.utmi_hstdet	= { 0x14c, 13, 13, 0, 1 }
+			}
+		},
+	},
+	{ /* sentinel */ }
+};
 
 static const struct rockchip_usb2phy_cfg rk3366_phy_cfgs[] = {
 	{
@@ -626,6 +656,7 @@ static const struct rockchip_usb2phy_cfg rk3366_phy_cfgs[] = {
 };
 
 static const struct of_device_id rockchip_usb2phy_dt_match[] = {
+	{ .compatible = "rockchip,rk3036-usb2phy", .data = &rk3036_phy_cfgs },
 	{ .compatible = "rockchip,rk3366-usb2phy", .data = &rk3366_phy_cfgs },
 	{}
 };
