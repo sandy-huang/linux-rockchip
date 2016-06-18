@@ -248,6 +248,15 @@
 	};
 };
 
+&io_domains {
+	status = "ok";
+
+	audio-supply = <&vcc_io>;
+	gpio30-supply = <&vcc_io>;
+	gpio1830-supply = <&vcc_io>;
+	wifi-supply = <&vccio_wl>;
+};
+
 &sdio0 {
 	assigned-clocks = <&cru SCLK_SDIO0>;
 	assigned-clock-parents = <&cru PLL_CPLL>;
@@ -341,14 +350,11 @@
 	};
 };
 
-&pmugrf {
-	io-domains {
-		compatible = "rockchip,rk3368-pmu-io-voltage-domain";
-		rockchip,grf = <&pmugrf>;
+&pmu_io_domains {
+	status = "okay";
 
-		pmu-supply = <&vcc_io>;
-		vop-supply = <&vcc_io>;
-	};
+	pmu-supply = <&vcc_io>;
+	vop-supply = <&vcc_io>;
 };
 
 &saradc {
