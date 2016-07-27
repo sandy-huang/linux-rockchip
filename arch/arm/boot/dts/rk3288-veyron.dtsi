@@ -409,6 +409,7 @@
 	gpio30-supply = <&vcc33_io>;
 	lcdc-supply = <&vcc33_lcd>;
 	wifi-supply = <&vcc18_wl>;
+};
 
 &pwm1 {
 	status = "okay";
