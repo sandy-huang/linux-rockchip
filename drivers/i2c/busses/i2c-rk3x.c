@@ -799,7 +799,7 @@ static int rk3x_i2c_v1_calc_timings(unsigned long clk_rate,
 	 * This is the maximum divider so we don't go over the maximum.
 	 * We don't round up here (we round down) since this is a maximum.
 	 */
-	 if (min_div_for_hold >= min_total_div) {
+	if (min_div_for_hold >= min_total_div) {
 		/*
 		 * Time needed to meet hold requirements is important.
 		 * Just use that.
