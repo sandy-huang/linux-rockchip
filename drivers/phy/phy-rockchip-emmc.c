@@ -88,43 +88,8 @@ static int rockchip_emmc_phy_power(struct phy *phy, bool on_off)
 	unsigned int caldone;
 	unsigned int dllrdy;
 	unsigned int freqsel = PHYCTRL_FREQSEL_200M;
+	unsigned long rate;
 	unsigned long timeout;
-
-	if (rk_phy->emmcclk != NULL) {
-		unsigned long rate = clk_get_rate(rk_phy->emmcclk);
-		unsigned long ideal_rate;
-		unsigned long diff;
-
-		switch (rate) {
-		case 0 ... 74999999:
-			ideal_rate = 50000000;
-			freqsel = PHYCTRL_FREQSEL_50M;
-			break;
-		case 75000000 ... 124999999:
-			ideal_rate = 100000000;
-			freqsel = PHYCTRL_FREQSEL_100M;
-			break;
-		case 125000000 ... 174999999:
-			ideal_rate = 150000000;
-			freqsel = PHYCTRL_FREQSEL_150M;
-			break;
-		default:
-			ideal_rate = 200000000;
-			break;
-		};
-
-		diff = (rate > ideal_rate) ?
-			rate - ideal_rate : ideal_rate - rate;
-
-		/*
-		 * In order for tuning delays to be accurate we need to be
-		 * pretty spot on for the DLL range, so warn if we're too
-		 * far off.  Also warn if we're above the 200 MHz max.  Don't
-		 * warn for really slow rates since we won't be tuning then.
-		 */
-		if ((rate > 50000000 && diff > 15000000) || (rate > 200000000))
-			dev_warn(&phy->dev, "Unsupported rate: %lu\n", rate);
-	}
 
 	/*
 	 * Keep phyctrl_pdb and phyctrl_endll low to allow
