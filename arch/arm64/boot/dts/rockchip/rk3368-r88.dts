@@ -216,7 +216,6 @@
 		audio-supply = <&vcc_io>;
 		gpio30-supply = <&vcc_io>;
 		gpio1830-supply = <&vcc_io>;
-		sdcard-supply = <&vccio_sd>;
 		wifi-supply = <&vccio_wl>;
 	};
 };
