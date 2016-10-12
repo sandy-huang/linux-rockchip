@@ -14,7 +14,9 @@
 #include <linux/kernel.h>
 #include <linux/errno.h>
 #include <linux/thread_info.h>
+#include <linux/string.h>
 #include <asm/asm-eva.h>
+#include <asm/extable.h>
 
 /*
  * The fs value determines whether argument validity checking should be
@@ -1170,6 +1172,8 @@ extern size_t __copy_in_user_eva(void *__to, const void *__from, size_t __n);
 			__cu_len = __invoke_copy_from_user(__cu_to,	\
 							   __cu_from,	\
 							   __cu_len);   \
+		} else {						\
+			memset(__cu_to, 0, __cu_len);			\
 		}							\
 	}								\
 	__cu_len;							\
@@ -1481,13 +1485,5 @@ static inline long strnlen_user(const char __user *s, long n)
 
 	return res;
 }
-
-struct exception_table_entry
-{
-	unsigned long insn;
-	unsigned long nextinsn;
-};
-
-extern int fixup_exception(struct pt_regs *regs);
 
 #endif /* _ASM_UACCESS_H */
