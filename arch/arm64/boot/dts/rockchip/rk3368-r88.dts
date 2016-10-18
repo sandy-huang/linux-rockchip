@@ -216,7 +216,6 @@
 		audio-supply = <&vcc_io>;
 		gpio30-supply = <&vcc_io>;
 		gpio1830-supply = <&vcc_io>;
-		sdcard-supply = <&vccio_sd>;
 		wifi-supply = <&vccio_wl>;
 	};
 };
@@ -260,7 +259,6 @@
 &sdio0 {
 	assigned-clocks = <&cru SCLK_SDIO0>;
 	assigned-clock-parents = <&cru PLL_CPLL>;
-	broken-cd;
 	bus-width = <4>;
 	cap-sd-highspeed;
 	cap-sdio-irq;

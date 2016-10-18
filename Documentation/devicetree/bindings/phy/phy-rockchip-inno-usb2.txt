@@ -22,8 +22,8 @@ Required properties (port (child) node):
  - #phy-cells : must be 0. See ./phy-bindings.txt for details.
  - interrupts : specify an interrupt for each entry in interrupt-names.
  - interrupt-names : a list which shall be the following entries:
-	* "otg_id" : for the otg id interrupt.
-	* "otg_bvalid" : for the otg vbus interrupt.
+	* "otg-id" : for the otg id interrupt.
+	* "otg-bvalid" : for the otg vbus interrupt.
 	* "linestate" : for the host/otg linestate interrupt.
 
 Optional properties:
@@ -50,7 +50,7 @@ grf: syscon@ff770000 {
 			interrupts = <GIC_SPI 93 IRQ_TYPE_LEVEL_HIGH>,
 				     <GIC_SPI 94 IRQ_TYPE_LEVEL_HIGH>,
 				     <GIC_SPI 95 IRQ_TYPE_LEVEL_HIGH>;
-			interrupt-names = "otg_id", "otg_bvalid", "linestate";
+			interrupt-names = "otg-id", "otg-bvalid", "linestate";
 			status = "okay";
 		};
 

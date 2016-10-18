@@ -31,6 +31,10 @@ Rockchip platforms device tree bindings
     or
       - compatible = "firefly,firefly-rk3288-beta", "rockchip,rk3288";
 
+- Firefly Firefly-RK3288 Reload board:
+    Required root node properties:
+      - compatible = "firefly,firefly-rk3288-reload", "rockchip,rk3288";
+
 - ChipSPARK PopMetal-RK3288 board:
     Required root node properties:
       - compatible = "chipspark,popmetal-rk3288", "rockchip,rk3288";
@@ -95,6 +99,14 @@ Rockchip platforms device tree bindings
     Required root node properties:
       - compatible = "mqmaker,miqi", "rockchip,rk3288";
 
+- Rockchip PX3 Evaluation board:
+    Required root node properties:
+      - compatible = "rockchip,px3-evb", "rockchip,px3", "rockchip,rk3188";
+
+- Rockchip PX5 Evaluation board:
+    Required root node properties:
+      - compatible = "rockchip,px5-evb", "rockchip,px5", "rockchip,rk3368";
+
 - Rockchip RK3368 evb:
     Required root node properties:
       - compatible = "rockchip,rk3368-evb-act8846", "rockchip,rk3368";
@@ -107,6 +119,17 @@ Rockchip platforms device tree bindings
     Required root node properties:
      - compatible = "rockchip,rk3228-evb", "rockchip,rk3228";
 
+- Rockchip RK3229 Evaluation board:
+     - compatible = "rockchip,rk3229-evb", "rockchip,rk3229";
+
+- Rockchip RK3288 Fennec board:
+    Required root node properties:
+     - compatible = "rockchip,rk3288-fennec", "rockchip,rk3288";
+
 - Rockchip RK3399 evb:
     Required root node properties:
       - compatible = "rockchip,rk3399-evb", "rockchip,rk3399";
+
+- Tronsmart Orion R68 Meta
+    Required root node properties:
+      - compatible = "tronsmart,orion-r68-meta", "rockchip,rk3368";
