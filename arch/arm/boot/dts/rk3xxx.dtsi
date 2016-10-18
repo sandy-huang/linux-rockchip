@@ -44,9 +44,11 @@
 #include <dt-bindings/interrupt-controller/irq.h>
 #include <dt-bindings/interrupt-controller/arm-gic.h>
 #include <dt-bindings/soc/rockchip,boot-mode.h>
-#include "skeleton.dtsi"
 
 / {
+	#address-cells = <1>;
+	#size-cells = <1>;
+
 	interrupt-parent = <&gic>;
 
 	aliases {
@@ -424,6 +426,7 @@
 		#size-cells = <0>;
 		dmas = <&dmac2 10>, <&dmac2 11>;
 		dma-names = "tx", "rx";
+		rockchip,spi-broken-burst-len;
 		status = "disabled";
 	};
 
@@ -437,6 +440,7 @@
 		#size-cells = <0>;
 		dmas = <&dmac2 12>, <&dmac2 13>;
 		dma-names = "tx", "rx";
+		rockchip,spi-broken-burst-len;
 		status = "disabled";
 	};
 };
