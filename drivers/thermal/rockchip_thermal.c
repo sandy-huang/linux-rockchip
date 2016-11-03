@@ -620,6 +620,7 @@ static void rk_tsadcv2_control(void __iomem *regs, bool enable)
 	else
 		val &= ~TSADCV2_AUTO_EN;
 
+printk("%s: val 0x%x\n", __func__, val);
 	writel_relaxed(val, regs + TSADCV2_AUTO_CON);
 }
 
@@ -650,6 +651,7 @@ static int rk_tsadcv2_get_temp(struct chip_tsadc_table table,
 
 	val = readl_relaxed(regs + TSADCV2_DATA(chn));
 
+printk("%s: chn %d, val 0x%x\n", __func__, chn, val);
 	return rk_tsadcv2_code_to_temp(table, val, temp);
 }
 
@@ -1022,6 +1024,7 @@ static int rockchip_thermal_probe(struct platform_device *pdev)
 	int i;
 	int error;
 
+printk("%s: a\n", __func__);
 	match = of_match_node(of_rockchip_thermal_match, np);
 	if (!match)
 		return -ENXIO;
@@ -1070,6 +1073,7 @@ static int rockchip_thermal_probe(struct platform_device *pdev)
 		return error;
 	}
 
+printk("%s: a\n", __func__);
 	error = clk_prepare_enable(thermal->clk);
 	if (error) {
 		dev_err(&pdev->dev, "failed to enable converter clock: %d\n",
@@ -1077,6 +1081,7 @@ static int rockchip_thermal_probe(struct platform_device *pdev)
 		return error;
 	}
 
+printk("%s: a\n", __func__);
 	error = clk_prepare_enable(thermal->pclk);
 	if (error) {
 		dev_err(&pdev->dev, "failed to enable pclk: %d\n", error);
@@ -1107,6 +1112,7 @@ static int rockchip_thermal_probe(struct platform_device *pdev)
 		}
 	}
 
+printk("%s: z\n", __func__);
 	error = devm_request_threaded_irq(&pdev->dev, irq, NULL,
 					  &rockchip_thermal_alarm_irq_thread,
 					  IRQF_ONESHOT,
@@ -1117,8 +1123,10 @@ static int rockchip_thermal_probe(struct platform_device *pdev)
 		goto err_disable_pclk;
 	}
 
+printk("%s: a\n", __func__);
 	thermal->chip->control(thermal->regs, true);
 
+printk("%s: a\n", __func__);
 	for (i = 0; i < thermal->chip->chn_num; i++)
 		rockchip_thermal_toggle_sensor(&thermal->sensors[i], true);
 
