@@ -259,6 +259,13 @@ enum dwc2_lx_state {
 	DWC2_L3,	/* Off state */
 };
 
+/*
+ * Gadget periodic tx fifo sizes as used by legacy driver
+ * EP0 is not included
+ */
+#define DWC2_G_P_LEGACY_TX_FIFO_SIZE {256, 256, 256, 256, 768, 768, 768, \
+					   768, 0, 0, 0, 0, 0, 0, 0}
+
 /* Gadget ep0 states */
 enum dwc2_ep0_state {
 	DWC2_EP0_SETUP,
@@ -852,6 +859,7 @@ struct dwc2_hsotg {
 	unsigned int ll_hw_enabled:1;
 
 	struct phy *phy;
+	struct work_struct phy_rst_work;
 	struct usb_phy *uphy;
 	struct dwc2_hsotg_plat *plat;
 	struct regulator_bulk_data supplies[ARRAY_SIZE(dwc2_hsotg_supply_names)];
