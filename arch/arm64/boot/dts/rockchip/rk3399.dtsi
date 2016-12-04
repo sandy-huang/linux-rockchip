@@ -260,6 +260,7 @@
 			 <&cru SCLK_SDMMC_DRV>, <&cru SCLK_SDMMC_SAMPLE>;
 		clock-names = "biu", "ciu", "ciu-drive", "ciu-sample";
 		fifo-depth = <0x100>;
+		power-domains = <&power RK3399_PD_SD>;
 		status = "disabled";
 	};
 
@@ -276,6 +277,7 @@
 		#clock-cells = <0>;
 		phys = <&emmc_phy>;
 		phy-names = "phy_arasan";
+		power-domains = <&power RK3399_PD_EMMC>;
 		status = "disabled";
 	};
 
@@ -307,8 +309,11 @@
 		ranges = <0x83000000 0x0 0xfa000000 0x0 0xfa000000 0x0 0x600000
 			  0x81000000 0x0 0xfa600000 0x0 0xfa600000 0x0 0x100000>;
 		resets = <&cru SRST_PCIE_CORE>, <&cru SRST_PCIE_MGMT>,
-			 <&cru SRST_PCIE_MGMT_STICKY>, <&cru SRST_PCIE_PIPE>;
-		reset-names = "core", "mgmt", "mgmt-sticky", "pipe";
+			 <&cru SRST_PCIE_MGMT_STICKY>, <&cru SRST_PCIE_PIPE>,
+			 <&cru SRST_PCIE_PM>, <&cru SRST_P_PCIE>,
+			 <&cru SRST_A_PCIE>;
+		reset-names = "core", "mgmt", "mgmt-sticky", "pipe",
+			      "pm", "pclk", "aclk";
 		status = "disabled";
 
 		pcie0_intc: interrupt-controller {
@@ -829,6 +834,16 @@
 		status = "disabled";
 	};
 
+	qos_sd: qos@ffa74000 {
+		compatible = "syscon";
+		reg = <0x0 0xffa74000 0x0 0x20>;
+	};
+
+	qos_emmc: qos@ffa58000 {
+		compatible = "syscon";
+		reg = <0x0 0xffa58000 0x0 0x20>;
+	};
+
 	qos_gmac: qos@ffa5c000 {
 		compatible = "syscon";
 		reg = <0x0 0xffa5c000 0x0 0x20>;
@@ -962,10 +977,22 @@
 			};
 
 			/* These power domains are grouped by VD_LOGIC */
+			pd_emmc@RK3399_PD_EMMC {
+				reg = <RK3399_PD_EMMC>;
+				clocks = <&cru ACLK_EMMC>;
+				pm_qos = <&qos_emmc>;
+			};
 			pd_gmac@RK3399_PD_GMAC {
 				reg = <RK3399_PD_GMAC>;
-				clocks = <&cru ACLK_GMAC>;
+				clocks = <&cru ACLK_GMAC>,
+					 <&cru PCLK_GMAC>;
 				pm_qos = <&qos_gmac>;
+			};
+			pd_sd@RK3399_PD_SD {
+				reg = <RK3399_PD_SD>;
+				clocks = <&cru HCLK_SDMMC>,
+					 <&cru SCLK_SDMMC>;
+				pm_qos = <&qos_sd>;
 			};
 			pd_vio@RK3399_PD_VIO {
 				reg = <RK3399_PD_VIO>;
@@ -1243,6 +1270,16 @@
 				interrupt-names = "linestate";
 				status = "disabled";
 			};
+
+			u2phy0_otg: otg-port {
+				#phy-cells = <0>;
+				interrupts = <GIC_SPI 103 IRQ_TYPE_LEVEL_HIGH 0>,
+					     <GIC_SPI 104 IRQ_TYPE_LEVEL_HIGH 0>,
+					     <GIC_SPI 106 IRQ_TYPE_LEVEL_HIGH 0>;
+				interrupt-names = "otg-bvalid", "otg-id",
+						  "linestate";
+				status = "disabled";
+			};
 		};
 
 		u2phy1: usb2-phy@e460 {
@@ -1258,6 +1295,16 @@
 				#phy-cells = <0>;
 				interrupts = <GIC_SPI 31 IRQ_TYPE_LEVEL_HIGH 0>;
 				interrupt-names = "linestate";
+				status = "disabled";
+			};
+
+			u2phy1_otg: otg-port {
+				#phy-cells = <0>;
+				interrupts = <GIC_SPI 108 IRQ_TYPE_LEVEL_HIGH 0>,
+					     <GIC_SPI 109 IRQ_TYPE_LEVEL_HIGH 0>,
+					     <GIC_SPI 111 IRQ_TYPE_LEVEL_HIGH 0>;
+				interrupt-names = "otg-bvalid", "otg-id",
+						  "linestate";
 				status = "disabled";
 			};
 		};
