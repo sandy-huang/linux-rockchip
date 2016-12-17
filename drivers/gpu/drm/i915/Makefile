@@ -33,18 +33,22 @@ i915-y += i915_cmd_parser.o \
 	  i915_gem_dmabuf.o \
 	  i915_gem_evict.o \
 	  i915_gem_execbuffer.o \
-	  i915_gem_fence.o \
+	  i915_gem_fence_reg.o \
 	  i915_gem_gtt.o \
+	  i915_gem_internal.o \
 	  i915_gem.o \
 	  i915_gem_render_state.o \
 	  i915_gem_request.o \
 	  i915_gem_shrinker.o \
 	  i915_gem_stolen.o \
 	  i915_gem_tiling.o \
+	  i915_gem_timeline.o \
 	  i915_gem_userptr.o \
 	  i915_trace_points.o \
+	  i915_vma.o \
 	  intel_breadcrumbs.o \
 	  intel_engine_cs.o \
+	  intel_hangcheck.o \
 	  intel_lrc.o \
 	  intel_mocs.o \
 	  intel_ringbuffer.o \

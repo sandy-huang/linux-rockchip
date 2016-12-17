@@ -957,13 +957,13 @@ static const struct drm_display_mode edid_cea_modes[] = {
 		   798, 858, 0, 480, 489, 495, 525, 0,
 		   DRM_MODE_FLAG_NHSYNC | DRM_MODE_FLAG_NVSYNC),
 	  .vrefresh = 240, .picture_aspect_ratio = HDMI_PICTURE_ASPECT_16_9, },
-	/* 58 - 720(1440)x480i@240 */
+	/* 58 - 720(1440)x480i@240Hz */
 	{ DRM_MODE("720x480i", DRM_MODE_TYPE_DRIVER, 54000, 720, 739,
 		   801, 858, 0, 480, 488, 494, 525, 0,
 		   DRM_MODE_FLAG_NHSYNC | DRM_MODE_FLAG_NVSYNC |
 			DRM_MODE_FLAG_INTERLACE | DRM_MODE_FLAG_DBLCLK),
 	  .vrefresh = 240, .picture_aspect_ratio = HDMI_PICTURE_ASPECT_4_3, },
-	/* 59 - 720(1440)x480i@240 */
+	/* 59 - 720(1440)x480i@240Hz */
 	{ DRM_MODE("720x480i", DRM_MODE_TYPE_DRIVER, 54000, 720, 739,
 		   801, 858, 0, 480, 488, 494, 525, 0,
 		   DRM_MODE_FLAG_NHSYNC | DRM_MODE_FLAG_NVSYNC |
@@ -2613,6 +2613,41 @@ cea_mode_alternate_clock(const struct drm_display_mode *cea_mode)
 	return clock;
 }
 
+static bool
+cea_mode_alternate_timings(u8 vic, struct drm_display_mode *mode)
+{
+	/*
+	 * For certain VICs the spec allows the vertical
+	 * front porch to vary by one or two lines.
+	 *
+	 * cea_modes[] stores the variant with the shortest
+	 * vertical front porch. We can adjust the mode to
+	 * get the other variants by simply increasing the
+	 * vertical front porch length.
+	 */
+	BUILD_BUG_ON(edid_cea_modes[8].vtotal != 262 ||
+		     edid_cea_modes[9].vtotal != 262 ||
+		     edid_cea_modes[12].vtotal != 262 ||
+		     edid_cea_modes[13].vtotal != 262 ||
+		     edid_cea_modes[23].vtotal != 312 ||
+		     edid_cea_modes[24].vtotal != 312 ||
+		     edid_cea_modes[27].vtotal != 312 ||
+		     edid_cea_modes[28].vtotal != 312);
+
+	if (((vic == 8 || vic == 9 ||
+	      vic == 12 || vic == 13) && mode->vtotal < 263) ||
+	    ((vic == 23 || vic == 24 ||
+	      vic == 27 || vic == 28) && mode->vtotal < 314)) {
+		mode->vsync_start++;
+		mode->vsync_end++;
+		mode->vtotal++;
+
+		return true;
+	}
+
+	return false;
+}
+
 static u8 drm_match_cea_mode_clock_tolerance(const struct drm_display_mode *to_match,
 					     unsigned int clock_tolerance)
 {
@@ -2622,19 +2657,21 @@ static u8 drm_match_cea_mode_clock_tolerance(const struct drm_display_mode *to_m
 		return 0;
 
 	for (vic = 1; vic < ARRAY_SIZE(edid_cea_modes); vic++) {
-		const struct drm_display_mode *cea_mode = &edid_cea_modes[vic];
+		struct drm_display_mode cea_mode = edid_cea_modes[vic];
 		unsigned int clock1, clock2;
 
 		/* Check both 60Hz and 59.94Hz */
-		clock1 = cea_mode->clock;
-		clock2 = cea_mode_alternate_clock(cea_mode);
+		clock1 = cea_mode.clock;
+		clock2 = cea_mode_alternate_clock(&cea_mode);
 
 		if (abs(to_match->clock - clock1) > clock_tolerance &&
 		    abs(to_match->clock - clock2) > clock_tolerance)
 			continue;
 
-		if (drm_mode_equal_no_clocks(to_match, cea_mode))
-			return vic;
+		do {
+			if (drm_mode_equal_no_clocks_no_stereo(to_match, &cea_mode))
+				return vic;
+		} while (cea_mode_alternate_timings(vic, &cea_mode));
 	}
 
 	return 0;
@@ -2655,18 +2692,23 @@ u8 drm_match_cea_mode(const struct drm_display_mode *to_match)
 		return 0;
 
 	for (vic = 1; vic < ARRAY_SIZE(edid_cea_modes); vic++) {
-		const struct drm_display_mode *cea_mode = &edid_cea_modes[vic];
+		struct drm_display_mode cea_mode = edid_cea_modes[vic];
 		unsigned int clock1, clock2;
 
 		/* Check both 60Hz and 59.94Hz */
-		clock1 = cea_mode->clock;
-		clock2 = cea_mode_alternate_clock(cea_mode);
+		clock1 = cea_mode.clock;
+		clock2 = cea_mode_alternate_clock(&cea_mode);
 
-		if ((KHZ2PICOS(to_match->clock) == KHZ2PICOS(clock1) ||
-		     KHZ2PICOS(to_match->clock) == KHZ2PICOS(clock2)) &&
-		    drm_mode_equal_no_clocks_no_stereo(to_match, cea_mode))
-			return vic;
+		if (KHZ2PICOS(to_match->clock) != KHZ2PICOS(clock1) &&
+		    KHZ2PICOS(to_match->clock) != KHZ2PICOS(clock2))
+			continue;
+
+		do {
+			if (drm_mode_equal_no_clocks_no_stereo(to_match, &cea_mode))
+				return vic;
+		} while (cea_mode_alternate_timings(vic, &cea_mode));
 	}
+
 	return 0;
 }
 EXPORT_SYMBOL(drm_match_cea_mode);
@@ -3609,32 +3651,6 @@ int drm_av_sync_delay(struct drm_connector *connector,
 	return max(v - a, 0);
 }
 EXPORT_SYMBOL(drm_av_sync_delay);
-
-/**
- * drm_select_eld - select one ELD from multiple HDMI/DP sinks
- * @encoder: the encoder just changed display mode
- *
- * It's possible for one encoder to be associated with multiple HDMI/DP sinks.
- * The policy is now hard coded to simply use the first HDMI/DP sink's ELD.
- *
- * Return: The connector associated with the first HDMI/DP sink that has ELD
- * attached to it.
- */
-struct drm_connector *drm_select_eld(struct drm_encoder *encoder)
-{
-	struct drm_connector *connector;
-	struct drm_device *dev = encoder->dev;
-
-	WARN_ON(!mutex_is_locked(&dev->mode_config.mutex));
-	WARN_ON(!drm_modeset_is_locked(&dev->mode_config.connection_mutex));
-
-	drm_for_each_connector(connector, dev)
-		if (connector->encoder == encoder && connector->eld[0])
-			return connector;
-
-	return NULL;
-}
-EXPORT_SYMBOL(drm_select_eld);
 
 /**
  * drm_detect_hdmi_monitor - detect whether monitor is HDMI

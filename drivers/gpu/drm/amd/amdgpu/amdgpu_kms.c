@@ -544,6 +544,32 @@ static int amdgpu_info_ioctl(struct drm_device *dev, void *data, struct drm_file
 		return copy_to_user(out, &vce_clk_table,
 				    min((size_t)size, sizeof(vce_clk_table))) ? -EFAULT : 0;
 	}
+	case AMDGPU_INFO_VBIOS: {
+		uint32_t bios_size = adev->bios_size;
+
+		switch (info->vbios_info.type) {
+		case AMDGPU_INFO_VBIOS_SIZE:
+			return copy_to_user(out, &bios_size,
+					min((size_t)size, sizeof(bios_size)))
+					? -EFAULT : 0;
+		case AMDGPU_INFO_VBIOS_IMAGE: {
+			uint8_t *bios;
+			uint32_t bios_offset = info->vbios_info.offset;
+
+			if (bios_offset >= bios_size)
+				return -EINVAL;
+
+			bios = adev->bios + bios_offset;
+			return copy_to_user(out, bios,
+					    min((size_t)size, (size_t)(bios_size - bios_offset)))
+					? -EFAULT : 0;
+		}
+		default:
+			DRM_DEBUG_KMS("Invalid request %d\n",
+					info->vbios_info.type);
+			return -EINVAL;
+		}
+	}
 	default:
 		DRM_DEBUG_KMS("Invalid request %d\n", info->query);
 		return -EINVAL;
@@ -825,6 +851,7 @@ const struct drm_ioctl_desc amdgpu_ioctls_kms[] = {
 	DRM_IOCTL_DEF_DRV(AMDGPU_CS, amdgpu_cs_ioctl, DRM_AUTH|DRM_RENDER_ALLOW),
 	DRM_IOCTL_DEF_DRV(AMDGPU_INFO, amdgpu_info_ioctl, DRM_AUTH|DRM_RENDER_ALLOW),
 	DRM_IOCTL_DEF_DRV(AMDGPU_WAIT_CS, amdgpu_cs_wait_ioctl, DRM_AUTH|DRM_RENDER_ALLOW),
+	DRM_IOCTL_DEF_DRV(AMDGPU_WAIT_FENCES, amdgpu_cs_wait_fences_ioctl, DRM_AUTH|DRM_RENDER_ALLOW),
 	DRM_IOCTL_DEF_DRV(AMDGPU_GEM_METADATA, amdgpu_gem_metadata_ioctl, DRM_AUTH|DRM_RENDER_ALLOW),
 	DRM_IOCTL_DEF_DRV(AMDGPU_GEM_VA, amdgpu_gem_va_ioctl, DRM_AUTH|DRM_RENDER_ALLOW),
 	DRM_IOCTL_DEF_DRV(AMDGPU_GEM_OP, amdgpu_gem_op_ioctl, DRM_AUTH|DRM_RENDER_ALLOW),

@@ -574,7 +574,7 @@ nv50_core_create(struct nvif_device *device, struct nvif_object *disp,
 		.pushbuf = 0xb0007d00,
 	};
 	static const s32 oclass[] = {
-		GP104_DISP_CORE_CHANNEL_DMA,
+		GP102_DISP_CORE_CHANNEL_DMA,
 		GP100_DISP_CORE_CHANNEL_DMA,
 		GM200_DISP_CORE_CHANNEL_DMA,
 		GM107_DISP_CORE_CHANNEL_DMA,
@@ -1726,6 +1726,11 @@ nv50_head_core_set(struct nv50_head *head, struct nv50_head_atom *asyh)
 			evo_data(push, asyh->core.handle);
 			evo_mthd(push, 0x08c0 + head->base.index * 0x400, 1);
 			evo_data(push, (asyh->core.y << 16) | asyh->core.x);
+			/* EVO will complain with INVALID_STATE if we have an
+			 * active cursor and (re)specify HeadSetContextDmaIso
+			 * without also updating HeadSetOffsetCursor.
+			 */
+			asyh->set.curs = asyh->curs.visible;
 		} else
 		if (core->base.user.oclass < GF110_DISP_CORE_CHANNEL_DMA) {
 			evo_mthd(push, 0x0860 + head->base.index * 0x400, 1);
@@ -3343,12 +3348,15 @@ nv50_mstm_detect(struct nv50_mstm *mstm, u8 dpcd[8], int allow)
 	if (!mstm)
 		return 0;
 
-	if (dpcd[0] >= 0x12 && allow) {
+	if (dpcd[0] >= 0x12) {
 		ret = drm_dp_dpcd_readb(mstm->mgr.aux, DP_MSTM_CAP, &dpcd[1]);
 		if (ret < 0)
 			return ret;
 
-		state = dpcd[1] & DP_MST_CAP;
+		if (!(dpcd[1] & DP_MST_CAP))
+			dpcd[0] = 0x11;
+		else
+			state = allow;
 	}
 
 	ret = nv50_mstm_enable(mstm, dpcd[0], state);
@@ -4087,6 +4095,8 @@ nv50_disp_atomic_commit_tail(struct drm_atomic_state *state)
 	for_each_crtc_in_state(state, crtc, crtc_state, i) {
 		if (crtc->state->event) {
 			unsigned long flags;
+			/* Get correct count/ts if racing with vblank irq */
+			drm_accurate_vblank_count(crtc);
 			spin_lock_irqsave(&crtc->dev->event_lock, flags);
 			drm_crtc_send_vblank_event(crtc, crtc->state->event);
 			spin_unlock_irqrestore(&crtc->dev->event_lock, flags);

@@ -73,7 +73,7 @@ static int map_vgpu_opregion(struct intel_vgpu *vgpu, bool map)
 		}
 		ret = intel_gvt_hypervisor_map_gfn_to_mfn(vgpu,
 				vgpu_opregion(vgpu)->gfn[i],
-				mfn, 1, map, GVT_MAP_OPREGION);
+				mfn, 1, map);
 		if (ret) {
 			gvt_err("fail to map GFN to MFN, errno: %d\n", ret);
 			return ret;
@@ -89,28 +89,18 @@ static int map_vgpu_opregion(struct intel_vgpu *vgpu, bool map)
  */
 void intel_vgpu_clean_opregion(struct intel_vgpu *vgpu)
 {
-	int i;
-
 	gvt_dbg_core("vgpu%d: clean vgpu opregion\n", vgpu->id);
 
 	if (!vgpu_opregion(vgpu)->va)
 		return;
 
-	if (intel_gvt_host.hypervisor_type == INTEL_GVT_HYPERVISOR_KVM) {
-		vunmap(vgpu_opregion(vgpu)->va);
-		for (i = 0; i < INTEL_GVT_OPREGION_PAGES; i++) {
-			if (vgpu_opregion(vgpu)->pages[i]) {
-				put_page(vgpu_opregion(vgpu)->pages[i]);
-				vgpu_opregion(vgpu)->pages[i] = NULL;
-			}
-		}
-	} else {
+	if (intel_gvt_host.hypervisor_type == INTEL_GVT_HYPERVISOR_XEN) {
 		map_vgpu_opregion(vgpu, false);
 		free_pages((unsigned long)vgpu_opregion(vgpu)->va,
 				INTEL_GVT_OPREGION_PORDER);
-	}
 
-	vgpu_opregion(vgpu)->va = NULL;
+		vgpu_opregion(vgpu)->va = NULL;
+	}
 }
 
 /**
@@ -137,22 +127,8 @@ int intel_vgpu_init_opregion(struct intel_vgpu *vgpu, u32 gpa)
 		ret = map_vgpu_opregion(vgpu, true);
 		if (ret)
 			return ret;
-	} else {
-		gvt_dbg_core("emulate opregion from userspace\n");
-
-		/*
-		 * If opregion pages are not allocated from host kenrel,
-		 * most of the params are meaningless
-		 */
-		ret = intel_gvt_hypervisor_map_gfn_to_mfn(vgpu,
-				0, /* not used */
-				0, /* not used */
-				2, /* not used */
-				1,
-				GVT_MAP_OPREGION);
-		if (ret)
-			return ret;
 	}
+
 	return 0;
 }
 
@@ -163,7 +139,7 @@ int intel_vgpu_init_opregion(struct intel_vgpu *vgpu, u32 gpa)
  */
 void intel_gvt_clean_opregion(struct intel_gvt *gvt)
 {
-	iounmap(gvt->opregion.opregion_va);
+	memunmap(gvt->opregion.opregion_va);
 	gvt->opregion.opregion_va = NULL;
 }
 
@@ -181,8 +157,8 @@ int intel_gvt_init_opregion(struct intel_gvt *gvt)
 	pci_read_config_dword(gvt->dev_priv->drm.pdev, INTEL_GVT_PCI_OPREGION,
 			&gvt->opregion.opregion_pa);
 
-	gvt->opregion.opregion_va = acpi_os_ioremap(gvt->opregion.opregion_pa,
-			INTEL_GVT_OPREGION_SIZE);
+	gvt->opregion.opregion_va = memremap(gvt->opregion.opregion_pa,
+					     INTEL_GVT_OPREGION_SIZE, MEMREMAP_WB);
 	if (!gvt->opregion.opregion_va) {
 		gvt_err("fail to map host opregion\n");
 		return -EFAULT;
