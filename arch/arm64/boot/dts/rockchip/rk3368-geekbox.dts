@@ -135,6 +135,9 @@
 	pinctrl-0 = <&rgmii_pins>;
 	tx_delay = <0x30>;
 	rx_delay = <0x10>;
+
+	mac-address = [cd 29 e5 86 2f f6];
+	local-mac-address = [cd 29 e5 86 2f f6];
 };
 
 &i2c0 {
