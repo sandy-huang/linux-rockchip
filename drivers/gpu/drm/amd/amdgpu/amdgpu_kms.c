@@ -50,15 +50,18 @@ static inline bool amdgpu_has_atpx(void) { return false; }
  * This is the main unload function for KMS (all asics).
  * Returns 0 on success.
  */
-int amdgpu_driver_unload_kms(struct drm_device *dev)
+void amdgpu_driver_unload_kms(struct drm_device *dev)
 {
 	struct amdgpu_device *adev = dev->dev_private;
 
 	if (adev == NULL)
-		return 0;
+		return;
 
 	if (adev->rmmio == NULL)
 		goto done_free;
+
+	if (amdgpu_sriov_vf(adev))
+		amdgpu_virt_request_full_gpu(adev, false);
 
 	if (amdgpu_device_is_px(dev)) {
 		pm_runtime_get_sync(dev->dev);
@@ -74,7 +77,6 @@ int amdgpu_driver_unload_kms(struct drm_device *dev)
 done_free:
 	kfree(adev);
 	dev->dev_private = NULL;
-	return 0;
 }
 
 /**
@@ -138,6 +140,9 @@ int amdgpu_driver_load_kms(struct drm_device *dev, unsigned long flags)
 		pm_runtime_mark_last_busy(dev->dev);
 		pm_runtime_put_autosuspend(dev->dev);
 	}
+
+	if (amdgpu_sriov_vf(adev))
+		amdgpu_virt_release_full_gpu(adev, true);
 
 out:
 	if (r) {
@@ -544,6 +549,53 @@ static int amdgpu_info_ioctl(struct drm_device *dev, void *data, struct drm_file
 		return copy_to_user(out, &vce_clk_table,
 				    min((size_t)size, sizeof(vce_clk_table))) ? -EFAULT : 0;
 	}
+	case AMDGPU_INFO_VBIOS: {
+		uint32_t bios_size = adev->bios_size;
+
+		switch (info->vbios_info.type) {
+		case AMDGPU_INFO_VBIOS_SIZE:
+			return copy_to_user(out, &bios_size,
+					min((size_t)size, sizeof(bios_size)))
+					? -EFAULT : 0;
+		case AMDGPU_INFO_VBIOS_IMAGE: {
+			uint8_t *bios;
+			uint32_t bios_offset = info->vbios_info.offset;
+
+			if (bios_offset >= bios_size)
+				return -EINVAL;
+
+			bios = adev->bios + bios_offset;
+			return copy_to_user(out, bios,
+					    min((size_t)size, (size_t)(bios_size - bios_offset)))
+					? -EFAULT : 0;
+		}
+		default:
+			DRM_DEBUG_KMS("Invalid request %d\n",
+					info->vbios_info.type);
+			return -EINVAL;
+		}
+	}
+	case AMDGPU_INFO_NUM_HANDLES: {
+		struct drm_amdgpu_info_num_handles handle;
+
+		switch (info->query_hw_ip.type) {
+		case AMDGPU_HW_IP_UVD:
+			/* Starting Polaris, we support unlimited UVD handles */
+			if (adev->asic_type < CHIP_POLARIS10) {
+				handle.uvd_max_handles = adev->uvd.max_handles;
+				handle.uvd_used_handles = amdgpu_uvd_used_handles(adev);
+
+				return copy_to_user(out, &handle,
+					min((size_t)size, sizeof(handle))) ? -EFAULT : 0;
+			} else {
+				return -ENODATA;
+			}
+
+			break;
+		default:
+			return -EINVAL;
+		}
+	}
 	default:
 		DRM_DEBUG_KMS("Invalid request %d\n", info->query);
 		return -EINVAL;
@@ -603,6 +655,12 @@ int amdgpu_driver_open_kms(struct drm_device *dev, struct drm_file *file_priv)
 		goto out_suspend;
 	}
 
+	if (amdgpu_sriov_vf(adev)) {
+		r = amdgpu_map_static_csa(adev, &fpriv->vm);
+		if (r)
+			goto out_suspend;
+	}
+
 	mutex_init(&fpriv->bo_list_lock);
 	idr_init(&fpriv->bo_list_handles);
 
@@ -640,6 +698,14 @@ void amdgpu_driver_postclose_kms(struct drm_device *dev,
 
 	amdgpu_uvd_free_handles(adev, file_priv);
 	amdgpu_vce_free_handles(adev, file_priv);
+
+	if (amdgpu_sriov_vf(adev)) {
+		/* TODO: how to handle reserve failure */
+		BUG_ON(amdgpu_bo_reserve(adev->virt.csa_obj, false));
+		amdgpu_vm_bo_rmv(adev, fpriv->vm.csa_bo_va);
+		fpriv->vm.csa_bo_va = NULL;
+		amdgpu_bo_unreserve(adev->virt.csa_obj);
+	}
 
 	amdgpu_vm_fini(adev, &fpriv->vm);
 
@@ -825,6 +891,7 @@ const struct drm_ioctl_desc amdgpu_ioctls_kms[] = {
 	DRM_IOCTL_DEF_DRV(AMDGPU_CS, amdgpu_cs_ioctl, DRM_AUTH|DRM_RENDER_ALLOW),
 	DRM_IOCTL_DEF_DRV(AMDGPU_INFO, amdgpu_info_ioctl, DRM_AUTH|DRM_RENDER_ALLOW),
 	DRM_IOCTL_DEF_DRV(AMDGPU_WAIT_CS, amdgpu_cs_wait_ioctl, DRM_AUTH|DRM_RENDER_ALLOW),
+	DRM_IOCTL_DEF_DRV(AMDGPU_WAIT_FENCES, amdgpu_cs_wait_fences_ioctl, DRM_AUTH|DRM_RENDER_ALLOW),
 	DRM_IOCTL_DEF_DRV(AMDGPU_GEM_METADATA, amdgpu_gem_metadata_ioctl, DRM_AUTH|DRM_RENDER_ALLOW),
 	DRM_IOCTL_DEF_DRV(AMDGPU_GEM_VA, amdgpu_gem_va_ioctl, DRM_AUTH|DRM_RENDER_ALLOW),
 	DRM_IOCTL_DEF_DRV(AMDGPU_GEM_OP, amdgpu_gem_op_ioctl, DRM_AUTH|DRM_RENDER_ALLOW),

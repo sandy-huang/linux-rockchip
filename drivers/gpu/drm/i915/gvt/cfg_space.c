@@ -47,11 +47,9 @@ enum {
  * Returns:
  * Zero on success, negative error code if failed.
  */
-int intel_vgpu_emulate_cfg_read(void *__vgpu, unsigned int offset,
+int intel_vgpu_emulate_cfg_read(struct intel_vgpu *vgpu, unsigned int offset,
 	void *p_data, unsigned int bytes)
 {
-	struct intel_vgpu *vgpu = __vgpu;
-
 	if (WARN_ON(bytes > 4))
 		return -EINVAL;
 
@@ -82,9 +80,8 @@ static int map_aperture(struct intel_vgpu *vgpu, bool map)
 
 	ret = intel_gvt_hypervisor_map_gfn_to_mfn(vgpu, first_gfn,
 						  first_mfn,
-						  vgpu_aperture_sz(vgpu)
-						  >> PAGE_SHIFT, map,
-						  GVT_MAP_APERTURE);
+						  vgpu_aperture_sz(vgpu) >>
+						  PAGE_SHIFT, map);
 	if (ret)
 		return ret;
 
@@ -126,6 +123,7 @@ static int emulate_pci_command_write(struct intel_vgpu *vgpu,
 	u8 changed = old ^ new;
 	int ret;
 
+	memcpy(vgpu_cfg_space(vgpu) + offset, p_data, bytes);
 	if (!(changed & PCI_COMMAND_MEMORY))
 		return 0;
 
@@ -145,7 +143,6 @@ static int emulate_pci_command_write(struct intel_vgpu *vgpu,
 			return ret;
 	}
 
-	memcpy(vgpu_cfg_space(vgpu) + offset, p_data, bytes);
 	return 0;
 }
 
@@ -235,16 +232,15 @@ static int emulate_pci_bar_write(struct intel_vgpu *vgpu, unsigned int offset,
  * Returns:
  * Zero on success, negative error code if failed.
  */
-int intel_vgpu_emulate_cfg_write(void *__vgpu, unsigned int offset,
+int intel_vgpu_emulate_cfg_write(struct intel_vgpu *vgpu, unsigned int offset,
 	void *p_data, unsigned int bytes)
 {
-	struct intel_vgpu *vgpu = __vgpu;
 	int ret;
 
 	if (WARN_ON(bytes > 4))
 		return -EINVAL;
 
-	if (WARN_ON(offset + bytes >= INTEL_GVT_MAX_CFG_SPACE_SZ))
+	if (WARN_ON(offset + bytes > INTEL_GVT_MAX_CFG_SPACE_SZ))
 		return -EINVAL;
 
 	/* First check if it's PCI_COMMAND */
@@ -285,4 +281,78 @@ int intel_vgpu_emulate_cfg_write(void *__vgpu, unsigned int offset,
 		break;
 	}
 	return 0;
+}
+
+/**
+ * intel_vgpu_init_cfg_space - init vGPU configuration space when create vGPU
+ *
+ * @vgpu: a vGPU
+ * @primary: is the vGPU presented as primary
+ *
+ */
+void intel_vgpu_init_cfg_space(struct intel_vgpu *vgpu,
+			       bool primary)
+{
+	struct intel_gvt *gvt = vgpu->gvt;
+	const struct intel_gvt_device_info *info = &gvt->device_info;
+	u16 *gmch_ctl;
+	int i;
+
+	memcpy(vgpu_cfg_space(vgpu), gvt->firmware.cfg_space,
+	       info->cfg_space_size);
+
+	if (!primary) {
+		vgpu_cfg_space(vgpu)[PCI_CLASS_DEVICE] =
+			INTEL_GVT_PCI_CLASS_VGA_OTHER;
+		vgpu_cfg_space(vgpu)[PCI_CLASS_PROG] =
+			INTEL_GVT_PCI_CLASS_VGA_OTHER;
+	}
+
+	/* Show guest that there isn't any stolen memory.*/
+	gmch_ctl = (u16 *)(vgpu_cfg_space(vgpu) + INTEL_GVT_PCI_GMCH_CONTROL);
+	*gmch_ctl &= ~(BDW_GMCH_GMS_MASK << BDW_GMCH_GMS_SHIFT);
+
+	intel_vgpu_write_pci_bar(vgpu, PCI_BASE_ADDRESS_2,
+				 gvt_aperture_pa_base(gvt), true);
+
+	vgpu_cfg_space(vgpu)[PCI_COMMAND] &= ~(PCI_COMMAND_IO
+					     | PCI_COMMAND_MEMORY
+					     | PCI_COMMAND_MASTER);
+	/*
+	 * Clear the bar upper 32bit and let guest to assign the new value
+	 */
+	memset(vgpu_cfg_space(vgpu) + PCI_BASE_ADDRESS_1, 0, 4);
+	memset(vgpu_cfg_space(vgpu) + PCI_BASE_ADDRESS_3, 0, 4);
+	memset(vgpu_cfg_space(vgpu) + INTEL_GVT_PCI_OPREGION, 0, 4);
+
+	for (i = 0; i < INTEL_GVT_MAX_BAR_NUM; i++) {
+		vgpu->cfg_space.bar[i].size = pci_resource_len(
+					      gvt->dev_priv->drm.pdev, i * 2);
+		vgpu->cfg_space.bar[i].tracked = false;
+	}
+}
+
+/**
+ * intel_vgpu_reset_cfg_space - reset vGPU configuration space
+ *
+ * @vgpu: a vGPU
+ *
+ */
+void intel_vgpu_reset_cfg_space(struct intel_vgpu *vgpu)
+{
+	u8 cmd = vgpu_cfg_space(vgpu)[PCI_COMMAND];
+	bool primary = vgpu_cfg_space(vgpu)[PCI_CLASS_DEVICE] !=
+				INTEL_GVT_PCI_CLASS_VGA_OTHER;
+
+	if (cmd & PCI_COMMAND_MEMORY) {
+		trap_gttmmio(vgpu, false);
+		map_aperture(vgpu, false);
+	}
+
+	/**
+	 * Currently we only do such reset when vGPU is not
+	 * owned by any VM, so we simply restore entire cfg
+	 * space to default value.
+	 */
+	intel_vgpu_init_cfg_space(vgpu, primary);
 }

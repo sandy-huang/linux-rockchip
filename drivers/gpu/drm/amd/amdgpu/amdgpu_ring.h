@@ -44,7 +44,8 @@ enum amdgpu_ring_type {
 	AMDGPU_RING_TYPE_COMPUTE,
 	AMDGPU_RING_TYPE_SDMA,
 	AMDGPU_RING_TYPE_UVD,
-	AMDGPU_RING_TYPE_VCE
+	AMDGPU_RING_TYPE_VCE,
+	AMDGPU_RING_TYPE_KIQ
 };
 
 struct amdgpu_device;
@@ -134,6 +135,8 @@ struct amdgpu_ring_funcs {
 	void (*end_use)(struct amdgpu_ring *ring);
 	void (*emit_switch_buffer) (struct amdgpu_ring *ring);
 	void (*emit_cntxcntl) (struct amdgpu_ring *ring, uint32_t flags);
+	void (*emit_rreg)(struct amdgpu_ring *ring, uint32_t reg);
+	void (*emit_wreg)(struct amdgpu_ring *ring, uint32_t reg, uint32_t val);
 };
 
 struct amdgpu_ring {

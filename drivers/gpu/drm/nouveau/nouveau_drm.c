@@ -502,7 +502,7 @@ fail_device:
 	return ret;
 }
 
-static int
+static void
 nouveau_drm_unload(struct drm_device *dev)
 {
 	struct nouveau_drm *drm = nouveau_drm(dev);
@@ -531,7 +531,6 @@ nouveau_drm_unload(struct drm_device *dev)
 	if (drm->hdmi_device)
 		pci_dev_put(drm->hdmi_device);
 	nouveau_cli_destroy(&drm->client);
-	return 0;
 }
 
 void
@@ -699,7 +698,12 @@ nouveau_pmops_resume(struct device *dev)
 		return ret;
 	pci_set_master(pdev);
 
-	return nouveau_do_resume(drm_dev, false);
+	ret = nouveau_do_resume(drm_dev, false);
+
+	/* Monitors may have been connected / disconnected during suspend */
+	schedule_work(&nouveau_drm(drm_dev)->hpd_work);
+
+	return ret;
 }
 
 static int
@@ -773,6 +777,10 @@ nouveau_pmops_runtime_resume(struct device *dev)
 	nvif_mask(&device->object, 0x088488, (1 << 25), (1 << 25));
 	vga_switcheroo_set_dynamic_switch(pdev, VGA_SWITCHEROO_ON);
 	drm_dev->switch_power_state = DRM_SWITCH_POWER_ON;
+
+	/* Monitors may have been connected / disconnected during suspend */
+	schedule_work(&nouveau_drm(drm_dev)->hpd_work);
+
 	return ret;
 }
 
@@ -1113,6 +1121,7 @@ nouveau_drm_init(void)
 #endif
 
 	nouveau_register_dsm_handler();
+	nouveau_backlight_ctor();
 	return drm_pci_init(&driver_pci, &nouveau_drm_pci_driver);
 }
 
@@ -1123,6 +1132,7 @@ nouveau_drm_exit(void)
 		return;
 
 	drm_pci_exit(&driver_pci, &nouveau_drm_pci_driver);
+	nouveau_backlight_dtor();
 	nouveau_unregister_dsm_handler();
 
 #ifdef CONFIG_NOUVEAU_PLATFORM_DRIVER

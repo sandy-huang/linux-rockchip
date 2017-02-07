@@ -102,19 +102,21 @@ intel_engine_setup(struct drm_i915_private *dev_priv,
 	engine->mmio_base = info->mmio_base;
 	engine->irq_shift = info->irq_shift;
 
+	/* Nothing to do here, execute in order of dependencies */
+	engine->schedule = NULL;
+
 	dev_priv->engine[id] = engine;
 	return 0;
 }
 
 /**
  * intel_engines_init() - allocate, populate and init the Engine Command Streamers
- * @dev: DRM device.
+ * @dev_priv: i915 device private
  *
  * Return: non-zero if the initialization failed.
  */
-int intel_engines_init(struct drm_device *dev)
+int intel_engines_init(struct drm_i915_private *dev_priv)
 {
-	struct drm_i915_private *dev_priv = to_i915(dev);
 	struct intel_device_info *device_info = mkwrite_device_info(dev_priv);
 	unsigned int ring_mask = INTEL_INFO(dev_priv)->ring_mask;
 	unsigned int mask = 0;
@@ -174,7 +176,7 @@ cleanup:
 	return ret;
 }
 
-void intel_engine_init_seqno(struct intel_engine_cs *engine, u32 seqno)
+void intel_engine_init_global_seqno(struct intel_engine_cs *engine, u32 seqno)
 {
 	struct drm_i915_private *dev_priv = engine->i915;
 
@@ -204,13 +206,13 @@ void intel_engine_init_seqno(struct intel_engine_cs *engine, u32 seqno)
 				       I915_NUM_ENGINES * gen8_semaphore_seqno_size);
 		kunmap(page);
 	}
-	memset(engine->semaphore.sync_seqno, 0,
-	       sizeof(engine->semaphore.sync_seqno));
 
 	intel_write_status_page(engine, I915_GEM_HWS_INDEX, seqno);
 	if (engine->irq_seqno_barrier)
 		engine->irq_seqno_barrier(engine);
-	engine->last_submitted_seqno = seqno;
+
+	GEM_BUG_ON(i915_gem_active_isset(&engine->timeline->last_request));
+	engine->timeline->last_submitted_seqno = seqno;
 
 	engine->hangcheck.seqno = seqno;
 
@@ -220,15 +222,9 @@ void intel_engine_init_seqno(struct intel_engine_cs *engine, u32 seqno)
 	intel_engine_wakeup(engine);
 }
 
-void intel_engine_init_hangcheck(struct intel_engine_cs *engine)
+static void intel_engine_init_timeline(struct intel_engine_cs *engine)
 {
-	memset(&engine->hangcheck, 0, sizeof(engine->hangcheck));
-}
-
-static void intel_engine_init_requests(struct intel_engine_cs *engine)
-{
-	init_request_active(&engine->last_request, NULL);
-	INIT_LIST_HEAD(&engine->request_list);
+	engine->timeline = &engine->i915->gt.global_timeline.engine[engine->id];
 }
 
 /**
@@ -242,12 +238,10 @@ static void intel_engine_init_requests(struct intel_engine_cs *engine)
  */
 void intel_engine_setup_common(struct intel_engine_cs *engine)
 {
-	INIT_LIST_HEAD(&engine->execlist_queue);
-	spin_lock_init(&engine->execlist_lock);
+	engine->execlist_queue = RB_ROOT;
+	engine->execlist_first = NULL;
 
-	engine->fence_context = dma_fence_context_alloc(1);
-
-	intel_engine_init_requests(engine);
+	intel_engine_init_timeline(engine);
 	intel_engine_init_hangcheck(engine);
 	i915_gem_batch_pool_init(engine, &engine->batch_pool);
 
@@ -262,15 +256,15 @@ int intel_engine_create_scratch(struct intel_engine_cs *engine, int size)
 
 	WARN_ON(engine->scratch);
 
-	obj = i915_gem_object_create_stolen(&engine->i915->drm, size);
+	obj = i915_gem_object_create_stolen(engine->i915, size);
 	if (!obj)
-		obj = i915_gem_object_create(&engine->i915->drm, size);
+		obj = i915_gem_object_create_internal(engine->i915, size);
 	if (IS_ERR(obj)) {
 		DRM_ERROR("Failed to allocate scratch page\n");
 		return PTR_ERR(obj);
 	}
 
-	vma = i915_vma_create(obj, &engine->i915->ggtt.base, NULL);
+	vma = i915_vma_instance(obj, &engine->i915->ggtt.base, NULL);
 	if (IS_ERR(vma)) {
 		ret = PTR_ERR(vma);
 		goto err_unref;
@@ -310,11 +304,30 @@ int intel_engine_init_common(struct intel_engine_cs *engine)
 {
 	int ret;
 
-	ret = intel_engine_init_breadcrumbs(engine);
+	/* We may need to do things with the shrinker which
+	 * require us to immediately switch back to the default
+	 * context. This can cause a problem as pinning the
+	 * default context also requires GTT space which may not
+	 * be available. To avoid this we always pin the default
+	 * context.
+	 */
+	ret = engine->context_pin(engine, engine->i915->kernel_context);
 	if (ret)
 		return ret;
 
+	ret = intel_engine_init_breadcrumbs(engine);
+	if (ret)
+		goto err_unpin;
+
+	ret = i915_gem_render_state_init(engine);
+	if (ret)
+		goto err_unpin;
+
 	return 0;
+
+err_unpin:
+	engine->context_unpin(engine, engine->i915->kernel_context);
+	return ret;
 }
 
 /**
@@ -328,9 +341,12 @@ void intel_engine_cleanup_common(struct intel_engine_cs *engine)
 {
 	intel_engine_cleanup_scratch(engine);
 
+	i915_gem_render_state_fini(engine);
 	intel_engine_fini_breadcrumbs(engine);
 	intel_engine_cleanup_cmd_parser(engine);
 	i915_gem_batch_pool_fini(&engine->batch_pool);
+
+	engine->context_unpin(engine, engine->i915->kernel_context);
 }
 
 u64 intel_engine_get_active_head(struct intel_engine_cs *engine)

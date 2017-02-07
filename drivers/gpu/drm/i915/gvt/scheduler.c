@@ -89,15 +89,15 @@ static int populate_shadow_context(struct intel_vgpu_workload *workload)
 		}
 
 		page = i915_gem_object_get_page(ctx_obj, LRC_PPHWSP_PN + i);
-		dst = kmap_atomic(page);
+		dst = kmap(page);
 		intel_gvt_hypervisor_read_gpa(vgpu, context_gpa, dst,
 				GTT_PAGE_SIZE);
-		kunmap_atomic(dst);
+		kunmap(page);
 		i++;
 	}
 
 	page = i915_gem_object_get_page(ctx_obj, LRC_STATE_PN);
-	shadow_ring_context = kmap_atomic(page);
+	shadow_ring_context = kmap(page);
 
 #define COPY_REG(name) \
 	intel_gvt_hypervisor_read_gpa(vgpu, workload->ring_context_gpa \
@@ -123,7 +123,7 @@ static int populate_shadow_context(struct intel_vgpu_workload *workload)
 			sizeof(*shadow_ring_context),
 			GTT_PAGE_SIZE - sizeof(*shadow_ring_context));
 
-	kunmap_atomic(shadow_ring_context);
+	kunmap(page);
 	return 0;
 }
 
@@ -160,8 +160,6 @@ static int shadow_context_status_change(struct notifier_block *nb,
 
 static int dispatch_workload(struct intel_vgpu_workload *workload)
 {
-	struct intel_vgpu *vgpu = workload->vgpu;
-	struct intel_gvt *gvt = vgpu->gvt;
 	int ring_id = workload->ring_id;
 	struct i915_gem_context *shadow_ctx = workload->vgpu->shadow_ctx;
 	struct drm_i915_private *dev_priv = workload->vgpu->gvt->dev_priv;
@@ -174,51 +172,49 @@ static int dispatch_workload(struct intel_vgpu_workload *workload)
 	shadow_ctx->desc_template = workload->ctx_desc.addressing_mode <<
 				    GEN8_CTX_ADDRESSING_MODE_SHIFT;
 
+	mutex_lock(&dev_priv->drm.struct_mutex);
+
 	rq = i915_gem_request_alloc(dev_priv->engine[ring_id], shadow_ctx);
 	if (IS_ERR(rq)) {
 		gvt_err("fail to allocate gem request\n");
-		workload->status = PTR_ERR(rq);
-		return workload->status;
+		ret = PTR_ERR(rq);
+		goto out;
 	}
 
 	gvt_dbg_sched("ring id %d get i915 gem request %p\n", ring_id, rq);
 
 	workload->req = i915_gem_request_get(rq);
 
-	mutex_lock(&gvt->lock);
-
 	ret = intel_gvt_scan_and_shadow_workload(workload);
 	if (ret)
-		goto err;
+		goto out;
 
 	ret = intel_gvt_scan_and_shadow_wa_ctx(&workload->wa_ctx);
 	if (ret)
-		goto err;
+		goto out;
 
 	ret = populate_shadow_context(workload);
 	if (ret)
-		goto err;
+		goto out;
 
 	if (workload->prepare) {
 		ret = workload->prepare(workload);
 		if (ret)
-			goto err;
+			goto out;
 	}
-
-	mutex_unlock(&gvt->lock);
 
 	gvt_dbg_sched("ring id %d submit workload to i915 %p\n",
 			ring_id, workload->req);
 
-	i915_add_request_no_flush(rq);
+	ret = 0;
 	workload->dispatched = true;
-	return 0;
-err:
-	workload->status = ret;
+out:
+	if (ret)
+		workload->status = ret;
 
-	mutex_unlock(&gvt->lock);
-
-	i915_add_request_no_flush(rq);
+	if (!IS_ERR_OR_NULL(rq))
+		i915_add_request_no_flush(rq);
+	mutex_unlock(&dev_priv->drm.struct_mutex);
 	return ret;
 }
 
@@ -318,10 +314,10 @@ static void update_guest_context(struct intel_vgpu_workload *workload)
 		}
 
 		page = i915_gem_object_get_page(ctx_obj, LRC_PPHWSP_PN + i);
-		src = kmap_atomic(page);
+		src = kmap(page);
 		intel_gvt_hypervisor_write_gpa(vgpu, context_gpa, src,
 				GTT_PAGE_SIZE);
-		kunmap_atomic(src);
+		kunmap(page);
 		i++;
 	}
 
@@ -329,7 +325,7 @@ static void update_guest_context(struct intel_vgpu_workload *workload)
 		RING_CTX_OFF(ring_header.val), &workload->rb_tail, 4);
 
 	page = i915_gem_object_get_page(ctx_obj, LRC_STATE_PN);
-	shadow_ring_context = kmap_atomic(page);
+	shadow_ring_context = kmap(page);
 
 #define COPY_REG(name) \
 	intel_gvt_hypervisor_write_gpa(vgpu, workload->ring_context_gpa + \
@@ -347,20 +343,22 @@ static void update_guest_context(struct intel_vgpu_workload *workload)
 			sizeof(*shadow_ring_context),
 			GTT_PAGE_SIZE - sizeof(*shadow_ring_context));
 
-	kunmap_atomic(shadow_ring_context);
+	kunmap(page);
 }
 
 static void complete_current_workload(struct intel_gvt *gvt, int ring_id)
 {
 	struct intel_gvt_workload_scheduler *scheduler = &gvt->scheduler;
 	struct intel_vgpu_workload *workload;
+	struct intel_vgpu *vgpu;
 	int event;
 
 	mutex_lock(&gvt->lock);
 
 	workload = scheduler->current_workload[ring_id];
+	vgpu = workload->vgpu;
 
-	if (!workload->status && !workload->vgpu->resetting) {
+	if (!workload->status && !vgpu->resetting) {
 		wait_event(workload->shadow_ctx_status_wq,
 			   !atomic_read(&workload->shadow_ctx_active));
 
@@ -368,8 +366,7 @@ static void complete_current_workload(struct intel_gvt *gvt, int ring_id)
 
 		for_each_set_bit(event, workload->pending_events,
 				 INTEL_GVT_EVENT_MAX)
-			intel_vgpu_trigger_virtual_event(workload->vgpu,
-					event);
+			intel_vgpu_trigger_virtual_event(vgpu, event);
 	}
 
 	gvt_dbg_sched("ring id %d complete workload %p status %d\n",
@@ -377,11 +374,10 @@ static void complete_current_workload(struct intel_gvt *gvt, int ring_id)
 
 	scheduler->current_workload[ring_id] = NULL;
 
-	atomic_dec(&workload->vgpu->running_workload_num);
-
 	list_del_init(&workload->list);
 	workload->complete(workload);
 
+	atomic_dec(&vgpu->running_workload_num);
 	wake_up(&scheduler->workload_complete_wq);
 	mutex_unlock(&gvt->lock);
 }
@@ -400,21 +396,27 @@ static int workload_thread(void *priv)
 	int ring_id = p->ring_id;
 	struct intel_gvt_workload_scheduler *scheduler = &gvt->scheduler;
 	struct intel_vgpu_workload *workload = NULL;
+	long lret;
 	int ret;
 	bool need_force_wake = IS_SKYLAKE(gvt->dev_priv);
+	DEFINE_WAIT_FUNC(wait, woken_wake_function);
 
 	kfree(p);
 
 	gvt_dbg_core("workload thread for ring %d started\n", ring_id);
 
 	while (!kthread_should_stop()) {
-		ret = wait_event_interruptible(scheduler->waitq[ring_id],
-				kthread_should_stop() ||
-				(workload = pick_next_workload(gvt, ring_id)));
+		add_wait_queue(&scheduler->waitq[ring_id], &wait);
+		do {
+			workload = pick_next_workload(gvt, ring_id);
+			if (workload)
+				break;
+			wait_woken(&wait, TASK_INTERRUPTIBLE,
+				   MAX_SCHEDULE_TIMEOUT);
+		} while (!kthread_should_stop());
+		remove_wait_queue(&scheduler->waitq[ring_id], &wait);
 
-		WARN_ON_ONCE(ret);
-
-		if (kthread_should_stop())
+		if (!workload)
 			break;
 
 		mutex_lock(&scheduler_mutex);
@@ -432,9 +434,9 @@ static int workload_thread(void *priv)
 			intel_uncore_forcewake_get(gvt->dev_priv,
 					FORCEWAKE_ALL);
 
-		mutex_lock(&gvt->dev_priv->drm.struct_mutex);
+		mutex_lock(&gvt->lock);
 		ret = dispatch_workload(workload);
-		mutex_unlock(&gvt->dev_priv->drm.struct_mutex);
+		mutex_unlock(&gvt->lock);
 
 		if (ret) {
 			gvt_err("fail to dispatch workload, skip\n");
@@ -444,20 +446,23 @@ static int workload_thread(void *priv)
 		gvt_dbg_sched("ring id %d wait workload %p\n",
 				workload->ring_id, workload);
 
-		workload->status = i915_wait_request(workload->req,
-						     0, NULL, NULL);
-		if (workload->status != 0)
+		lret = i915_wait_request(workload->req,
+					 0, MAX_SCHEDULE_TIMEOUT);
+		if (lret < 0) {
+			workload->status = lret;
 			gvt_err("fail to wait workload, skip\n");
+		} else {
+			workload->status = 0;
+		}
 
 complete:
 		gvt_dbg_sched("will complete workload %p\n, status: %d\n",
 				workload, workload->status);
 
-		mutex_lock(&gvt->dev_priv->drm.struct_mutex);
-		complete_current_workload(gvt, ring_id);
-		mutex_unlock(&gvt->dev_priv->drm.struct_mutex);
+		if (workload->req)
+			i915_gem_request_put(fetch_and_zero(&workload->req));
 
-		i915_gem_request_put(fetch_and_zero(&workload->req));
+		complete_current_workload(gvt, ring_id);
 
 		if (need_force_wake)
 			intel_uncore_forcewake_put(gvt->dev_priv,
@@ -544,18 +549,10 @@ err:
 
 void intel_vgpu_clean_gvt_context(struct intel_vgpu *vgpu)
 {
-	struct drm_i915_private *dev_priv = vgpu->gvt->dev_priv;
-
 	atomic_notifier_chain_unregister(&vgpu->shadow_ctx->status_notifier,
 			&vgpu->shadow_ctx_notifier_block);
 
-	mutex_lock(&dev_priv->drm.struct_mutex);
-
-	/* a little hacky to mark as ctx closed */
-	vgpu->shadow_ctx->closed = true;
-	i915_gem_context_put(vgpu->shadow_ctx);
-
-	mutex_unlock(&dev_priv->drm.struct_mutex);
+	i915_gem_context_put_unlocked(vgpu->shadow_ctx);
 }
 
 int intel_vgpu_init_gvt_context(struct intel_vgpu *vgpu)

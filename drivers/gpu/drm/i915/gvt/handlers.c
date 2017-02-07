@@ -93,7 +93,8 @@ static void write_vreg(struct intel_vgpu *vgpu, unsigned int offset,
 static int new_mmio_info(struct intel_gvt *gvt,
 		u32 offset, u32 flags, u32 size,
 		u32 addr_mask, u32 ro_mask, u32 device,
-		void *read, void *write)
+		int (*read)(struct intel_vgpu *, unsigned int, void *, unsigned int),
+		int (*write)(struct intel_vgpu *, unsigned int, void *, unsigned int))
 {
 	struct intel_gvt_mmio_info *info, *p;
 	u32 start, end, i;
@@ -219,7 +220,7 @@ static int mul_force_wake_write(struct intel_vgpu *vgpu,
 		default:
 			/*should not hit here*/
 			gvt_err("invalid forcewake offset 0x%x\n", offset);
-			return 1;
+			return -EINVAL;
 		}
 	} else {
 		ack_reg_offset = FORCEWAKE_ACK_HSW_REG;
@@ -230,62 +231,45 @@ static int mul_force_wake_write(struct intel_vgpu *vgpu,
 	return 0;
 }
 
-static int handle_device_reset(struct intel_vgpu *vgpu, unsigned int offset,
-		void *p_data, unsigned int bytes, unsigned long bitmap)
-{
-	struct intel_gvt_workload_scheduler *scheduler =
-		&vgpu->gvt->scheduler;
-
-	vgpu->resetting = true;
-
-	intel_vgpu_stop_schedule(vgpu);
-	if (scheduler->current_vgpu == vgpu) {
-		mutex_unlock(&vgpu->gvt->lock);
-		intel_gvt_wait_vgpu_idle(vgpu);
-		mutex_lock(&vgpu->gvt->lock);
-	}
-
-	intel_vgpu_reset_execlist(vgpu, bitmap);
-
-	vgpu->resetting = false;
-
-	return 0;
-}
-
 static int gdrst_mmio_write(struct intel_vgpu *vgpu, unsigned int offset,
-		void *p_data, unsigned int bytes)
+			    void *p_data, unsigned int bytes)
 {
+	unsigned int engine_mask = 0;
 	u32 data;
-	u64 bitmap = 0;
 
+	write_vreg(vgpu, offset, p_data, bytes);
 	data = vgpu_vreg(vgpu, offset);
 
 	if (data & GEN6_GRDOM_FULL) {
 		gvt_dbg_mmio("vgpu%d: request full GPU reset\n", vgpu->id);
-		bitmap = 0xff;
+		engine_mask = ALL_ENGINES;
+	} else {
+		if (data & GEN6_GRDOM_RENDER) {
+			gvt_dbg_mmio("vgpu%d: request RCS reset\n", vgpu->id);
+			engine_mask |= (1 << RCS);
+		}
+		if (data & GEN6_GRDOM_MEDIA) {
+			gvt_dbg_mmio("vgpu%d: request VCS reset\n", vgpu->id);
+			engine_mask |= (1 << VCS);
+		}
+		if (data & GEN6_GRDOM_BLT) {
+			gvt_dbg_mmio("vgpu%d: request BCS Reset\n", vgpu->id);
+			engine_mask |= (1 << BCS);
+		}
+		if (data & GEN6_GRDOM_VECS) {
+			gvt_dbg_mmio("vgpu%d: request VECS Reset\n", vgpu->id);
+			engine_mask |= (1 << VECS);
+		}
+		if (data & GEN8_GRDOM_MEDIA2) {
+			gvt_dbg_mmio("vgpu%d: request VCS2 Reset\n", vgpu->id);
+			if (HAS_BSD2(vgpu->gvt->dev_priv))
+				engine_mask |= (1 << VCS2);
+		}
 	}
-	if (data & GEN6_GRDOM_RENDER) {
-		gvt_dbg_mmio("vgpu%d: request RCS reset\n", vgpu->id);
-		bitmap |= (1 << RCS);
-	}
-	if (data & GEN6_GRDOM_MEDIA) {
-		gvt_dbg_mmio("vgpu%d: request VCS reset\n", vgpu->id);
-		bitmap |= (1 << VCS);
-	}
-	if (data & GEN6_GRDOM_BLT) {
-		gvt_dbg_mmio("vgpu%d: request BCS Reset\n", vgpu->id);
-		bitmap |= (1 << BCS);
-	}
-	if (data & GEN6_GRDOM_VECS) {
-		gvt_dbg_mmio("vgpu%d: request VECS Reset\n", vgpu->id);
-		bitmap |= (1 << VECS);
-	}
-	if (data & GEN8_GRDOM_MEDIA2) {
-		gvt_dbg_mmio("vgpu%d: request VCS2 Reset\n", vgpu->id);
-		if (HAS_BSD2(vgpu->gvt->dev_priv))
-			bitmap |= (1 << VCS2);
-	}
-	return handle_device_reset(vgpu, offset, p_data, bytes, bitmap);
+
+	intel_gvt_reset_vgpu_locked(vgpu, false, engine_mask);
+
+	return 0;
 }
 
 static int gmbus_mmio_read(struct intel_vgpu *vgpu, unsigned int offset,
@@ -959,7 +943,7 @@ static int sbi_data_mmio_read(struct intel_vgpu *vgpu, unsigned int offset,
 	return 0;
 }
 
-static bool sbi_ctl_mmio_write(struct intel_vgpu *vgpu, unsigned int offset,
+static int sbi_ctl_mmio_write(struct intel_vgpu *vgpu, unsigned int offset,
 		void *p_data, unsigned int bytes)
 {
 	u32 data;
@@ -1143,7 +1127,10 @@ static int fpga_dbg_mmio_write(struct intel_vgpu *vgpu,
 static int dma_ctrl_write(struct intel_vgpu *vgpu, unsigned int offset,
 		void *p_data, unsigned int bytes)
 {
-	u32 mode = *(u32 *)p_data;
+	u32 mode;
+
+	write_vreg(vgpu, offset, p_data, bytes);
+	mode = vgpu_vreg(vgpu, offset);
 
 	if (GFX_MODE_BIT_SET_IN_MASK(mode, START_DMA)) {
 		WARN_ONCE(1, "VM(%d): iGVT-g doesn't supporte GuC\n",
@@ -1260,19 +1247,18 @@ static int skl_misc_ctl_write(struct intel_vgpu *vgpu, unsigned int offset,
 	switch (offset) {
 	case 0x4ddc:
 		vgpu_vreg(vgpu, offset) = 0x8000003c;
+		/* WaCompressedResourceSamplerPbeMediaNewHashMode:skl */
+		I915_WRITE(reg, vgpu_vreg(vgpu, offset));
 		break;
 	case 0x42080:
 		vgpu_vreg(vgpu, offset) = 0x8000;
+		/* WaCompressedResourceDisplayNewHashMode:skl */
+		I915_WRITE(reg, vgpu_vreg(vgpu, offset));
 		break;
 	default:
 		return -EINVAL;
 	}
 
-	/**
-	 * TODO: need detect stepping info after gvt contain such information
-	 * 0x4ddc enabled after C0, 0x42080 enabled after E0.
-	 */
-	I915_WRITE(reg, vgpu_vreg(vgpu, offset));
 	return 0;
 }
 
@@ -1305,7 +1291,7 @@ static int elsp_mmio_write(struct intel_vgpu *vgpu, unsigned int offset,
 	int ring_id = render_mmio_to_ring_id(vgpu->gvt, offset);
 	struct intel_vgpu_execlist *execlist;
 	u32 data = *(u32 *)p_data;
-	int ret;
+	int ret = 0;
 
 	if (WARN_ON(ring_id < 0 || ring_id > I915_NUM_ENGINES - 1))
 		return -EINVAL;
@@ -1313,12 +1299,15 @@ static int elsp_mmio_write(struct intel_vgpu *vgpu, unsigned int offset,
 	execlist = &vgpu->execlist[ring_id];
 
 	execlist->elsp_dwords.data[execlist->elsp_dwords.index] = data;
-	if (execlist->elsp_dwords.index == 3)
+	if (execlist->elsp_dwords.index == 3) {
 		ret = intel_vgpu_submit_execlist(vgpu, ring_id);
+		if(ret)
+			gvt_err("fail submit workload on ring %d\n", ring_id);
+	}
 
 	++execlist->elsp_dwords.index;
 	execlist->elsp_dwords.index &= 0x3;
-	return 0;
+	return ret;
 }
 
 static int ring_mode_mmio_write(struct intel_vgpu *vgpu, unsigned int offset,
@@ -1346,8 +1335,10 @@ static int ring_mode_mmio_write(struct intel_vgpu *vgpu, unsigned int offset,
 static int gvt_reg_tlb_control_handler(struct intel_vgpu *vgpu,
 		unsigned int offset, void *p_data, unsigned int bytes)
 {
-	int rc = 0;
 	unsigned int id = 0;
+
+	write_vreg(vgpu, offset, p_data, bytes);
+	vgpu_vreg(vgpu, offset) = 0;
 
 	switch (offset) {
 	case 0x4260:
@@ -1366,12 +1357,28 @@ static int gvt_reg_tlb_control_handler(struct intel_vgpu *vgpu,
 		id = VECS;
 		break;
 	default:
-		rc = -EINVAL;
-		break;
+		return -EINVAL;
 	}
 	set_bit(id, (void *)vgpu->tlb_handle_pending);
 
-	return rc;
+	return 0;
+}
+
+static int ring_reset_ctl_write(struct intel_vgpu *vgpu,
+	unsigned int offset, void *p_data, unsigned int bytes)
+{
+	u32 data;
+
+	write_vreg(vgpu, offset, p_data, bytes);
+	data = vgpu_vreg(vgpu, offset);
+
+	if (data & _MASKED_BIT_ENABLE(RESET_CTL_REQUEST_RESET))
+		data |= RESET_CTL_READY_TO_RESET;
+	else if (data & _MASKED_BIT_DISABLE(RESET_CTL_REQUEST_RESET))
+		data &= ~RESET_CTL_READY_TO_RESET;
+
+	vgpu_vreg(vgpu, offset) = data;
+	return 0;
 }
 
 #define MMIO_F(reg, s, f, am, rm, d, r, w) do { \
@@ -1467,7 +1474,7 @@ static int init_generic_mmio_info(struct intel_gvt *gvt)
 
 	MMIO_DFH(GEN7_GT_MODE, D_ALL, F_MODE_MASK, NULL, NULL);
 	MMIO_DFH(CACHE_MODE_0_GEN7, D_ALL, F_MODE_MASK, NULL, NULL);
-	MMIO_DFH(CACHE_MODE_1, D_ALL, F_MODE_MASK, NULL, NULL);
+	MMIO_DFH(CACHE_MODE_1, D_ALL, F_MODE_MASK | F_CMD_ACCESS, NULL, NULL);
 
 	MMIO_DFH(0x20dc, D_ALL, F_MODE_MASK, NULL, NULL);
 	MMIO_DFH(_3D_CHICKEN3, D_ALL, F_MODE_MASK, NULL, NULL);
@@ -1476,7 +1483,7 @@ static int init_generic_mmio_info(struct intel_gvt *gvt)
 	MMIO_DFH(0x2470, D_ALL, F_MODE_MASK, NULL, NULL);
 	MMIO_D(GAM_ECOCHK, D_ALL);
 	MMIO_DFH(GEN7_COMMON_SLICE_CHICKEN1, D_ALL, F_MODE_MASK, NULL, NULL);
-	MMIO_DFH(COMMON_SLICE_CHICKEN2, D_ALL, F_MODE_MASK, NULL, NULL);
+	MMIO_DFH(COMMON_SLICE_CHICKEN2, D_ALL, F_MODE_MASK | F_CMD_ACCESS, NULL, NULL);
 	MMIO_D(0x9030, D_ALL);
 	MMIO_D(0x20a0, D_ALL);
 	MMIO_D(0x2420, D_ALL);
@@ -1485,7 +1492,7 @@ static int init_generic_mmio_info(struct intel_gvt *gvt)
 	MMIO_D(0x2438, D_ALL);
 	MMIO_D(0x243c, D_ALL);
 	MMIO_DFH(0x7018, D_ALL, F_MODE_MASK, NULL, NULL);
-	MMIO_DFH(0xe184, D_ALL, F_MODE_MASK, NULL, NULL);
+	MMIO_DFH(HALF_SLICE_CHICKEN3, D_ALL, F_MODE_MASK | F_CMD_ACCESS, NULL, NULL);
 	MMIO_DFH(0xe100, D_ALL, F_MODE_MASK, NULL, NULL);
 
 	/* display */
@@ -2098,6 +2105,7 @@ static int init_generic_mmio_info(struct intel_gvt *gvt)
 	MMIO_D(GEN6_MBCTL, D_ALL);
 	MMIO_D(0x911c, D_ALL);
 	MMIO_D(0x9120, D_ALL);
+	MMIO_DFH(GEN7_UCGCTL4, D_ALL, F_CMD_ACCESS, NULL, NULL);
 
 	MMIO_D(GAB_CTL, D_ALL);
 	MMIO_D(0x48800, D_ALL);
@@ -2159,7 +2167,7 @@ static int init_generic_mmio_info(struct intel_gvt *gvt)
 	MMIO_DFH(0x1217c, D_ALL, F_CMD_ACCESS, NULL, NULL);
 
 	MMIO_F(0x2290, 8, 0, 0, 0, D_HSW_PLUS, NULL, NULL);
-	MMIO_D(OACONTROL, D_HSW);
+	MMIO_D(GEN7_OACONTROL, D_HSW);
 	MMIO_D(0x2b00, D_BDW_PLUS);
 	MMIO_D(0x2360, D_BDW_PLUS);
 	MMIO_F(0x5200, 32, 0, 0, 0, D_ALL, NULL, NULL);
@@ -2280,6 +2288,15 @@ static int init_broadwell_mmio_info(struct intel_gvt *gvt)
 
 	MMIO_RING_D(RING_ACTHD_UDW, D_BDW_PLUS);
 
+#define RING_REG(base) (base + 0xd0)
+	MMIO_RING_F(RING_REG, 4, F_RO, 0,
+		~_MASKED_BIT_ENABLE(RESET_CTL_REQUEST_RESET), D_BDW_PLUS, NULL,
+		ring_reset_ctl_write);
+	MMIO_F(RING_REG(GEN8_BSD2_RING_BASE), 4, F_RO, 0,
+		~_MASKED_BIT_ENABLE(RESET_CTL_REQUEST_RESET), D_BDW_PLUS, NULL,
+		ring_reset_ctl_write);
+#undef RING_REG
+
 #define RING_REG(base) (base + 0x230)
 	MMIO_RING_DFH(RING_REG, D_BDW_PLUS, 0, NULL, elsp_mmio_write);
 	MMIO_DH(RING_REG(GEN8_BSD2_RING_BASE), D_BDW_PLUS, NULL, elsp_mmio_write);
@@ -2327,7 +2344,7 @@ static int init_broadwell_mmio_info(struct intel_gvt *gvt)
 	MMIO_RING_GM(RING_HWS_PGA, D_BDW_PLUS, NULL, NULL);
 	MMIO_GM(0x1c080, D_BDW_PLUS, NULL, NULL);
 
-	MMIO_DFH(HDC_CHICKEN0, D_BDW_PLUS, F_MODE_MASK, NULL, NULL);
+	MMIO_DFH(HDC_CHICKEN0, D_BDW_PLUS, F_MODE_MASK | F_CMD_ACCESS, NULL, NULL);
 
 	MMIO_D(CHICKEN_PIPESL_1(PIPE_A), D_BDW);
 	MMIO_D(CHICKEN_PIPESL_1(PIPE_B), D_BDW);
@@ -2346,7 +2363,7 @@ static int init_broadwell_mmio_info(struct intel_gvt *gvt)
 	MMIO_D(GEN8_EU_DISABLE2, D_BDW_PLUS);
 
 	MMIO_D(0xfdc, D_BDW);
-	MMIO_D(GEN8_ROW_CHICKEN, D_BDW_PLUS);
+	MMIO_DFH(GEN8_ROW_CHICKEN, D_BDW_PLUS, F_CMD_ACCESS, NULL, NULL);
 	MMIO_D(GEN7_ROW_CHICKEN2, D_BDW_PLUS);
 	MMIO_D(GEN8_UCGCTL6, D_BDW_PLUS);
 
@@ -2357,10 +2374,10 @@ static int init_broadwell_mmio_info(struct intel_gvt *gvt)
 	MMIO_D(0xb10c, D_BDW);
 	MMIO_D(0xb110, D_BDW);
 
-	MMIO_DH(0x24d0, D_BDW_PLUS, NULL, NULL);
-	MMIO_DH(0x24d4, D_BDW_PLUS, NULL, NULL);
-	MMIO_DH(0x24d8, D_BDW_PLUS, NULL, NULL);
-	MMIO_DH(0x24dc, D_BDW_PLUS, NULL, NULL);
+	MMIO_DFH(0x24d0, D_BDW_PLUS, F_CMD_ACCESS, NULL, NULL);
+	MMIO_DFH(0x24d4, D_BDW_PLUS, F_CMD_ACCESS, NULL, NULL);
+	MMIO_DFH(0x24d8, D_BDW_PLUS, F_CMD_ACCESS, NULL, NULL);
+	MMIO_DFH(0x24dc, D_BDW_PLUS, F_CMD_ACCESS, NULL, NULL);
 
 	MMIO_D(0x83a4, D_BDW);
 	MMIO_D(GEN8_L3_LRA_1_GPGPU, D_BDW_PLUS);
@@ -2374,9 +2391,9 @@ static int init_broadwell_mmio_info(struct intel_gvt *gvt)
 	MMIO_D(0x6e570, D_BDW_PLUS);
 	MMIO_D(0x65f10, D_BDW_PLUS);
 
-	MMIO_DFH(0xe194, D_BDW_PLUS, F_MODE_MASK, NULL, NULL);
-	MMIO_DFH(0xe188, D_BDW_PLUS, F_MODE_MASK, NULL, NULL);
-	MMIO_DFH(0xe180, D_BDW_PLUS, F_MODE_MASK, NULL, NULL);
+	MMIO_DFH(0xe194, D_BDW_PLUS, F_MODE_MASK | F_CMD_ACCESS, NULL, NULL);
+	MMIO_DFH(0xe188, D_BDW_PLUS, F_MODE_MASK | F_CMD_ACCESS, NULL, NULL);
+	MMIO_DFH(HALF_SLICE_CHICKEN2, D_BDW_PLUS, F_MODE_MASK | F_CMD_ACCESS, NULL, NULL);
 	MMIO_DFH(0x2580, D_BDW_PLUS, F_MODE_MASK, NULL, NULL);
 
 	MMIO_D(0x2248, D_BDW);
@@ -2407,6 +2424,7 @@ static int init_skl_mmio_info(struct intel_gvt *gvt)
 	MMIO_D(0xa210, D_SKL_PLUS);
 	MMIO_D(GEN9_MEDIA_PG_IDLE_HYSTERESIS, D_SKL_PLUS);
 	MMIO_D(GEN9_RENDER_PG_IDLE_HYSTERESIS, D_SKL_PLUS);
+	MMIO_DFH(GEN9_GAMT_ECO_REG_RW_IA, D_SKL_PLUS, F_CMD_ACCESS, NULL, NULL);
 	MMIO_DH(0x4ddc, D_SKL, NULL, skl_misc_ctl_write);
 	MMIO_DH(0x42080, D_SKL, NULL, skl_misc_ctl_write);
 	MMIO_D(0x45504, D_SKL);
@@ -2556,8 +2574,8 @@ static int init_skl_mmio_info(struct intel_gvt *gvt)
 	MMIO_D(0x51000, D_SKL);
 	MMIO_D(0x6c00c, D_SKL);
 
-	MMIO_F(0xc800, 0x7f8, 0, 0, 0, D_SKL, NULL, NULL);
-	MMIO_F(0xb020, 0x80, 0, 0, 0, D_SKL, NULL, NULL);
+	MMIO_F(0xc800, 0x7f8, F_CMD_ACCESS, 0, 0, D_SKL, NULL, NULL);
+	MMIO_F(0xb020, 0x80, F_CMD_ACCESS, 0, 0, D_SKL, NULL, NULL);
 
 	MMIO_D(0xd08, D_SKL);
 	MMIO_D(0x20e0, D_SKL);

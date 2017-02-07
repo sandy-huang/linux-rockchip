@@ -81,12 +81,45 @@ struct intel_gvt_gtt {
 	struct list_head oos_page_use_list_head;
 	struct list_head oos_page_free_list_head;
 	struct list_head mm_lru_list_head;
+
+	struct page *scratch_ggtt_page;
+	unsigned long scratch_ggtt_mfn;
 };
 
 enum {
 	INTEL_GVT_MM_GGTT = 0,
 	INTEL_GVT_MM_PPGTT,
 };
+
+typedef enum {
+	GTT_TYPE_INVALID = -1,
+
+	GTT_TYPE_GGTT_PTE,
+
+	GTT_TYPE_PPGTT_PTE_4K_ENTRY,
+	GTT_TYPE_PPGTT_PTE_2M_ENTRY,
+	GTT_TYPE_PPGTT_PTE_1G_ENTRY,
+
+	GTT_TYPE_PPGTT_PTE_ENTRY,
+
+	GTT_TYPE_PPGTT_PDE_ENTRY,
+	GTT_TYPE_PPGTT_PDP_ENTRY,
+	GTT_TYPE_PPGTT_PML4_ENTRY,
+
+	GTT_TYPE_PPGTT_ROOT_ENTRY,
+
+	GTT_TYPE_PPGTT_ROOT_L3_ENTRY,
+	GTT_TYPE_PPGTT_ROOT_L4_ENTRY,
+
+	GTT_TYPE_PPGTT_ENTRY,
+
+	GTT_TYPE_PPGTT_PTE_PT,
+	GTT_TYPE_PPGTT_PDE_PT,
+	GTT_TYPE_PPGTT_PDP_PT,
+	GTT_TYPE_PPGTT_PML4_PT,
+
+	GTT_TYPE_MAX,
+} intel_gvt_gtt_type_t;
 
 struct intel_vgpu_mm {
 	int type;
@@ -151,6 +184,12 @@ extern void intel_vgpu_destroy_mm(struct kref *mm_ref);
 
 struct intel_vgpu_guest_page;
 
+struct intel_vgpu_scratch_pt {
+	struct page *page;
+	unsigned long page_mfn;
+};
+
+
 struct intel_vgpu_gtt {
 	struct intel_vgpu_mm *ggtt_mm;
 	unsigned long active_ppgtt_mm_bitmap;
@@ -160,14 +199,16 @@ struct intel_vgpu_gtt {
 	atomic_t n_write_protected_guest_page;
 	struct list_head oos_page_list_head;
 	struct list_head post_shadow_list_head;
-	struct page *scratch_page;
-	unsigned long scratch_page_mfn;
+	struct intel_vgpu_scratch_pt scratch_pt[GTT_TYPE_MAX];
+
 };
 
 extern int intel_vgpu_init_gtt(struct intel_vgpu *vgpu);
 extern void intel_vgpu_clean_gtt(struct intel_vgpu *vgpu);
+void intel_vgpu_reset_ggtt(struct intel_vgpu *vgpu);
 
 extern int intel_gvt_init_gtt(struct intel_gvt *gvt);
+extern void intel_vgpu_reset_gtt(struct intel_vgpu *vgpu, bool dmlr);
 extern void intel_gvt_clean_gtt(struct intel_gvt *gvt);
 
 extern struct intel_vgpu_mm *intel_gvt_find_ppgtt_mm(struct intel_vgpu *vgpu,

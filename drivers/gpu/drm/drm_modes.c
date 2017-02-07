@@ -49,13 +49,7 @@
  */
 void drm_mode_debug_printmodeline(const struct drm_display_mode *mode)
 {
-	DRM_DEBUG_KMS("Modeline %d:\"%s\" %d %d %d %d %d %d %d %d %d %d "
-			"0x%x 0x%x\n",
-		mode->base.id, mode->name, mode->vrefresh, mode->clock,
-		mode->hdisplay, mode->hsync_start,
-		mode->hsync_end, mode->htotal,
-		mode->vdisplay, mode->vsync_start,
-		mode->vsync_end, mode->vtotal, mode->type, mode->flags);
+	DRM_DEBUG_KMS("Modeline " DRM_MODE_FMT "\n", DRM_MODE_ARG(mode));
 }
 EXPORT_SYMBOL(drm_mode_debug_printmodeline);
 
@@ -803,6 +797,26 @@ int drm_mode_vrefresh(const struct drm_display_mode *mode)
 EXPORT_SYMBOL(drm_mode_vrefresh);
 
 /**
+ * drm_mode_get_hv_timing - Fetches hdisplay/vdisplay for given mode
+ * @mode: mode to query
+ * @hdisplay: hdisplay value to fill in
+ * @vdisplay: vdisplay value to fill in
+ *
+ * The vdisplay value will be doubled if the specified mode is a stereo mode of
+ * the appropriate layout.
+ */
+void drm_mode_get_hv_timing(const struct drm_display_mode *mode,
+			    int *hdisplay, int *vdisplay)
+{
+	struct drm_display_mode adjusted = *mode;
+
+	drm_mode_set_crtcinfo(&adjusted, CRTC_STEREO_DOUBLE_ONLY);
+	*hdisplay = adjusted.crtc_hdisplay;
+	*vdisplay = adjusted.crtc_vdisplay;
+}
+EXPORT_SYMBOL(drm_mode_get_hv_timing);
+
+/**
  * drm_mode_set_crtcinfo - set CRTC modesetting timing parameters
  * @p: mode
  * @adjust_flags: a combination of adjustment flags
@@ -1001,7 +1015,6 @@ bool drm_mode_equal_no_clocks_no_stereo(const struct drm_display_mode *mode1,
 	    mode1->vsync_end == mode2->vsync_end &&
 	    mode1->vtotal == mode2->vtotal &&
 	    mode1->vscan == mode2->vscan &&
-	    mode1->picture_aspect_ratio == mode2->picture_aspect_ratio &&
 	    (mode1->flags & ~DRM_MODE_FLAG_3D_MASK) ==
 	     (mode2->flags & ~DRM_MODE_FLAG_3D_MASK))
 		return true;
@@ -1467,6 +1480,9 @@ drm_mode_create_from_cmdline_mode(struct drm_device *dev,
 		return NULL;
 
 	mode->type |= DRM_MODE_TYPE_USERDEF;
+	/* fix up 1368x768: GFT/CVT can't express 1366 width due to alignment */
+	if (cmd->xres == 1366)
+		drm_mode_fixup_1366x768(mode);
 	drm_mode_set_crtcinfo(mode, CRTC_INTERLACE_HALVE_V);
 	return mode;
 }
@@ -1504,27 +1520,6 @@ void drm_mode_convert_to_umode(struct drm_mode_modeinfo *out,
 	out->vrefresh = in->vrefresh;
 	out->flags = in->flags;
 	out->type = in->type;
-	out->flags &= ~DRM_MODE_FLAG_PIC_AR_MASK;
-
-	switch (in->picture_aspect_ratio) {
-	case HDMI_PICTURE_ASPECT_4_3:
-		out->flags |= DRM_MODE_FLAG_PIC_AR_4_3;
-		break;
-	case HDMI_PICTURE_ASPECT_16_9:
-		out->flags |= DRM_MODE_FLAG_PIC_AR_16_9;
-		break;
-	case HDMI_PICTURE_ASPECT_64_27:
-		out->flags |= DRM_MODE_FLAG_PIC_AR_64_27;
-		break;
-	case DRM_MODE_PICTURE_ASPECT_256_135:
-		out->flags |= DRM_MODE_FLAG_PIC_AR_256_135;
-		break;
-	case HDMI_PICTURE_ASPECT_RESERVED:
-	default:
-		out->flags |= DRM_MODE_FLAG_PIC_AR_NONE;
-		break;
-	}
-
 	strncpy(out->name, in->name, DRM_DISPLAY_MODE_LEN);
 	out->name[DRM_DISPLAY_MODE_LEN-1] = 0;
 }
@@ -1569,27 +1564,6 @@ int drm_mode_convert_umode(struct drm_display_mode *out,
 	out->type = in->type;
 	strncpy(out->name, in->name, DRM_DISPLAY_MODE_LEN);
 	out->name[DRM_DISPLAY_MODE_LEN-1] = 0;
-
-	/* Clearing picture aspect ratio bits from out flags */
-	out->flags &= ~DRM_MODE_FLAG_PIC_AR_MASK;
-
-	switch (in->flags & DRM_MODE_FLAG_PIC_AR_MASK) {
-	case DRM_MODE_FLAG_PIC_AR_4_3:
-		out->picture_aspect_ratio |= HDMI_PICTURE_ASPECT_4_3;
-		break;
-	case DRM_MODE_FLAG_PIC_AR_16_9:
-		out->picture_aspect_ratio |= HDMI_PICTURE_ASPECT_16_9;
-		break;
-	case DRM_MODE_FLAG_PIC_AR_64_27:
-		out->picture_aspect_ratio |= HDMI_PICTURE_ASPECT_64_27;
-		break;
-	case DRM_MODE_FLAG_PIC_AR_256_135:
-		out->picture_aspect_ratio |= HDMI_PICTURE_ASPECT_256_135;
-		break;
-	default:
-		out->picture_aspect_ratio = HDMI_PICTURE_ASPECT_NONE;
-		break;
-	}
 
 	out->status = drm_mode_validate_basic(out);
 	if (out->status != MODE_OK)

@@ -29,6 +29,7 @@
 #include <drm/drm_edid.h>
 #include <drm/i915_drm.h>
 #include <drm/drm_panel.h>
+#include <linux/gpio/consumer.h>
 #include <linux/slab.h>
 #include <video/mipi_display.h>
 #include <asm/intel-mid.h>
@@ -300,23 +301,49 @@ static void chv_exec_gpio(struct drm_i915_private *dev_priv,
 	mutex_lock(&dev_priv->sb_lock);
 	vlv_iosf_sb_write(dev_priv, port, cfg1, 0);
 	vlv_iosf_sb_write(dev_priv, port, cfg0,
-			  CHV_GPIO_GPIOCFG_GPO | CHV_GPIO_GPIOTXSTATE(value));
+			  CHV_GPIO_GPIOEN | CHV_GPIO_GPIOCFG_GPO |
+			  CHV_GPIO_GPIOTXSTATE(value));
 	mutex_unlock(&dev_priv->sb_lock);
+}
+
+static void bxt_exec_gpio(struct drm_i915_private *dev_priv,
+			  u8 gpio_source, u8 gpio_index, bool value)
+{
+	/* XXX: this table is a quick ugly hack. */
+	static struct gpio_desc *bxt_gpio_table[U8_MAX + 1];
+	struct gpio_desc *gpio_desc = bxt_gpio_table[gpio_index];
+
+	if (!gpio_desc) {
+		gpio_desc = devm_gpiod_get_index(dev_priv->drm.dev,
+						 "panel", gpio_index,
+						 value ? GPIOD_OUT_LOW :
+						 GPIOD_OUT_HIGH);
+
+		if (IS_ERR_OR_NULL(gpio_desc)) {
+			DRM_ERROR("GPIO index %u request failed (%ld)\n",
+				  gpio_index, PTR_ERR(gpio_desc));
+			return;
+		}
+
+		bxt_gpio_table[gpio_index] = gpio_desc;
+	}
+
+	gpiod_set_value(gpio_desc, value);
 }
 
 static const u8 *mipi_exec_gpio(struct intel_dsi *intel_dsi, const u8 *data)
 {
 	struct drm_device *dev = intel_dsi->base.base.dev;
 	struct drm_i915_private *dev_priv = to_i915(dev);
-	u8 gpio_source, gpio_index;
+	u8 gpio_source, gpio_index = 0, gpio_number;
 	bool value;
 
 	DRM_DEBUG_KMS("\n");
 
 	if (dev_priv->vbt.dsi.seq_version >= 3)
-		data++;
+		gpio_index = *data++;
 
-	gpio_index = *data++;
+	gpio_number = *data++;
 
 	/* gpio source in sequence v2 only */
 	if (dev_priv->vbt.dsi.seq_version == 2)
@@ -328,11 +355,11 @@ static const u8 *mipi_exec_gpio(struct intel_dsi *intel_dsi, const u8 *data)
 	value = *data++ & 1;
 
 	if (IS_VALLEYVIEW(dev_priv))
-		vlv_exec_gpio(dev_priv, gpio_source, gpio_index, value);
+		vlv_exec_gpio(dev_priv, gpio_source, gpio_number, value);
 	else if (IS_CHERRYVIEW(dev_priv))
-		chv_exec_gpio(dev_priv, gpio_source, gpio_index, value);
+		chv_exec_gpio(dev_priv, gpio_source, gpio_number, value);
 	else
-		DRM_DEBUG_KMS("GPIO element not supported on this platform\n");
+		bxt_exec_gpio(dev_priv, gpio_source, gpio_index, value);
 
 	return data;
 }
@@ -376,11 +403,11 @@ static const fn_mipi_elem_exec exec_elem[] = {
  */
 
 static const char * const seq_name[] = {
-	[MIPI_SEQ_ASSERT_RESET] = "MIPI_SEQ_ASSERT_RESET",
+	[MIPI_SEQ_DEASSERT_RESET] = "MIPI_SEQ_DEASSERT_RESET",
 	[MIPI_SEQ_INIT_OTP] = "MIPI_SEQ_INIT_OTP",
 	[MIPI_SEQ_DISPLAY_ON] = "MIPI_SEQ_DISPLAY_ON",
 	[MIPI_SEQ_DISPLAY_OFF]  = "MIPI_SEQ_DISPLAY_OFF",
-	[MIPI_SEQ_DEASSERT_RESET] = "MIPI_SEQ_DEASSERT_RESET",
+	[MIPI_SEQ_ASSERT_RESET] = "MIPI_SEQ_ASSERT_RESET",
 	[MIPI_SEQ_BACKLIGHT_ON] = "MIPI_SEQ_BACKLIGHT_ON",
 	[MIPI_SEQ_BACKLIGHT_OFF] = "MIPI_SEQ_BACKLIGHT_OFF",
 	[MIPI_SEQ_TEAR_ON] = "MIPI_SEQ_TEAR_ON",
@@ -774,9 +801,8 @@ struct drm_panel *vbt_panel_init(struct intel_dsi *intel_dsi, u16 panel_id)
 			8);
 	intel_dsi->clk_hs_to_lp_count += extra_byte_count;
 
-	DRM_DEBUG_KMS("Eot %s\n", intel_dsi->eotp_pkt ? "enabled" : "disabled");
-	DRM_DEBUG_KMS("Clockstop %s\n", intel_dsi->clock_stop ?
-						"disabled" : "enabled");
+	DRM_DEBUG_KMS("Eot %s\n", enableddisabled(intel_dsi->eotp_pkt));
+	DRM_DEBUG_KMS("Clockstop %s\n", enableddisabled(!intel_dsi->clock_stop));
 	DRM_DEBUG_KMS("Mode %s\n", intel_dsi->operation_mode ? "command" : "video");
 	if (intel_dsi->dual_link == DSI_DUAL_LINK_FRONT_BACK)
 		DRM_DEBUG_KMS("Dual link: DSI_DUAL_LINK_FRONT_BACK\n");
@@ -795,8 +821,7 @@ struct drm_panel *vbt_panel_init(struct intel_dsi *intel_dsi, u16 panel_id)
 	DRM_DEBUG_KMS("LP to HS Clock Count 0x%x\n", intel_dsi->clk_lp_to_hs_count);
 	DRM_DEBUG_KMS("HS to LP Clock Count 0x%x\n", intel_dsi->clk_hs_to_lp_count);
 	DRM_DEBUG_KMS("BTA %s\n",
-			intel_dsi->video_frmt_cfg_bits & DISABLE_VIDEO_BTA ?
-			"disabled" : "enabled");
+			enableddisabled(!(intel_dsi->video_frmt_cfg_bits & DISABLE_VIDEO_BTA)));
 
 	/* delays in VBT are in unit of 100us, so need to convert
 	 * here in ms

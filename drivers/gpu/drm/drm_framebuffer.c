@@ -39,13 +39,13 @@
  * Frame buffers rely on the underlying memory manager for allocating backing
  * storage. When creating a frame buffer applications pass a memory handle
  * (or a list of memory handles for multi-planar formats) through the
- * struct &drm_mode_fb_cmd2 argument. For drivers using GEM as their userspace
+ * &struct drm_mode_fb_cmd2 argument. For drivers using GEM as their userspace
  * buffer management interface this would be a GEM handle.  Drivers are however
  * free to use their own backing storage object handles, e.g. vmwgfx directly
  * exposes special TTM handles to userspace and so expects TTM handles in the
  * create ioctl and not GEM handles.
  *
- * Framebuffers are tracked with struct &drm_framebuffer. They are published
+ * Framebuffers are tracked with &struct drm_framebuffer. They are published
  * using drm_framebuffer_init() - after calling that function userspace can use
  * and access the framebuffer object. The helper function
  * drm_helper_mode_fill_fb_struct() can be used to pre-fill the required
@@ -55,11 +55,11 @@
  * drivers can grab additional references with drm_framebuffer_reference() and
  * drop them again with drm_framebuffer_unreference(). For driver-private
  * framebuffers for which the last reference is never dropped (e.g. for the
- * fbdev framebuffer when the struct struct &drm_framebuffer is embedded into
+ * fbdev framebuffer when the struct &struct drm_framebuffer is embedded into
  * the fbdev helper struct) drivers can manually clean up a framebuffer at
  * module unload time with drm_framebuffer_unregister_private(). But doing this
- * is not recommended, and it's better to have a normal free-standing struct
- * &drm_framebuffer.
+ * is not recommended, and it's better to have a normal free-standing &struct
+ * drm_framebuffer.
  */
 
 int drm_framebuffer_check_src_coords(uint32_t src_x, uint32_t src_y,
@@ -133,9 +133,10 @@ static int framebuffer_check(const struct drm_mode_fb_cmd2 *r)
 
 	info = __drm_format_info(r->pixel_format & ~DRM_FORMAT_BIG_ENDIAN);
 	if (!info) {
-		char *format_name = drm_get_format_name(r->pixel_format);
-		DRM_DEBUG_KMS("bad framebuffer format %s\n", format_name);
-		kfree(format_name);
+		struct drm_format_name_buf format_name;
+		DRM_DEBUG_KMS("bad framebuffer format %s\n",
+		              drm_get_format_name(r->pixel_format,
+		                                  &format_name));
 		return -EINVAL;
 	}
 
@@ -171,6 +172,13 @@ static int framebuffer_check(const struct drm_mode_fb_cmd2 *r)
 		}
 
 		if (r->modifier[i] && !(r->flags & DRM_MODE_FB_MODIFIERS)) {
+			DRM_DEBUG_KMS("bad fb modifier %llu for plane %d\n",
+				      r->modifier[i], i);
+			return -EINVAL;
+		}
+
+		if (r->flags & DRM_MODE_FB_MODIFIERS &&
+		    r->modifier[i] != r->modifier[0]) {
 			DRM_DEBUG_KMS("bad fb modifier %llu for plane %d\n",
 				      r->modifier[i], i);
 			return -EINVAL;
@@ -424,8 +432,8 @@ int drm_mode_getfb(struct drm_device *dev,
 
 	r->height = fb->height;
 	r->width = fb->width;
-	r->depth = fb->depth;
-	r->bpp = fb->bits_per_pixel;
+	r->depth = fb->format->depth;
+	r->bpp = fb->format->cpp[0] * 8;
 	r->pitch = fb->pitches[0];
 	if (fb->funcs->create_handle) {
 		if (drm_is_current_master(file_priv) || capable(CAP_SYS_ADMIN) ||
@@ -462,7 +470,7 @@ int drm_mode_getfb(struct drm_device *dev,
  * usb display-link, mipi manual update panels or edp panel self refresh modes.
  *
  * Modesetting drivers which always update the frontbuffer do not need to
- * implement the corresponding ->dirty framebuffer callback.
+ * implement the corresponding &drm_framebuffer_funcs.dirty callback.
  *
  * Called by the user via ioctl.
  *
@@ -623,8 +631,11 @@ int drm_framebuffer_init(struct drm_device *dev, struct drm_framebuffer *fb,
 {
 	int ret;
 
+	if (WARN_ON_ONCE(fb->dev != dev || !fb->format))
+		return -EINVAL;
+
 	INIT_LIST_HEAD(&fb->filp_head);
-	fb->dev = dev;
+
 	fb->funcs = funcs;
 
 	ret = drm_mode_object_get_reg(dev, &fb->base, DRM_MODE_OBJECT_FB,
@@ -673,6 +684,11 @@ EXPORT_SYMBOL(drm_framebuffer_lookup);
  * those used for fbdev. Note that the caller must hold a reference of it's own,
  * i.e. the object may not be destroyed through this call (since it'll lead to a
  * locking inversion).
+ *
+ * NOTE: This function is deprecated. For driver-private framebuffers it is not
+ * recommended to embed a framebuffer struct info fbdev struct, instead, a
+ * framebuffer pointer is preferred and drm_framebuffer_unreference() should be
+ * called when the framebuffer is to be cleaned up.
  */
 void drm_framebuffer_unregister_private(struct drm_framebuffer *fb)
 {
@@ -693,10 +709,10 @@ EXPORT_SYMBOL(drm_framebuffer_unregister_private);
  * @fb: framebuffer to remove
  *
  * Cleanup framebuffer. This function is intended to be used from the drivers
- * ->destroy callback. It can also be used to clean up driver private
- * framebuffers embedded into a larger structure.
+ * &drm_framebuffer_funcs.destroy callback. It can also be used to clean up
+ * driver private framebuffers embedded into a larger structure.
  *
- * Note that this function does not remove the fb from active usuage - if it is
+ * Note that this function does not remove the fb from active usage - if it is
  * still used anywhere, hilarity can ensue since userspace could call getfb on
  * the id and get back -EINVAL. Obviously no concern at driver unload time.
  *
@@ -777,3 +793,47 @@ void drm_framebuffer_remove(struct drm_framebuffer *fb)
 	drm_framebuffer_unreference(fb);
 }
 EXPORT_SYMBOL(drm_framebuffer_remove);
+
+/**
+ * drm_framebuffer_plane_width - width of the plane given the first plane
+ * @width: width of the first plane
+ * @fb: the framebuffer
+ * @plane: plane index
+ *
+ * Returns:
+ * The width of @plane, given that the width of the first plane is @width.
+ */
+int drm_framebuffer_plane_width(int width,
+				const struct drm_framebuffer *fb, int plane)
+{
+	if (plane >= fb->format->num_planes)
+		return 0;
+
+	if (plane == 0)
+		return width;
+
+	return width / fb->format->hsub;
+}
+EXPORT_SYMBOL(drm_framebuffer_plane_width);
+
+/**
+ * drm_framebuffer_plane_height - height of the plane given the first plane
+ * @height: height of the first plane
+ * @fb: the framebuffer
+ * @plane: plane index
+ *
+ * Returns:
+ * The height of @plane, given that the height of the first plane is @height.
+ */
+int drm_framebuffer_plane_height(int height,
+				 const struct drm_framebuffer *fb, int plane)
+{
+	if (plane >= fb->format->num_planes)
+		return 0;
+
+	if (plane == 0)
+		return height;
+
+	return height / fb->format->vsub;
+}
+EXPORT_SYMBOL(drm_framebuffer_plane_height);

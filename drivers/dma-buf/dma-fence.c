@@ -28,6 +28,7 @@
 
 EXPORT_TRACEPOINT_SYMBOL(dma_fence_annotate_wait_on);
 EXPORT_TRACEPOINT_SYMBOL(dma_fence_emit);
+EXPORT_TRACEPOINT_SYMBOL(dma_fence_enable_signal);
 
 /*
  * fence context counter: each execution context should have its own
@@ -161,9 +162,6 @@ dma_fence_wait_timeout(struct dma_fence *fence, bool intr, signed long timeout)
 	if (WARN_ON(timeout < 0))
 		return -EINVAL;
 
-	if (timeout == 0)
-		return dma_fence_is_signaled(fence);
-
 	trace_dma_fence_wait_start(fence);
 	ret = fence->ops->wait(fence, intr, timeout);
 	trace_dma_fence_wait_end(fence);
@@ -285,6 +283,31 @@ int dma_fence_add_callback(struct dma_fence *fence, struct dma_fence_cb *cb,
 EXPORT_SYMBOL(dma_fence_add_callback);
 
 /**
+ * dma_fence_get_status - returns the status upon completion
+ * @fence: [in]	the dma_fence to query
+ *
+ * This wraps dma_fence_get_status_locked() to return the error status
+ * condition on a signaled fence. See dma_fence_get_status_locked() for more
+ * details.
+ *
+ * Returns 0 if the fence has not yet been signaled, 1 if the fence has
+ * been signaled without an error condition, or a negative error code
+ * if the fence has been completed in err.
+ */
+int dma_fence_get_status(struct dma_fence *fence)
+{
+	unsigned long flags;
+	int status;
+
+	spin_lock_irqsave(fence->lock, flags);
+	status = dma_fence_get_status_locked(fence);
+	spin_unlock_irqrestore(fence->lock, flags);
+
+	return status;
+}
+EXPORT_SYMBOL(dma_fence_get_status);
+
+/**
  * dma_fence_remove_callback - remove a callback from the signaling list
  * @fence:	[in]	the fence to wait on
  * @cb:		[in]	the callback to remove
@@ -339,18 +362,20 @@ dma_fence_default_wait_cb(struct dma_fence *fence, struct dma_fence_cb *cb)
  * @timeout:	[in]	timeout value in jiffies, or MAX_SCHEDULE_TIMEOUT
  *
  * Returns -ERESTARTSYS if interrupted, 0 if the wait timed out, or the
- * remaining timeout in jiffies on success.
+ * remaining timeout in jiffies on success. If timeout is zero the value one is
+ * returned if the fence is already signaled for consistency with other
+ * functions taking a jiffies timeout.
  */
 signed long
 dma_fence_default_wait(struct dma_fence *fence, bool intr, signed long timeout)
 {
 	struct default_wait_cb cb;
 	unsigned long flags;
-	signed long ret = timeout;
+	signed long ret = timeout ? timeout : 1;
 	bool was_set;
 
 	if (test_bit(DMA_FENCE_FLAG_SIGNALED_BIT, &fence->flags))
-		return timeout;
+		return ret;
 
 	spin_lock_irqsave(fence->lock, flags);
 
@@ -403,14 +428,18 @@ out:
 EXPORT_SYMBOL(dma_fence_default_wait);
 
 static bool
-dma_fence_test_signaled_any(struct dma_fence **fences, uint32_t count)
+dma_fence_test_signaled_any(struct dma_fence **fences, uint32_t count,
+			    uint32_t *idx)
 {
 	int i;
 
 	for (i = 0; i < count; ++i) {
 		struct dma_fence *fence = fences[i];
-		if (test_bit(DMA_FENCE_FLAG_SIGNALED_BIT, &fence->flags))
+		if (test_bit(DMA_FENCE_FLAG_SIGNALED_BIT, &fence->flags)) {
+			if (idx)
+				*idx = i;
 			return true;
+		}
 	}
 	return false;
 }
@@ -422,6 +451,8 @@ dma_fence_test_signaled_any(struct dma_fence **fences, uint32_t count)
  * @count:	[in]	number of fences to wait on
  * @intr:	[in]	if true, do an interruptible wait
  * @timeout:	[in]	timeout value in jiffies, or MAX_SCHEDULE_TIMEOUT
+ * @idx:       [out]	the first signaled fence index, meaningful only on
+ *			positive return
  *
  * Returns -EINVAL on custom fence wait implementation, -ERESTARTSYS if
  * interrupted, 0 if the wait timed out, or the remaining timeout in jiffies
@@ -433,7 +464,7 @@ dma_fence_test_signaled_any(struct dma_fence **fences, uint32_t count)
  */
 signed long
 dma_fence_wait_any_timeout(struct dma_fence **fences, uint32_t count,
-			   bool intr, signed long timeout)
+			   bool intr, signed long timeout, uint32_t *idx)
 {
 	struct default_wait_cb *cb;
 	signed long ret = timeout;
@@ -444,8 +475,11 @@ dma_fence_wait_any_timeout(struct dma_fence **fences, uint32_t count,
 
 	if (timeout == 0) {
 		for (i = 0; i < count; ++i)
-			if (dma_fence_is_signaled(fences[i]))
+			if (dma_fence_is_signaled(fences[i])) {
+				if (idx)
+					*idx = i;
 				return 1;
+			}
 
 		return 0;
 	}
@@ -468,6 +502,8 @@ dma_fence_wait_any_timeout(struct dma_fence **fences, uint32_t count,
 		if (dma_fence_add_callback(fence, &cb[i].base,
 					   dma_fence_default_wait_cb)) {
 			/* This fence is already signaled */
+			if (idx)
+				*idx = i;
 			goto fence_rm_cb;
 		}
 	}
@@ -478,7 +514,7 @@ dma_fence_wait_any_timeout(struct dma_fence **fences, uint32_t count,
 		else
 			set_current_state(TASK_UNINTERRUPTIBLE);
 
-		if (dma_fence_test_signaled_any(fences, count))
+		if (dma_fence_test_signaled_any(fences, count, idx))
 			break;
 
 		ret = schedule_timeout(ret);
@@ -531,6 +567,7 @@ dma_fence_init(struct dma_fence *fence, const struct dma_fence_ops *ops,
 	fence->context = context;
 	fence->seqno = seqno;
 	fence->flags = 0UL;
+	fence->error = 0;
 
 	trace_dma_fence_init(fence);
 }

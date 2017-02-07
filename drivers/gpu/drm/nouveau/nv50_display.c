@@ -574,7 +574,7 @@ nv50_core_create(struct nvif_device *device, struct nvif_object *disp,
 		.pushbuf = 0xb0007d00,
 	};
 	static const s32 oclass[] = {
-		GP104_DISP_CORE_CHANNEL_DMA,
+		GP102_DISP_CORE_CHANNEL_DMA,
 		GP100_DISP_CORE_CHANNEL_DMA,
 		GM200_DISP_CORE_CHANNEL_DMA,
 		GM107_DISP_CORE_CHANNEL_DMA,
@@ -1153,7 +1153,7 @@ nv50_curs_acquire(struct nv50_wndw *wndw, struct nv50_wndw_atom *asyw,
 	if (asyw->state.fb->width != asyw->state.fb->height)
 		return -EINVAL;
 
-	switch (asyw->state.fb->pixel_format) {
+	switch (asyw->state.fb->format->format) {
 	case DRM_FORMAT_ARGB8888: asyh->curs.format = 1; break;
 	default:
 		WARN_ON(1);
@@ -1418,12 +1418,10 @@ static int
 nv50_base_acquire(struct nv50_wndw *wndw, struct nv50_wndw_atom *asyw,
 		  struct nv50_head_atom *asyh)
 {
-	const u32 format = asyw->state.fb->pixel_format;
-	const struct drm_format_info *info;
+	const struct drm_framebuffer *fb = asyw->state.fb;
 	int ret;
 
-	info = drm_format_info(format);
-	if (!info || !info->depth)
+	if (!fb->format->depth)
 		return -EINVAL;
 
 	ret = drm_plane_helper_check_state(&asyw->state, &asyw->clip,
@@ -1433,14 +1431,14 @@ nv50_base_acquire(struct nv50_wndw *wndw, struct nv50_wndw_atom *asyw,
 	if (ret)
 		return ret;
 
-	asyh->base.depth = info->depth;
-	asyh->base.cpp = info->cpp[0];
+	asyh->base.depth = fb->format->depth;
+	asyh->base.cpp = fb->format->cpp[0];
 	asyh->base.x = asyw->state.src.x1 >> 16;
 	asyh->base.y = asyw->state.src.y1 >> 16;
 	asyh->base.w = asyw->state.fb->width;
 	asyh->base.h = asyw->state.fb->height;
 
-	switch (format) {
+	switch (fb->format->format) {
 	case DRM_FORMAT_C8         : asyw->image.format = 0x1e; break;
 	case DRM_FORMAT_RGB565     : asyw->image.format = 0xe8; break;
 	case DRM_FORMAT_XRGB1555   :
@@ -1726,6 +1724,11 @@ nv50_head_core_set(struct nv50_head *head, struct nv50_head_atom *asyh)
 			evo_data(push, asyh->core.handle);
 			evo_mthd(push, 0x08c0 + head->base.index * 0x400, 1);
 			evo_data(push, (asyh->core.y << 16) | asyh->core.x);
+			/* EVO will complain with INVALID_STATE if we have an
+			 * active cursor and (re)specify HeadSetContextDmaIso
+			 * without also updating HeadSetOffsetCursor.
+			 */
+			asyh->set.curs = asyh->curs.visible;
 		} else
 		if (core->base.user.oclass < GF110_DISP_CORE_CHANNEL_DMA) {
 			evo_mthd(push, 0x0860 + head->base.index * 0x400, 1);
@@ -3343,12 +3346,15 @@ nv50_mstm_detect(struct nv50_mstm *mstm, u8 dpcd[8], int allow)
 	if (!mstm)
 		return 0;
 
-	if (dpcd[0] >= 0x12 && allow) {
+	if (dpcd[0] >= 0x12) {
 		ret = drm_dp_dpcd_readb(mstm->mgr.aux, DP_MSTM_CAP, &dpcd[1]);
 		if (ret < 0)
 			return ret;
 
-		state = dpcd[1] & DP_MST_CAP;
+		if (!(dpcd[1] & DP_MST_CAP))
+			dpcd[0] = 0x11;
+		else
+			state = allow;
 	}
 
 	ret = nv50_mstm_enable(mstm, dpcd[0], state);
@@ -3411,7 +3417,7 @@ nv50_mstm_new(struct nouveau_encoder *outp, struct drm_dp_aux *aux, int aux_max,
 	mstm->outp = outp;
 	mstm->mgr.cbs = &nv50_mstm;
 
-	ret = drm_dp_mst_topology_mgr_init(&mstm->mgr, dev->dev, aux, aux_max,
+	ret = drm_dp_mst_topology_mgr_init(&mstm->mgr, dev, aux, aux_max,
 					   max_payloads, conn_base_id);
 	if (ret)
 		return ret;
@@ -4087,6 +4093,8 @@ nv50_disp_atomic_commit_tail(struct drm_atomic_state *state)
 	for_each_crtc_in_state(state, crtc, crtc_state, i) {
 		if (crtc->state->event) {
 			unsigned long flags;
+			/* Get correct count/ts if racing with vblank irq */
+			drm_accurate_vblank_count(crtc);
 			spin_lock_irqsave(&crtc->dev->event_lock, flags);
 			drm_crtc_send_vblank_event(crtc, crtc->state->event);
 			spin_unlock_irqrestore(&crtc->dev->event_lock, flags);
