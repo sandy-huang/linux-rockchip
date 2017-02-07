@@ -382,10 +382,6 @@ int drm_connector_register(struct drm_connector *connector)
 	if (connector->registered)
 		goto unlock;
 
-	mutex_lock(&connector->mutex);
-	if (connector->registered)
-		goto unlock;
-
 	ret = drm_sysfs_connector_add(connector);
 	if (ret)
 		goto unlock;

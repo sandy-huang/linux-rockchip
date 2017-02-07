@@ -113,7 +113,7 @@ struct intel_shadow_bb_entry {
 	struct drm_i915_gem_object *obj;
 	void *va;
 	unsigned long len;
-	u32 *bb_start_cmd_va;
+	void *bb_start_cmd_va;
 };
 
 #define workload_q_head(vgpu, ring_id) \
