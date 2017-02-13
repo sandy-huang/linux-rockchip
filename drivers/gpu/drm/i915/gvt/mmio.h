@@ -86,11 +86,16 @@ struct intel_gvt_mmio_info *intel_gvt_find_mmio_info(struct intel_gvt *gvt,
 	*offset; \
 })
 
+int intel_vgpu_init_mmio(struct intel_vgpu *vgpu);
+void intel_vgpu_reset_mmio(struct intel_vgpu *vgpu);
+void intel_vgpu_clean_mmio(struct intel_vgpu *vgpu);
+
 int intel_vgpu_gpa_to_mmio_offset(struct intel_vgpu *vgpu, u64 gpa);
-int intel_vgpu_emulate_mmio_read(void *__vgpu, u64 pa, void *p_data,
-				 unsigned int bytes);
-int intel_vgpu_emulate_mmio_write(void *__vgpu, u64 pa, void *p_data,
-				  unsigned int bytes);
+
+int intel_vgpu_emulate_mmio_read(struct intel_vgpu *vgpu, u64 pa,
+				void *p_data, unsigned int bytes);
+int intel_vgpu_emulate_mmio_write(struct intel_vgpu *vgpu, u64 pa,
+				void *p_data, unsigned int bytes);
 bool intel_gvt_mmio_is_cmd_access(struct intel_gvt *gvt,
 				  unsigned int offset);
 bool intel_gvt_mmio_is_unalign(struct intel_gvt *gvt, unsigned int offset);

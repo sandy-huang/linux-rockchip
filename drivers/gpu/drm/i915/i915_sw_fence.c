@@ -13,7 +13,96 @@
 
 #include "i915_sw_fence.h"
 
+#define I915_SW_FENCE_FLAG_ALLOC BIT(3) /* after WQ_FLAG_* for safety */
+
 static DEFINE_SPINLOCK(i915_sw_fence_lock);
+
+enum {
+	DEBUG_FENCE_IDLE = 0,
+	DEBUG_FENCE_NOTIFY,
+};
+
+#ifdef CONFIG_DRM_I915_SW_FENCE_DEBUG_OBJECTS
+
+static void *i915_sw_fence_debug_hint(void *addr)
+{
+	return (void *)(((struct i915_sw_fence *)addr)->flags & I915_SW_FENCE_MASK);
+}
+
+static struct debug_obj_descr i915_sw_fence_debug_descr = {
+	.name = "i915_sw_fence",
+	.debug_hint = i915_sw_fence_debug_hint,
+};
+
+static inline void debug_fence_init(struct i915_sw_fence *fence)
+{
+	debug_object_init(fence, &i915_sw_fence_debug_descr);
+}
+
+static inline void debug_fence_activate(struct i915_sw_fence *fence)
+{
+	debug_object_activate(fence, &i915_sw_fence_debug_descr);
+}
+
+static inline void debug_fence_set_state(struct i915_sw_fence *fence,
+					 int old, int new)
+{
+	debug_object_active_state(fence, &i915_sw_fence_debug_descr, old, new);
+}
+
+static inline void debug_fence_deactivate(struct i915_sw_fence *fence)
+{
+	debug_object_deactivate(fence, &i915_sw_fence_debug_descr);
+}
+
+static inline void debug_fence_destroy(struct i915_sw_fence *fence)
+{
+	debug_object_destroy(fence, &i915_sw_fence_debug_descr);
+}
+
+static inline void debug_fence_free(struct i915_sw_fence *fence)
+{
+	debug_object_free(fence, &i915_sw_fence_debug_descr);
+	smp_wmb(); /* flush the change in state before reallocation */
+}
+
+static inline void debug_fence_assert(struct i915_sw_fence *fence)
+{
+	debug_object_assert_init(fence, &i915_sw_fence_debug_descr);
+}
+
+#else
+
+static inline void debug_fence_init(struct i915_sw_fence *fence)
+{
+}
+
+static inline void debug_fence_activate(struct i915_sw_fence *fence)
+{
+}
+
+static inline void debug_fence_set_state(struct i915_sw_fence *fence,
+					 int old, int new)
+{
+}
+
+static inline void debug_fence_deactivate(struct i915_sw_fence *fence)
+{
+}
+
+static inline void debug_fence_destroy(struct i915_sw_fence *fence)
+{
+}
+
+static inline void debug_fence_free(struct i915_sw_fence *fence)
+{
+}
+
+static inline void debug_fence_assert(struct i915_sw_fence *fence)
+{
+}
+
+#endif
 
 static int __i915_sw_fence_notify(struct i915_sw_fence *fence,
 				  enum i915_sw_fence_notify state)
@@ -24,25 +113,37 @@ static int __i915_sw_fence_notify(struct i915_sw_fence *fence,
 	return fn(fence, state);
 }
 
-static void i915_sw_fence_free(struct kref *kref)
+#ifdef CONFIG_DRM_I915_SW_FENCE_DEBUG_OBJECTS
+void i915_sw_fence_fini(struct i915_sw_fence *fence)
+{
+	debug_fence_free(fence);
+}
+#endif
+
+static void i915_sw_fence_release(struct kref *kref)
 {
 	struct i915_sw_fence *fence = container_of(kref, typeof(*fence), kref);
 
 	WARN_ON(atomic_read(&fence->pending) > 0);
+	debug_fence_destroy(fence);
 
-	if (fence->flags & I915_SW_FENCE_MASK)
+	if (fence->flags & I915_SW_FENCE_MASK) {
 		__i915_sw_fence_notify(fence, FENCE_FREE);
-	else
+	} else {
+		i915_sw_fence_fini(fence);
 		kfree(fence);
+	}
 }
 
 static void i915_sw_fence_put(struct i915_sw_fence *fence)
 {
-	kref_put(&fence->kref, i915_sw_fence_free);
+	debug_fence_assert(fence);
+	kref_put(&fence->kref, i915_sw_fence_release);
 }
 
 static struct i915_sw_fence *i915_sw_fence_get(struct i915_sw_fence *fence)
 {
+	debug_fence_assert(fence);
 	kref_get(&fence->kref);
 	return fence;
 }
@@ -54,6 +155,7 @@ static void __i915_sw_fence_wake_up_all(struct i915_sw_fence *fence,
 	wait_queue_t *pos, *next;
 	unsigned long flags;
 
+	debug_fence_deactivate(fence);
 	atomic_set_release(&fence->pending, -1); /* 0 -> -1 [done] */
 
 	/*
@@ -86,23 +188,33 @@ static void __i915_sw_fence_wake_up_all(struct i915_sw_fence *fence,
 		} while (1);
 	}
 	spin_unlock_irqrestore(&x->lock, flags);
+
+	debug_fence_assert(fence);
 }
 
 static void __i915_sw_fence_complete(struct i915_sw_fence *fence,
 				     struct list_head *continuation)
 {
+	debug_fence_assert(fence);
+
 	if (!atomic_dec_and_test(&fence->pending))
 		return;
+
+	debug_fence_set_state(fence, DEBUG_FENCE_IDLE, DEBUG_FENCE_NOTIFY);
 
 	if (fence->flags & I915_SW_FENCE_MASK &&
 	    __i915_sw_fence_notify(fence, FENCE_COMPLETE) != NOTIFY_DONE)
 		return;
+
+	debug_fence_set_state(fence, DEBUG_FENCE_NOTIFY, DEBUG_FENCE_IDLE);
 
 	__i915_sw_fence_wake_up_all(fence, continuation);
 }
 
 static void i915_sw_fence_complete(struct i915_sw_fence *fence)
 {
+	debug_fence_assert(fence);
+
 	if (WARN_ON(i915_sw_fence_done(fence)))
 		return;
 
@@ -111,23 +223,35 @@ static void i915_sw_fence_complete(struct i915_sw_fence *fence)
 
 static void i915_sw_fence_await(struct i915_sw_fence *fence)
 {
+	debug_fence_assert(fence);
 	WARN_ON(atomic_inc_return(&fence->pending) <= 1);
 }
 
-void i915_sw_fence_init(struct i915_sw_fence *fence, i915_sw_fence_notify_t fn)
+void __i915_sw_fence_init(struct i915_sw_fence *fence,
+			  i915_sw_fence_notify_t fn,
+			  const char *name,
+			  struct lock_class_key *key)
 {
 	BUG_ON((unsigned long)fn & ~I915_SW_FENCE_MASK);
 
-	init_waitqueue_head(&fence->wait);
+	debug_fence_init(fence);
+
+	__init_waitqueue_head(&fence->wait, name, key);
 	kref_init(&fence->kref);
 	atomic_set(&fence->pending, 1);
 	fence->flags = (unsigned long)fn;
 }
 
-void i915_sw_fence_commit(struct i915_sw_fence *fence)
+static void __i915_sw_fence_commit(struct i915_sw_fence *fence)
 {
 	i915_sw_fence_complete(fence);
 	i915_sw_fence_put(fence);
+}
+
+void i915_sw_fence_commit(struct i915_sw_fence *fence)
+{
+	debug_fence_activate(fence);
+	__i915_sw_fence_commit(fence);
 }
 
 static int i915_sw_fence_wake(wait_queue_t *wq, unsigned mode, int flags, void *key)
@@ -135,6 +259,8 @@ static int i915_sw_fence_wake(wait_queue_t *wq, unsigned mode, int flags, void *
 	list_del(&wq->task_list);
 	__i915_sw_fence_complete(wq->private, key);
 	i915_sw_fence_put(wq->private);
+	if (wq->flags & I915_SW_FENCE_FLAG_ALLOC)
+		kfree(wq);
 	return 0;
 }
 
@@ -192,22 +318,40 @@ static bool i915_sw_fence_check_if_after(struct i915_sw_fence *fence,
 	return err;
 }
 
-int i915_sw_fence_await_sw_fence(struct i915_sw_fence *fence,
-				 struct i915_sw_fence *signaler,
-				 wait_queue_t *wq)
+static int __i915_sw_fence_await_sw_fence(struct i915_sw_fence *fence,
+					  struct i915_sw_fence *signaler,
+					  wait_queue_t *wq, gfp_t gfp)
 {
 	unsigned long flags;
 	int pending;
 
+	debug_fence_assert(fence);
+
 	if (i915_sw_fence_done(signaler))
 		return 0;
+
+	debug_fence_assert(signaler);
 
 	/* The dependency graph must be acyclic. */
 	if (unlikely(i915_sw_fence_check_if_after(fence, signaler)))
 		return -EINVAL;
 
+	pending = 0;
+	if (!wq) {
+		wq = kmalloc(sizeof(*wq), gfp);
+		if (!wq) {
+			if (!gfpflags_allow_blocking(gfp))
+				return -ENOMEM;
+
+			i915_sw_fence_wait(signaler);
+			return 0;
+		}
+
+		pending |= I915_SW_FENCE_FLAG_ALLOC;
+	}
+
 	INIT_LIST_HEAD(&wq->task_list);
-	wq->flags = 0;
+	wq->flags = pending;
 	wq->func = i915_sw_fence_wake;
 	wq->private = i915_sw_fence_get(fence);
 
@@ -224,6 +368,20 @@ int i915_sw_fence_await_sw_fence(struct i915_sw_fence *fence,
 	spin_unlock_irqrestore(&signaler->wait.lock, flags);
 
 	return pending;
+}
+
+int i915_sw_fence_await_sw_fence(struct i915_sw_fence *fence,
+				 struct i915_sw_fence *signaler,
+				 wait_queue_t *wq)
+{
+	return __i915_sw_fence_await_sw_fence(fence, signaler, wq, 0);
+}
+
+int i915_sw_fence_await_sw_fence_gfp(struct i915_sw_fence *fence,
+				     struct i915_sw_fence *signaler,
+				     gfp_t gfp)
+{
+	return __i915_sw_fence_await_sw_fence(fence, signaler, NULL, gfp);
 }
 
 struct i915_sw_dma_fence_cb {
@@ -244,7 +402,7 @@ static void timer_i915_sw_fence_wake(unsigned long data)
 	dma_fence_put(cb->dma);
 	cb->dma = NULL;
 
-	i915_sw_fence_commit(cb->fence);
+	__i915_sw_fence_commit(cb->fence);
 	cb->timer.function = NULL;
 }
 
@@ -255,7 +413,7 @@ static void dma_i915_sw_fence_wake(struct dma_fence *dma,
 
 	del_timer_sync(&cb->timer);
 	if (cb->timer.function)
-		i915_sw_fence_commit(cb->fence);
+		__i915_sw_fence_commit(cb->fence);
 	dma_fence_put(cb->dma);
 
 	kfree(cb);
@@ -268,6 +426,8 @@ int i915_sw_fence_await_dma_fence(struct i915_sw_fence *fence,
 {
 	struct i915_sw_dma_fence_cb *cb;
 	int ret;
+
+	debug_fence_assert(fence);
 
 	if (dma_fence_is_signaled(dma))
 		return 0;
@@ -313,6 +473,8 @@ int i915_sw_fence_await_reservation(struct i915_sw_fence *fence,
 {
 	struct dma_fence *excl;
 	int ret = 0, pending;
+
+	debug_fence_assert(fence);
 
 	if (write) {
 		struct dma_fence **shared;

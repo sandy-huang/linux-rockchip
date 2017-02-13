@@ -393,12 +393,12 @@ intel_dvo_get_current_mode(struct drm_connector *connector)
 	 * its timings to get how the BIOS set up the panel.
 	 */
 	if (dvo_val & DVO_ENABLE) {
-		struct drm_crtc *crtc;
+		struct intel_crtc *crtc;
 		int pipe = (dvo_val & DVO_PIPE_B_SELECT) ? 1 : 0;
 
-		crtc = intel_get_crtc_for_pipe(dev, pipe);
+		crtc = intel_get_crtc_for_pipe(dev_priv, pipe);
 		if (crtc) {
-			mode = intel_crtc_mode_get(dev, crtc);
+			mode = intel_crtc_mode_get(dev, &crtc->base);
 			if (mode) {
 				mode->type |= DRM_MODE_TYPE_PREFERRED;
 				if (dvo_val & DVO_HSYNC_ACTIVE_HIGH)
@@ -422,9 +422,8 @@ static enum port intel_dvo_port(i915_reg_t dvo_reg)
 		return PORT_C;
 }
 
-void intel_dvo_init(struct drm_device *dev)
+void intel_dvo_init(struct drm_i915_private *dev_priv)
 {
-	struct drm_i915_private *dev_priv = to_i915(dev);
 	struct intel_encoder *intel_encoder;
 	struct intel_dvo *intel_dvo;
 	struct intel_connector *intel_connector;
@@ -511,7 +510,7 @@ void intel_dvo_init(struct drm_device *dev)
 			continue;
 
 		port = intel_dvo_port(dvo->dvo_reg);
-		drm_encoder_init(dev, &intel_encoder->base,
+		drm_encoder_init(&dev_priv->drm, &intel_encoder->base,
 				 &intel_dvo_enc_funcs, encoder_type,
 				 "DVO %c", port_name(port));
 
@@ -523,14 +522,14 @@ void intel_dvo_init(struct drm_device *dev)
 		case INTEL_DVO_CHIP_TMDS:
 			intel_encoder->cloneable = (1 << INTEL_OUTPUT_ANALOG) |
 				(1 << INTEL_OUTPUT_DVO);
-			drm_connector_init(dev, connector,
+			drm_connector_init(&dev_priv->drm, connector,
 					   &intel_dvo_connector_funcs,
 					   DRM_MODE_CONNECTOR_DVII);
 			encoder_type = DRM_MODE_ENCODER_TMDS;
 			break;
 		case INTEL_DVO_CHIP_LVDS:
 			intel_encoder->cloneable = 0;
-			drm_connector_init(dev, connector,
+			drm_connector_init(&dev_priv->drm, connector,
 					   &intel_dvo_connector_funcs,
 					   DRM_MODE_CONNECTOR_LVDS);
 			encoder_type = DRM_MODE_ENCODER_LVDS;

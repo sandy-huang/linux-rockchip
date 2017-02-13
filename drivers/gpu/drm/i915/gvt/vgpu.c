@@ -35,75 +35,7 @@
 #include "gvt.h"
 #include "i915_pvinfo.h"
 
-static void clean_vgpu_mmio(struct intel_vgpu *vgpu)
-{
-	vfree(vgpu->mmio.vreg);
-	vgpu->mmio.vreg = vgpu->mmio.sreg = NULL;
-}
-
-static int setup_vgpu_mmio(struct intel_vgpu *vgpu)
-{
-	struct intel_gvt *gvt = vgpu->gvt;
-	const struct intel_gvt_device_info *info = &gvt->device_info;
-
-	vgpu->mmio.vreg = vzalloc(info->mmio_size * 2);
-	if (!vgpu->mmio.vreg)
-		return -ENOMEM;
-
-	vgpu->mmio.sreg = vgpu->mmio.vreg + info->mmio_size;
-
-	memcpy(vgpu->mmio.vreg, gvt->firmware.mmio, info->mmio_size);
-	memcpy(vgpu->mmio.sreg, gvt->firmware.mmio, info->mmio_size);
-
-	vgpu_vreg(vgpu, GEN6_GT_THREAD_STATUS_REG) = 0;
-
-	/* set the bit 0:2(Core C-State ) to C0 */
-	vgpu_vreg(vgpu, GEN6_GT_CORE_STATUS) = 0;
-	return 0;
-}
-
-static void setup_vgpu_cfg_space(struct intel_vgpu *vgpu,
-	struct intel_vgpu_creation_params *param)
-{
-	struct intel_gvt *gvt = vgpu->gvt;
-	const struct intel_gvt_device_info *info = &gvt->device_info;
-	u16 *gmch_ctl;
-	int i;
-
-	memcpy(vgpu_cfg_space(vgpu), gvt->firmware.cfg_space,
-	       info->cfg_space_size);
-
-	if (!param->primary) {
-		vgpu_cfg_space(vgpu)[PCI_CLASS_DEVICE] =
-			INTEL_GVT_PCI_CLASS_VGA_OTHER;
-		vgpu_cfg_space(vgpu)[PCI_CLASS_PROG] =
-			INTEL_GVT_PCI_CLASS_VGA_OTHER;
-	}
-
-	/* Show guest that there isn't any stolen memory.*/
-	gmch_ctl = (u16 *)(vgpu_cfg_space(vgpu) + INTEL_GVT_PCI_GMCH_CONTROL);
-	*gmch_ctl &= ~(BDW_GMCH_GMS_MASK << BDW_GMCH_GMS_SHIFT);
-
-	intel_vgpu_write_pci_bar(vgpu, PCI_BASE_ADDRESS_2,
-				 gvt_aperture_pa_base(gvt), true);
-
-	vgpu_cfg_space(vgpu)[PCI_COMMAND] &= ~(PCI_COMMAND_IO
-					     | PCI_COMMAND_MEMORY
-					     | PCI_COMMAND_MASTER);
-	/*
-	 * Clear the bar upper 32bit and let guest to assign the new value
-	 */
-	memset(vgpu_cfg_space(vgpu) + PCI_BASE_ADDRESS_1, 0, 4);
-	memset(vgpu_cfg_space(vgpu) + PCI_BASE_ADDRESS_3, 0, 4);
-
-	for (i = 0; i < INTEL_GVT_MAX_BAR_NUM; i++) {
-		vgpu->cfg_space.bar[i].size = pci_resource_len(
-					      gvt->dev_priv->drm.pdev, i * 2);
-		vgpu->cfg_space.bar[i].tracked = false;
-	}
-}
-
-static void populate_pvinfo_page(struct intel_vgpu *vgpu)
+void populate_pvinfo_page(struct intel_vgpu *vgpu)
 {
 	/* setup the ballooning information */
 	vgpu_vreg64(vgpu, vgtif_reg(magic)) = VGT_MAGIC;
@@ -130,6 +62,106 @@ static void populate_pvinfo_page(struct intel_vgpu *vgpu)
 	gvt_dbg_core("fence size %d\n", vgpu_fence_sz(vgpu));
 
 	WARN_ON(sizeof(struct vgt_if) != VGT_PVINFO_SIZE);
+}
+
+/**
+ * intel_gvt_init_vgpu_types - initialize vGPU type list
+ * @gvt : GVT device
+ *
+ * Initialize vGPU type list based on available resource.
+ *
+ */
+int intel_gvt_init_vgpu_types(struct intel_gvt *gvt)
+{
+	unsigned int num_types;
+	unsigned int i, low_avail;
+	unsigned int min_low;
+
+	/* vGPU type name is defined as GVTg_Vx_y which contains
+	 * physical GPU generation type and 'y' means maximum vGPU
+	 * instances user can create on one physical GPU for this
+	 * type.
+	 *
+	 * Depend on physical SKU resource, might see vGPU types like
+	 * GVTg_V4_8, GVTg_V4_4, GVTg_V4_2, etc. We can create
+	 * different types of vGPU on same physical GPU depending on
+	 * available resource. Each vGPU type will have "avail_instance"
+	 * to indicate how many vGPU instance can be created for this
+	 * type.
+	 *
+	 * Currently use static size here as we init type earlier..
+	 */
+	low_avail = MB_TO_BYTES(256) - HOST_LOW_GM_SIZE;
+	num_types = 4;
+
+	gvt->types = kzalloc(num_types * sizeof(struct intel_vgpu_type),
+			     GFP_KERNEL);
+	if (!gvt->types)
+		return -ENOMEM;
+
+	min_low = MB_TO_BYTES(32);
+	for (i = 0; i < num_types; ++i) {
+		if (low_avail / min_low == 0)
+			break;
+		gvt->types[i].low_gm_size = min_low;
+		gvt->types[i].high_gm_size = max((min_low<<3), MB_TO_BYTES(384U));
+		gvt->types[i].fence = 4;
+		gvt->types[i].max_instance = low_avail / min_low;
+		gvt->types[i].avail_instance = gvt->types[i].max_instance;
+
+		if (IS_GEN8(gvt->dev_priv))
+			sprintf(gvt->types[i].name, "GVTg_V4_%u",
+						gvt->types[i].max_instance);
+		else if (IS_GEN9(gvt->dev_priv))
+			sprintf(gvt->types[i].name, "GVTg_V5_%u",
+						gvt->types[i].max_instance);
+
+		min_low <<= 1;
+		gvt_dbg_core("type[%d]: %s max %u avail %u low %u high %u fence %u\n",
+			     i, gvt->types[i].name, gvt->types[i].max_instance,
+			     gvt->types[i].avail_instance,
+			     gvt->types[i].low_gm_size,
+			     gvt->types[i].high_gm_size, gvt->types[i].fence);
+	}
+
+	gvt->num_types = i;
+	return 0;
+}
+
+void intel_gvt_clean_vgpu_types(struct intel_gvt *gvt)
+{
+	kfree(gvt->types);
+}
+
+static void intel_gvt_update_vgpu_types(struct intel_gvt *gvt)
+{
+	int i;
+	unsigned int low_gm_avail, high_gm_avail, fence_avail;
+	unsigned int low_gm_min, high_gm_min, fence_min, total_min;
+
+	/* Need to depend on maxium hw resource size but keep on
+	 * static config for now.
+	 */
+	low_gm_avail = MB_TO_BYTES(256) - HOST_LOW_GM_SIZE -
+		gvt->gm.vgpu_allocated_low_gm_size;
+	high_gm_avail = MB_TO_BYTES(256) * 8UL - HOST_HIGH_GM_SIZE -
+		gvt->gm.vgpu_allocated_high_gm_size;
+	fence_avail = gvt_fence_sz(gvt) - HOST_FENCE -
+		gvt->fence.vgpu_allocated_fence_num;
+
+	for (i = 0; i < gvt->num_types; i++) {
+		low_gm_min = low_gm_avail / gvt->types[i].low_gm_size;
+		high_gm_min = high_gm_avail / gvt->types[i].high_gm_size;
+		fence_min = fence_avail / gvt->types[i].fence;
+		total_min = min(min(low_gm_min, high_gm_min), fence_min);
+		gvt->types[i].avail_instance = min(gvt->types[i].max_instance,
+						   total_min);
+
+		gvt_dbg_core("update type[%d]: %s max %u avail %u low %u high %u fence %u\n",
+		       i, gvt->types[i].name, gvt->types[i].max_instance,
+		       gvt->types[i].avail_instance, gvt->types[i].low_gm_size,
+		       gvt->types[i].high_gm_size, gvt->types[i].fence);
+	}
 }
 
 /**
@@ -163,23 +195,14 @@ void intel_gvt_destroy_vgpu(struct intel_vgpu *vgpu)
 	intel_vgpu_clean_gtt(vgpu);
 	intel_gvt_hypervisor_detach_vgpu(vgpu);
 	intel_vgpu_free_resource(vgpu);
-	clean_vgpu_mmio(vgpu);
+	intel_vgpu_clean_mmio(vgpu);
 	vfree(vgpu);
 
+	intel_gvt_update_vgpu_types(gvt);
 	mutex_unlock(&gvt->lock);
 }
 
-/**
- * intel_gvt_create_vgpu - create a virtual GPU
- * @gvt: GVT device
- * @param: vGPU creation parameters
- *
- * This function is called when user wants to create a virtual GPU.
- *
- * Returns:
- * pointer to intel_vgpu, error pointer if failed.
- */
-struct intel_vgpu *intel_gvt_create_vgpu(struct intel_gvt *gvt,
+static struct intel_vgpu *__intel_gvt_create_vgpu(struct intel_gvt *gvt,
 		struct intel_vgpu_creation_params *param)
 {
 	struct intel_vgpu *vgpu;
@@ -204,11 +227,11 @@ struct intel_vgpu *intel_gvt_create_vgpu(struct intel_gvt *gvt,
 	vgpu->gvt = gvt;
 	bitmap_zero(vgpu->tlb_handle_pending, I915_NUM_ENGINES);
 
-	setup_vgpu_cfg_space(vgpu, param);
+	intel_vgpu_init_cfg_space(vgpu, param->primary);
 
-	ret = setup_vgpu_mmio(vgpu);
+	ret = intel_vgpu_init_mmio(vgpu);
 	if (ret)
-		goto out_free_vgpu;
+		goto out_clean_idr;
 
 	ret = intel_vgpu_alloc_resource(vgpu, param);
 	if (ret)
@@ -224,15 +247,9 @@ struct intel_vgpu *intel_gvt_create_vgpu(struct intel_gvt *gvt,
 	if (ret)
 		goto out_detach_hypervisor_vgpu;
 
-	if (intel_gvt_host.hypervisor_type == INTEL_GVT_HYPERVISOR_KVM) {
-		ret = intel_vgpu_init_opregion(vgpu, 0);
-		if (ret)
-			goto out_clean_gtt;
-	}
-
 	ret = intel_vgpu_init_display(vgpu);
 	if (ret)
-		goto out_clean_opregion;
+		goto out_clean_gtt;
 
 	ret = intel_vgpu_init_execlist(vgpu);
 	if (ret)
@@ -257,8 +274,6 @@ out_clean_execlist:
 	intel_vgpu_clean_execlist(vgpu);
 out_clean_display:
 	intel_vgpu_clean_display(vgpu);
-out_clean_opregion:
-	intel_vgpu_clean_opregion(vgpu);
 out_clean_gtt:
 	intel_vgpu_clean_gtt(vgpu);
 out_detach_hypervisor_vgpu:
@@ -266,9 +281,129 @@ out_detach_hypervisor_vgpu:
 out_clean_vgpu_resource:
 	intel_vgpu_free_resource(vgpu);
 out_clean_vgpu_mmio:
-	clean_vgpu_mmio(vgpu);
+	intel_vgpu_clean_mmio(vgpu);
+out_clean_idr:
+	idr_remove(&gvt->vgpu_idr, vgpu->id);
 out_free_vgpu:
 	vfree(vgpu);
 	mutex_unlock(&gvt->lock);
 	return ERR_PTR(ret);
+}
+
+/**
+ * intel_gvt_create_vgpu - create a virtual GPU
+ * @gvt: GVT device
+ * @type: type of the vGPU to create
+ *
+ * This function is called when user wants to create a virtual GPU.
+ *
+ * Returns:
+ * pointer to intel_vgpu, error pointer if failed.
+ */
+struct intel_vgpu *intel_gvt_create_vgpu(struct intel_gvt *gvt,
+				struct intel_vgpu_type *type)
+{
+	struct intel_vgpu_creation_params param;
+	struct intel_vgpu *vgpu;
+
+	param.handle = 0;
+	param.primary = 1;
+	param.low_gm_sz = type->low_gm_size;
+	param.high_gm_sz = type->high_gm_size;
+	param.fence_sz = type->fence;
+
+	/* XXX current param based on MB */
+	param.low_gm_sz = BYTES_TO_MB(param.low_gm_sz);
+	param.high_gm_sz = BYTES_TO_MB(param.high_gm_sz);
+
+	vgpu = __intel_gvt_create_vgpu(gvt, &param);
+	if (IS_ERR(vgpu))
+		return vgpu;
+
+	/* calculate left instance change for types */
+	intel_gvt_update_vgpu_types(gvt);
+
+	return vgpu;
+}
+
+/**
+ * intel_gvt_reset_vgpu_locked - reset a virtual GPU by DMLR or GT reset
+ * @vgpu: virtual GPU
+ * @dmlr: vGPU Device Model Level Reset or GT Reset
+ * @engine_mask: engines to reset for GT reset
+ *
+ * This function is called when user wants to reset a virtual GPU through
+ * device model reset or GT reset. The caller should hold the gvt lock.
+ *
+ * vGPU Device Model Level Reset (DMLR) simulates the PCI level reset to reset
+ * the whole vGPU to default state as when it is created. This vGPU function
+ * is required both for functionary and security concerns.The ultimate goal
+ * of vGPU FLR is that reuse a vGPU instance by virtual machines. When we
+ * assign a vGPU to a virtual machine we must isse such reset first.
+ *
+ * Full GT Reset and Per-Engine GT Reset are soft reset flow for GPU engines
+ * (Render, Blitter, Video, Video Enhancement). It is defined by GPU Spec.
+ * Unlike the FLR, GT reset only reset particular resource of a vGPU per
+ * the reset request. Guest driver can issue a GT reset by programming the
+ * virtual GDRST register to reset specific virtual GPU engine or all
+ * engines.
+ *
+ * The parameter dev_level is to identify if we will do DMLR or GT reset.
+ * The parameter engine_mask is to specific the engines that need to be
+ * resetted. If value ALL_ENGINES is given for engine_mask, it means
+ * the caller requests a full GT reset that we will reset all virtual
+ * GPU engines. For FLR, engine_mask is ignored.
+ */
+void intel_gvt_reset_vgpu_locked(struct intel_vgpu *vgpu, bool dmlr,
+				 unsigned int engine_mask)
+{
+	struct intel_gvt *gvt = vgpu->gvt;
+	struct intel_gvt_workload_scheduler *scheduler = &gvt->scheduler;
+
+	gvt_dbg_core("------------------------------------------\n");
+	gvt_dbg_core("resseting vgpu%d, dmlr %d, engine_mask %08x\n",
+		     vgpu->id, dmlr, engine_mask);
+	vgpu->resetting = true;
+
+	intel_vgpu_stop_schedule(vgpu);
+	/*
+	 * The current_vgpu will set to NULL after stopping the
+	 * scheduler when the reset is triggered by current vgpu.
+	 */
+	if (scheduler->current_vgpu == NULL) {
+		mutex_unlock(&gvt->lock);
+		intel_gvt_wait_vgpu_idle(vgpu);
+		mutex_lock(&gvt->lock);
+	}
+
+	intel_vgpu_reset_execlist(vgpu, dmlr ? ALL_ENGINES : engine_mask);
+
+	/* full GPU reset or device model level reset */
+	if (engine_mask == ALL_ENGINES || dmlr) {
+		intel_vgpu_reset_gtt(vgpu, dmlr);
+		intel_vgpu_reset_resource(vgpu);
+		intel_vgpu_reset_mmio(vgpu);
+		populate_pvinfo_page(vgpu);
+
+		if (dmlr)
+			intel_vgpu_reset_cfg_space(vgpu);
+	}
+
+	vgpu->resetting = false;
+	gvt_dbg_core("reset vgpu%d done\n", vgpu->id);
+	gvt_dbg_core("------------------------------------------\n");
+}
+
+/**
+ * intel_gvt_reset_vgpu - reset a virtual GPU (Function Level)
+ * @vgpu: virtual GPU
+ *
+ * This function is called when user wants to reset a virtual GPU.
+ *
+ */
+void intel_gvt_reset_vgpu(struct intel_vgpu *vgpu)
+{
+	mutex_lock(&vgpu->gvt->lock);
+	intel_gvt_reset_vgpu_locked(vgpu, true, 0);
+	mutex_unlock(&vgpu->gvt->lock);
 }

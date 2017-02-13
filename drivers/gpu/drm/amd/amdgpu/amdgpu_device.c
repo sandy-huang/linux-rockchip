@@ -73,6 +73,7 @@ static const char *amdgpu_asic_name[] = {
 	"STONEY",
 	"POLARIS10",
 	"POLARIS11",
+	"POLARIS12",
 	"LAST",
 };
 
@@ -93,6 +94,11 @@ uint32_t amdgpu_mm_rreg(struct amdgpu_device *adev, uint32_t reg,
 {
 	uint32_t ret;
 
+	if (amdgpu_sriov_runtime(adev)) {
+		BUG_ON(in_interrupt());
+		return amdgpu_virt_kiq_rreg(adev, reg);
+	}
+
 	if ((reg * 4) < adev->rmmio_size && !always_indirect)
 		ret = readl(((void __iomem *)adev->rmmio) + (reg * 4));
 	else {
@@ -111,6 +117,11 @@ void amdgpu_mm_wreg(struct amdgpu_device *adev, uint32_t reg, uint32_t v,
 		    bool always_indirect)
 {
 	trace_amdgpu_mm_wreg(adev->pdev->device, reg, v);
+
+	if (amdgpu_sriov_runtime(adev)) {
+		BUG_ON(in_interrupt());
+		return amdgpu_virt_kiq_wreg(adev, reg, v);
+	}
 
 	if ((reg * 4) < adev->rmmio_size && !always_indirect)
 		writel(v, ((void __iomem *)adev->rmmio) + (reg * 4));
@@ -884,7 +895,7 @@ static int amdgpu_atombios_init(struct amdgpu_device *adev)
 		atom_card_info->ioreg_read = cail_ioreg_read;
 		atom_card_info->ioreg_write = cail_ioreg_write;
 	} else {
-		DRM_ERROR("Unable to find PCI I/O BAR; using MMIO for ATOM IIO\n");
+		DRM_INFO("PCI I/O BAR is not found. Using MMIO to access ATOM BIOS\n");
 		atom_card_info->ioreg_read = cail_reg_read;
 		atom_card_info->ioreg_write = cail_reg_write;
 	}
@@ -1017,8 +1028,8 @@ static void amdgpu_check_arguments(struct amdgpu_device *adev)
 		amdgpu_vm_block_size = 9;
 	}
 
-	if ((amdgpu_vram_page_split != -1 && amdgpu_vram_page_split < 16) ||
-	    !amdgpu_check_pot_argument(amdgpu_vram_page_split)) {
+	if (amdgpu_vram_page_split != -1 && (amdgpu_vram_page_split < 16 ||
+	    !amdgpu_check_pot_argument(amdgpu_vram_page_split))) {
 		dev_warn(adev->dev, "invalid VRAM page split (%d)\n",
 			 amdgpu_vram_page_split);
 		amdgpu_vram_page_split = 1024;
@@ -1130,6 +1141,18 @@ int amdgpu_set_powergating_state(struct amdgpu_device *adev,
 	return r;
 }
 
+void amdgpu_get_clockgating_state(struct amdgpu_device *adev, u32 *flags)
+{
+	int i;
+
+	for (i = 0; i < adev->num_ip_blocks; i++) {
+		if (!adev->ip_blocks[i].status.valid)
+			continue;
+		if (adev->ip_blocks[i].version->funcs->get_clockgating_state)
+			adev->ip_blocks[i].version->funcs->get_clockgating_state((void *)adev, flags);
+	}
+}
+
 int amdgpu_wait_for_idle(struct amdgpu_device *adev,
 			 enum amd_ip_block_type block_type)
 {
@@ -1234,7 +1257,8 @@ static void amdgpu_device_enable_virtual_display(struct amdgpu_device *adev)
 		pciaddstr_tmp = pciaddstr;
 		while ((pciaddname_tmp = strsep(&pciaddstr_tmp, ";"))) {
 			pciaddname = strsep(&pciaddname_tmp, ",");
-			if (!strcmp(pci_address_name, pciaddname)) {
+			if (!strcmp("all", pciaddname)
+			    || !strcmp(pci_address_name, pciaddname)) {
 				long num_crtc;
 				int res = -1;
 
@@ -1277,6 +1301,7 @@ static int amdgpu_early_init(struct amdgpu_device *adev)
 	case CHIP_FIJI:
 	case CHIP_POLARIS11:
 	case CHIP_POLARIS10:
+	case CHIP_POLARIS12:
 	case CHIP_CARRIZO:
 	case CHIP_STONEY:
 		if (adev->asic_type == CHIP_CARRIZO || adev->asic_type == CHIP_STONEY)
@@ -1319,6 +1344,12 @@ static int amdgpu_early_init(struct amdgpu_device *adev)
 	default:
 		/* FIXME: not supported yet */
 		return -EINVAL;
+	}
+
+	if (amdgpu_sriov_vf(adev)) {
+		r = amdgpu_virt_request_full_gpu(adev, true);
+		if (r)
+			return r;
 	}
 
 	for (i = 0; i < adev->num_ip_blocks; i++) {
@@ -1381,6 +1412,15 @@ static int amdgpu_init(struct amdgpu_device *adev)
 				return r;
 			}
 			adev->ip_blocks[i].status.hw = true;
+
+			/* right after GMC hw init, we create CSA */
+			if (amdgpu_sriov_vf(adev)) {
+				r = amdgpu_allocate_static_csa(adev);
+				if (r) {
+					DRM_ERROR("allocate CSA failed %d\n", r);
+					return r;
+				}
+			}
 		}
 	}
 
@@ -1470,20 +1510,26 @@ static int amdgpu_fini(struct amdgpu_device *adev)
 			amdgpu_wb_fini(adev);
 			amdgpu_vram_scratch_fini(adev);
 		}
-		/* ungate blocks before hw fini so that we can shutdown the blocks safely */
-		r = adev->ip_blocks[i].version->funcs->set_clockgating_state((void *)adev,
-									     AMD_CG_STATE_UNGATE);
-		if (r) {
-			DRM_ERROR("set_clockgating_state(ungate) of IP block <%s> failed %d\n",
-				  adev->ip_blocks[i].version->funcs->name, r);
-			return r;
+
+		if (adev->ip_blocks[i].version->type != AMD_IP_BLOCK_TYPE_UVD &&
+			adev->ip_blocks[i].version->type != AMD_IP_BLOCK_TYPE_VCE) {
+			/* ungate blocks before hw fini so that we can shutdown the blocks safely */
+			r = adev->ip_blocks[i].version->funcs->set_clockgating_state((void *)adev,
+										     AMD_CG_STATE_UNGATE);
+			if (r) {
+				DRM_ERROR("set_clockgating_state(ungate) of IP block <%s> failed %d\n",
+					  adev->ip_blocks[i].version->funcs->name, r);
+				return r;
+			}
 		}
+
 		r = adev->ip_blocks[i].version->funcs->hw_fini((void *)adev);
 		/* XXX handle errors */
 		if (r) {
 			DRM_DEBUG("hw_fini of IP block <%s> failed %d\n",
 				  adev->ip_blocks[i].version->funcs->name, r);
 		}
+
 		adev->ip_blocks[i].status.hw = false;
 	}
 
@@ -1508,12 +1554,20 @@ static int amdgpu_fini(struct amdgpu_device *adev)
 		adev->ip_blocks[i].status.late_initialized = false;
 	}
 
+	if (amdgpu_sriov_vf(adev)) {
+		amdgpu_bo_free_kernel(&adev->virt.csa_obj, &adev->virt.csa_vmid0_addr, NULL);
+		amdgpu_virt_release_full_gpu(adev, false);
+	}
+
 	return 0;
 }
 
-static int amdgpu_suspend(struct amdgpu_device *adev)
+int amdgpu_suspend(struct amdgpu_device *adev)
 {
 	int i, r;
+
+	if (amdgpu_sriov_vf(adev))
+		amdgpu_virt_request_full_gpu(adev, false);
 
 	/* ungate SMC block first */
 	r = amdgpu_set_clockgating_state(adev, AMD_IP_BLOCK_TYPE_SMC,
@@ -1543,6 +1597,9 @@ static int amdgpu_suspend(struct amdgpu_device *adev)
 		}
 	}
 
+	if (amdgpu_sriov_vf(adev))
+		amdgpu_virt_release_full_gpu(adev, false);
+
 	return 0;
 }
 
@@ -1567,7 +1624,7 @@ static int amdgpu_resume(struct amdgpu_device *adev)
 static void amdgpu_device_detect_sriov_bios(struct amdgpu_device *adev)
 {
 	if (amdgpu_atombios_has_gpu_virtualization_table(adev))
-		adev->virtualization.virtual_caps |= AMDGPU_SRIOV_CAPS_SRIOV_VBIOS;
+		adev->virt.caps |= AMDGPU_SRIOV_CAPS_SRIOV_VBIOS;
 }
 
 /**
@@ -1597,7 +1654,6 @@ int amdgpu_device_init(struct amdgpu_device *adev,
 	adev->pdev = pdev;
 	adev->flags = flags;
 	adev->asic_type = flags & AMD_ASIC_MASK;
-	adev->is_atom_bios = false;
 	adev->usec_timeout = AMDGPU_MAX_USEC_TIMEOUT;
 	adev->mc.gtt_size = 512 * 1024 * 1024;
 	adev->accel_working = false;
@@ -1687,7 +1743,7 @@ int amdgpu_device_init(struct amdgpu_device *adev,
 		}
 	}
 	if (adev->rio_mem == NULL)
-		DRM_ERROR("Unable to find PCI I/O BAR\n");
+		DRM_INFO("PCI I/O BAR is not found.\n");
 
 	/* early init functions */
 	r = amdgpu_early_init(adev);
@@ -1712,12 +1768,7 @@ int amdgpu_device_init(struct amdgpu_device *adev,
 		r = -EINVAL;
 		goto failed;
 	}
-	/* Must be an ATOMBIOS */
-	if (!adev->is_atom_bios) {
-		dev_err(adev->dev, "Expecting atombios for GPU\n");
-		r = -EINVAL;
-		goto failed;
-	}
+
 	r = amdgpu_atombios_init(adev);
 	if (r) {
 		dev_err(adev->dev, "amdgpu_atombios_init failed\n");
@@ -1844,8 +1895,6 @@ failed:
 	return r;
 }
 
-static void amdgpu_debugfs_remove_files(struct amdgpu_device *adev);
-
 /**
  * amdgpu_device_fini - tear down the driver
  *
@@ -1885,7 +1934,6 @@ void amdgpu_device_fini(struct amdgpu_device *adev)
 	if (adev->asic_type >= CHIP_BONAIRE)
 		amdgpu_doorbell_fini(adev);
 	amdgpu_debugfs_regs_cleanup(adev);
-	amdgpu_debugfs_remove_files(adev);
 }
 
 
@@ -2244,6 +2292,9 @@ int amdgpu_gpu_reset(struct amdgpu_device *adev)
 	int resched;
 	bool need_full_reset;
 
+	if (amdgpu_sriov_vf(adev))
+		return 0;
+
 	if (!amdgpu_check_soft_reset(adev)) {
 		DRM_INFO("No hardware hang detected. Did some blocks stall?\n");
 		return 0;
@@ -2493,29 +2544,10 @@ int amdgpu_debugfs_add_files(struct amdgpu_device *adev,
 	adev->debugfs_count = i;
 #if defined(CONFIG_DEBUG_FS)
 	drm_debugfs_create_files(files, nfiles,
-				 adev->ddev->control->debugfs_root,
-				 adev->ddev->control);
-	drm_debugfs_create_files(files, nfiles,
 				 adev->ddev->primary->debugfs_root,
 				 adev->ddev->primary);
 #endif
 	return 0;
-}
-
-static void amdgpu_debugfs_remove_files(struct amdgpu_device *adev)
-{
-#if defined(CONFIG_DEBUG_FS)
-	unsigned i;
-
-	for (i = 0; i < adev->debugfs_count; i++) {
-		drm_debugfs_remove_files(adev->debugfs[i].files,
-					 adev->debugfs[i].num_files,
-					 adev->ddev->control);
-		drm_debugfs_remove_files(adev->debugfs[i].files,
-					 adev->debugfs[i].num_files,
-					 adev->ddev->primary);
-	}
-#endif
 }
 
 #if defined(CONFIG_DEBUG_FS)
@@ -2523,7 +2555,7 @@ static void amdgpu_debugfs_remove_files(struct amdgpu_device *adev)
 static ssize_t amdgpu_debugfs_regs_read(struct file *f, char __user *buf,
 					size_t size, loff_t *pos)
 {
-	struct amdgpu_device *adev = f->f_inode->i_private;
+	struct amdgpu_device *adev = file_inode(f)->i_private;
 	ssize_t result = 0;
 	int r;
 	bool pm_pg_lock, use_bank;
@@ -2599,7 +2631,7 @@ end:
 static ssize_t amdgpu_debugfs_regs_write(struct file *f, const char __user *buf,
 					 size_t size, loff_t *pos)
 {
-	struct amdgpu_device *adev = f->f_inode->i_private;
+	struct amdgpu_device *adev = file_inode(f)->i_private;
 	ssize_t result = 0;
 	int r;
 	bool pm_pg_lock, use_bank;
@@ -2673,7 +2705,7 @@ static ssize_t amdgpu_debugfs_regs_write(struct file *f, const char __user *buf,
 static ssize_t amdgpu_debugfs_regs_pcie_read(struct file *f, char __user *buf,
 					size_t size, loff_t *pos)
 {
-	struct amdgpu_device *adev = f->f_inode->i_private;
+	struct amdgpu_device *adev = file_inode(f)->i_private;
 	ssize_t result = 0;
 	int r;
 
@@ -2700,7 +2732,7 @@ static ssize_t amdgpu_debugfs_regs_pcie_read(struct file *f, char __user *buf,
 static ssize_t amdgpu_debugfs_regs_pcie_write(struct file *f, const char __user *buf,
 					 size_t size, loff_t *pos)
 {
-	struct amdgpu_device *adev = f->f_inode->i_private;
+	struct amdgpu_device *adev = file_inode(f)->i_private;
 	ssize_t result = 0;
 	int r;
 
@@ -2728,7 +2760,7 @@ static ssize_t amdgpu_debugfs_regs_pcie_write(struct file *f, const char __user 
 static ssize_t amdgpu_debugfs_regs_didt_read(struct file *f, char __user *buf,
 					size_t size, loff_t *pos)
 {
-	struct amdgpu_device *adev = f->f_inode->i_private;
+	struct amdgpu_device *adev = file_inode(f)->i_private;
 	ssize_t result = 0;
 	int r;
 
@@ -2755,7 +2787,7 @@ static ssize_t amdgpu_debugfs_regs_didt_read(struct file *f, char __user *buf,
 static ssize_t amdgpu_debugfs_regs_didt_write(struct file *f, const char __user *buf,
 					 size_t size, loff_t *pos)
 {
-	struct amdgpu_device *adev = f->f_inode->i_private;
+	struct amdgpu_device *adev = file_inode(f)->i_private;
 	ssize_t result = 0;
 	int r;
 
@@ -2783,7 +2815,7 @@ static ssize_t amdgpu_debugfs_regs_didt_write(struct file *f, const char __user 
 static ssize_t amdgpu_debugfs_regs_smc_read(struct file *f, char __user *buf,
 					size_t size, loff_t *pos)
 {
-	struct amdgpu_device *adev = f->f_inode->i_private;
+	struct amdgpu_device *adev = file_inode(f)->i_private;
 	ssize_t result = 0;
 	int r;
 
@@ -2810,7 +2842,7 @@ static ssize_t amdgpu_debugfs_regs_smc_read(struct file *f, char __user *buf,
 static ssize_t amdgpu_debugfs_regs_smc_write(struct file *f, const char __user *buf,
 					 size_t size, loff_t *pos)
 {
-	struct amdgpu_device *adev = f->f_inode->i_private;
+	struct amdgpu_device *adev = file_inode(f)->i_private;
 	ssize_t result = 0;
 	int r;
 
@@ -2838,7 +2870,7 @@ static ssize_t amdgpu_debugfs_regs_smc_write(struct file *f, const char __user *
 static ssize_t amdgpu_debugfs_gca_config_read(struct file *f, char __user *buf,
 					size_t size, loff_t *pos)
 {
-	struct amdgpu_device *adev = f->f_inode->i_private;
+	struct amdgpu_device *adev = file_inode(f)->i_private;
 	ssize_t result = 0;
 	int r;
 	uint32_t *config, no_regs = 0;
@@ -2851,7 +2883,7 @@ static ssize_t amdgpu_debugfs_gca_config_read(struct file *f, char __user *buf,
 		return -ENOMEM;
 
 	/* version, increment each time something is added */
-	config[no_regs++] = 2;
+	config[no_regs++] = 3;
 	config[no_regs++] = adev->gfx.config.max_shader_engines;
 	config[no_regs++] = adev->gfx.config.max_tile_pipes;
 	config[no_regs++] = adev->gfx.config.max_cu_per_sh;
@@ -2885,6 +2917,12 @@ static ssize_t amdgpu_debugfs_gca_config_read(struct file *f, char __user *buf,
 	config[no_regs++] = adev->family;
 	config[no_regs++] = adev->external_rev_id;
 
+	/* rev==3 */
+	config[no_regs++] = adev->pdev->device;
+	config[no_regs++] = adev->pdev->revision;
+	config[no_regs++] = adev->pdev->subsystem_device;
+	config[no_regs++] = adev->pdev->subsystem_vendor;
+
 	while (size && (*pos < no_regs * 4)) {
 		uint32_t value;
 
@@ -2908,7 +2946,7 @@ static ssize_t amdgpu_debugfs_gca_config_read(struct file *f, char __user *buf,
 static ssize_t amdgpu_debugfs_sensor_read(struct file *f, char __user *buf,
 					size_t size, loff_t *pos)
 {
-	struct amdgpu_device *adev = f->f_inode->i_private;
+	struct amdgpu_device *adev = file_inode(f)->i_private;
 	int idx, r;
 	int32_t value;
 
@@ -2979,6 +3017,66 @@ static ssize_t amdgpu_debugfs_wave_read(struct file *f, char __user *buf,
 	return result;
 }
 
+static ssize_t amdgpu_debugfs_gpr_read(struct file *f, char __user *buf,
+					size_t size, loff_t *pos)
+{
+	struct amdgpu_device *adev = f->f_inode->i_private;
+	int r;
+	ssize_t result = 0;
+	uint32_t offset, se, sh, cu, wave, simd, thread, bank, *data;
+
+	if (size & 3 || *pos & 3)
+		return -EINVAL;
+
+	/* decode offset */
+	offset = (*pos & 0xFFF);       /* in dwords */
+	se = ((*pos >> 12) & 0xFF);
+	sh = ((*pos >> 20) & 0xFF);
+	cu = ((*pos >> 28) & 0xFF);
+	wave = ((*pos >> 36) & 0xFF);
+	simd = ((*pos >> 44) & 0xFF);
+	thread = ((*pos >> 52) & 0xFF);
+	bank = ((*pos >> 60) & 1);
+
+	data = kmalloc_array(1024, sizeof(*data), GFP_KERNEL);
+	if (!data)
+		return -ENOMEM;
+
+	/* switch to the specific se/sh/cu */
+	mutex_lock(&adev->grbm_idx_mutex);
+	amdgpu_gfx_select_se_sh(adev, se, sh, cu);
+
+	if (bank == 0) {
+		if (adev->gfx.funcs->read_wave_vgprs)
+			adev->gfx.funcs->read_wave_vgprs(adev, simd, wave, thread, offset, size>>2, data);
+	} else {
+		if (adev->gfx.funcs->read_wave_sgprs)
+			adev->gfx.funcs->read_wave_sgprs(adev, simd, wave, offset, size>>2, data);
+	}
+
+	amdgpu_gfx_select_se_sh(adev, 0xFFFFFFFF, 0xFFFFFFFF, 0xFFFFFFFF);
+	mutex_unlock(&adev->grbm_idx_mutex);
+
+	while (size) {
+		uint32_t value;
+
+		value = data[offset++];
+		r = put_user(value, (uint32_t *)buf);
+		if (r) {
+			result = r;
+			goto err;
+		}
+
+		result += 4;
+		buf += 4;
+		size -= 4;
+	}
+
+err:
+	kfree(data);
+	return result;
+}
+
 static const struct file_operations amdgpu_debugfs_regs_fops = {
 	.owner = THIS_MODULE,
 	.read = amdgpu_debugfs_regs_read,
@@ -3021,6 +3119,11 @@ static const struct file_operations amdgpu_debugfs_wave_fops = {
 	.read = amdgpu_debugfs_wave_read,
 	.llseek = default_llseek
 };
+static const struct file_operations amdgpu_debugfs_gpr_fops = {
+	.owner = THIS_MODULE,
+	.read = amdgpu_debugfs_gpr_read,
+	.llseek = default_llseek
+};
 
 static const struct file_operations *debugfs_regs[] = {
 	&amdgpu_debugfs_regs_fops,
@@ -3030,6 +3133,7 @@ static const struct file_operations *debugfs_regs[] = {
 	&amdgpu_debugfs_gca_config_fops,
 	&amdgpu_debugfs_sensors_fops,
 	&amdgpu_debugfs_wave_fops,
+	&amdgpu_debugfs_gpr_fops,
 };
 
 static const char *debugfs_regs_names[] = {
@@ -3040,6 +3144,7 @@ static const char *debugfs_regs_names[] = {
 	"amdgpu_gca_config",
 	"amdgpu_sensors",
 	"amdgpu_wave",
+	"amdgpu_gpr",
 };
 
 static int amdgpu_debugfs_regs_init(struct amdgpu_device *adev)
@@ -3083,10 +3188,6 @@ static void amdgpu_debugfs_regs_cleanup(struct amdgpu_device *adev)
 int amdgpu_debugfs_init(struct drm_minor *minor)
 {
 	return 0;
-}
-
-void amdgpu_debugfs_cleanup(struct drm_minor *minor)
-{
 }
 #else
 static int amdgpu_debugfs_regs_init(struct amdgpu_device *adev)

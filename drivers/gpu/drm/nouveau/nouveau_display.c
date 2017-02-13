@@ -24,6 +24,7 @@
  *
  */
 
+#include <acpi/video.h>
 #include <drm/drmP.h>
 #include <drm/drm_atomic.h>
 #include <drm/drm_atomic_helper.h>
@@ -57,27 +58,30 @@ int
 nouveau_display_vblank_enable(struct drm_device *dev, unsigned int pipe)
 {
 	struct drm_crtc *crtc;
-	list_for_each_entry(crtc, &dev->mode_config.crtc_list, head) {
-		struct nouveau_crtc *nv_crtc = nouveau_crtc(crtc);
-		if (nv_crtc->index == pipe) {
-			nvif_notify_get(&nv_crtc->vblank);
-			return 0;
-		}
-	}
-	return -EINVAL;
+	struct nouveau_crtc *nv_crtc;
+
+	crtc = drm_crtc_from_index(dev, pipe);
+	if (!crtc)
+		return -EINVAL;
+
+	nv_crtc = nouveau_crtc(crtc);
+	nvif_notify_get(&nv_crtc->vblank);
+
+	return 0;
 }
 
 void
 nouveau_display_vblank_disable(struct drm_device *dev, unsigned int pipe)
 {
 	struct drm_crtc *crtc;
-	list_for_each_entry(crtc, &dev->mode_config.crtc_list, head) {
-		struct nouveau_crtc *nv_crtc = nouveau_crtc(crtc);
-		if (nv_crtc->index == pipe) {
-			nvif_notify_put(&nv_crtc->vblank);
-			return;
-		}
-	}
+	struct nouveau_crtc *nv_crtc;
+
+	crtc = drm_crtc_from_index(dev, pipe);
+	if (!crtc)
+		return;
+
+	nv_crtc = nouveau_crtc(crtc);
+	nvif_notify_put(&nv_crtc->vblank);
 }
 
 static inline int
@@ -161,7 +165,7 @@ nouveau_display_vblstamp(struct drm_device *dev, unsigned int pipe,
 	list_for_each_entry(crtc, &dev->mode_config.crtc_list, head) {
 		if (nouveau_crtc(crtc)->index == pipe) {
 			struct drm_display_mode *mode;
-			if (dev->mode_config.funcs->atomic_commit)
+			if (drm_drv_uses_atomic_modeset(dev))
 				mode = &crtc->state->adjusted_mode;
 			else
 				mode = &crtc->hwmode;
@@ -258,7 +262,7 @@ nouveau_framebuffer_new(struct drm_device *dev,
 	if (!(fb = *pfb = kzalloc(sizeof(*fb), GFP_KERNEL)))
 		return -ENOMEM;
 
-	drm_helper_mode_fill_fb_struct(&fb->base, mode_cmd);
+	drm_helper_mode_fill_fb_struct(dev, &fb->base, mode_cmd);
 	fb->nvbo = nvbo;
 
 	ret = drm_framebuffer_init(dev, &fb->base, &nouveau_framebuffer_funcs);
@@ -348,6 +352,55 @@ static struct nouveau_drm_prop_enum_list dither_depth[] = {
 	}                                                                      \
 } while(0)
 
+static void
+nouveau_display_hpd_work(struct work_struct *work)
+{
+	struct nouveau_drm *drm = container_of(work, typeof(*drm), hpd_work);
+
+	pm_runtime_get_sync(drm->dev->dev);
+
+	drm_helper_hpd_irq_event(drm->dev);
+
+	pm_runtime_mark_last_busy(drm->dev->dev);
+	pm_runtime_put_sync(drm->dev->dev);
+}
+
+#ifdef CONFIG_ACPI
+
+/*
+ * Hans de Goede: This define belongs in acpi/video.h, I've submitted a patch
+ * to the acpi subsys to move it there from drivers/acpi/acpi_video.c .
+ * This should be dropped once that is merged.
+ */
+#ifndef ACPI_VIDEO_NOTIFY_PROBE
+#define ACPI_VIDEO_NOTIFY_PROBE			0x81
+#endif
+
+static int
+nouveau_display_acpi_ntfy(struct notifier_block *nb, unsigned long val,
+			  void *data)
+{
+	struct nouveau_drm *drm = container_of(nb, typeof(*drm), acpi_nb);
+	struct acpi_bus_event *info = data;
+
+	if (!strcmp(info->device_class, ACPI_VIDEO_CLASS)) {
+		if (info->type == ACPI_VIDEO_NOTIFY_PROBE) {
+			/*
+			 * This may be the only indication we receive of a
+			 * connector hotplug on a runtime suspended GPU,
+			 * schedule hpd_work to check.
+			 */
+			schedule_work(&drm->hpd_work);
+
+			/* acpi-video should not generate keypresses for this */
+			return NOTIFY_BAD;
+		}
+	}
+
+	return NOTIFY_DONE;
+}
+#endif
+
 int
 nouveau_display_init(struct drm_device *dev)
 {
@@ -380,14 +433,14 @@ nouveau_display_fini(struct drm_device *dev, bool suspend)
 	struct nouveau_display *disp = nouveau_display(dev);
 	struct nouveau_drm *drm = nouveau_drm(dev);
 	struct drm_connector *connector;
-	int head;
+	struct drm_crtc *crtc;
 
 	if (!suspend)
 		drm_crtc_force_disable_all(dev);
 
 	/* Make sure that drm and hw vblank irqs get properly disabled. */
-	for (head = 0; head < dev->mode_config.num_crtc; head++)
-		drm_vblank_off(dev, head);
+	drm_for_each_crtc(crtc, dev)
+		drm_crtc_vblank_off(crtc);
 
 	/* disable flip completion events */
 	nvif_notify_put(&drm->flip);
@@ -488,7 +541,7 @@ nouveau_display_create(struct drm_device *dev)
 
 	if (nouveau_modeset != 2 && drm->vbios.dcb.entries) {
 		static const u16 oclass[] = {
-			GP104_DISP,
+			GP102_DISP,
 			GP100_DISP,
 			GM200_DISP,
 			GM107_DISP,
@@ -532,6 +585,12 @@ nouveau_display_create(struct drm_device *dev)
 	}
 
 	nouveau_backlight_init(dev);
+	INIT_WORK(&drm->hpd_work, nouveau_display_hpd_work);
+#ifdef CONFIG_ACPI
+	drm->acpi_nb.notifier_call = nouveau_display_acpi_ntfy;
+	register_acpi_notifier(&drm->acpi_nb);
+#endif
+
 	return 0;
 
 vblank_err:
@@ -547,6 +606,9 @@ nouveau_display_destroy(struct drm_device *dev)
 {
 	struct nouveau_display *disp = nouveau_display(dev);
 
+#ifdef CONFIG_ACPI
+	unregister_acpi_notifier(&nouveau_drm(dev)->acpi_nb);
+#endif
 	nouveau_backlight_exit(dev);
 	nouveau_display_vblank_fini(dev);
 
@@ -679,7 +741,7 @@ nouveau_display_suspend(struct drm_device *dev, bool runtime)
 	struct nouveau_display *disp = nouveau_display(dev);
 	struct drm_crtc *crtc;
 
-	if (dev->mode_config.funcs->atomic_commit) {
+	if (drm_drv_uses_atomic_modeset(dev)) {
 		if (!runtime) {
 			disp->suspend = nouveau_atomic_suspend(dev);
 			if (IS_ERR(disp->suspend)) {
@@ -723,9 +785,9 @@ nouveau_display_resume(struct drm_device *dev, bool runtime)
 	struct nouveau_display *disp = nouveau_display(dev);
 	struct nouveau_drm *drm = nouveau_drm(dev);
 	struct drm_crtc *crtc;
-	int ret, head;
+	int ret;
 
-	if (dev->mode_config.funcs->atomic_commit) {
+	if (drm_drv_uses_atomic_modeset(dev)) {
 		nouveau_display_init(dev);
 		if (disp->suspend) {
 			drm_atomic_helper_resume(dev, disp->suspend);
@@ -776,10 +838,6 @@ nouveau_display_resume(struct drm_device *dev, bool runtime)
 		return;
 
 	drm_helper_resume_force_mode(dev);
-
-	/* Make sure that drm and hw vblank irqs get resumed if needed. */
-	for (head = 0; head < dev->mode_config.num_crtc; head++)
-		drm_vblank_on(dev, head);
 
 	list_for_each_entry(crtc, &dev->mode_config.crtc_list, head) {
 		struct nouveau_crtc *nv_crtc = nouveau_crtc(crtc);
@@ -892,7 +950,7 @@ nouveau_crtc_page_flip(struct drm_crtc *crtc, struct drm_framebuffer *fb,
 
 	/* Initialize a page flip struct */
 	*s = (struct nouveau_page_flip_state)
-		{ { }, event, crtc, fb->bits_per_pixel, fb->pitches[0],
+		{ { }, event, crtc, fb->format->cpp[0] * 8, fb->pitches[0],
 		  new_bo->bo.offset };
 
 	/* Keep vblanks on during flip, for the target crtc of this flip */

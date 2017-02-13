@@ -77,7 +77,7 @@ static int psbfb_setcolreg(unsigned regno, unsigned red, unsigned green,
 	    (transp << info->var.transp.offset);
 
 	if (regno < 16) {
-		switch (fb->bits_per_pixel) {
+		switch (fb->format->cpp[0] * 8) {
 		case 16:
 			((uint32_t *) info->pseudo_palette)[regno] = v;
 			break;
@@ -125,7 +125,7 @@ static int psbfb_vm_fault(struct vm_area_struct *vma, struct vm_fault *vmf)
 				  psbfb->gtt->offset;
 
 	page_num = vma_pages(vma);
-	address = (unsigned long)vmf->virtual_address - (vmf->pgoff << PAGE_SHIFT);
+	address = vmf->address - (vmf->pgoff << PAGE_SHIFT);
 
 	vma->vm_page_prot = pgprot_noncached(vma->vm_page_prot);
 
@@ -185,9 +185,7 @@ static int psbfb_mmap(struct fb_info *info, struct vm_area_struct *vma)
 
 static struct fb_ops psbfb_ops = {
 	.owner = THIS_MODULE,
-	.fb_check_var = drm_fb_helper_check_var,
-	.fb_set_par = drm_fb_helper_set_par,
-	.fb_blank = drm_fb_helper_blank,
+	DRM_FB_HELPER_DEFAULT_OPS,
 	.fb_setcolreg = psbfb_setcolreg,
 	.fb_fillrect = drm_fb_helper_cfb_fillrect,
 	.fb_copyarea = psbfb_copyarea,
@@ -198,9 +196,7 @@ static struct fb_ops psbfb_ops = {
 
 static struct fb_ops psbfb_roll_ops = {
 	.owner = THIS_MODULE,
-	.fb_check_var = drm_fb_helper_check_var,
-	.fb_set_par = drm_fb_helper_set_par,
-	.fb_blank = drm_fb_helper_blank,
+	DRM_FB_HELPER_DEFAULT_OPS,
 	.fb_setcolreg = psbfb_setcolreg,
 	.fb_fillrect = drm_fb_helper_cfb_fillrect,
 	.fb_copyarea = drm_fb_helper_cfb_copyarea,
@@ -211,9 +207,7 @@ static struct fb_ops psbfb_roll_ops = {
 
 static struct fb_ops psbfb_unaccel_ops = {
 	.owner = THIS_MODULE,
-	.fb_check_var = drm_fb_helper_check_var,
-	.fb_set_par = drm_fb_helper_set_par,
-	.fb_blank = drm_fb_helper_blank,
+	DRM_FB_HELPER_DEFAULT_OPS,
 	.fb_setcolreg = psbfb_setcolreg,
 	.fb_fillrect = drm_fb_helper_cfb_fillrect,
 	.fb_copyarea = drm_fb_helper_cfb_copyarea,
@@ -250,7 +244,7 @@ static int psb_framebuffer_init(struct drm_device *dev,
 	if (mode_cmd->pitches[0] & 63)
 		return -EINVAL;
 
-	drm_helper_mode_fill_fb_struct(&fb->base, mode_cmd);
+	drm_helper_mode_fill_fb_struct(dev, &fb->base, mode_cmd);
 	fb->gtt = gt;
 	ret = drm_framebuffer_init(dev, &fb->base, &psb_fb_funcs);
 	if (ret) {
@@ -413,7 +407,7 @@ static int psbfb_create(struct psb_fbdev *fbdev,
 
 	fbdev->psb_fb_helper.fb = fb;
 
-	drm_fb_helper_fill_fix(info, fb->pitches[0], fb->depth);
+	drm_fb_helper_fill_fix(info, fb->pitches[0], fb->format->depth);
 	strcpy(info->fix.id, "psbdrmfb");
 
 	info->flags = FBINFO_DEFAULT;
@@ -570,7 +564,7 @@ int psb_fbdev_init(struct drm_device *dev)
 	drm_fb_helper_prepare(dev, &fbdev->psb_fb_helper, &psb_fb_helper_funcs);
 
 	ret = drm_fb_helper_init(dev, &fbdev->psb_fb_helper,
-				 dev_priv->ops->crtcs, INTELFB_CONN_LIMIT);
+				 INTELFB_CONN_LIMIT);
 	if (ret)
 		goto free;
 

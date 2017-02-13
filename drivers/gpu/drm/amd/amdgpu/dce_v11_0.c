@@ -167,6 +167,7 @@ static void dce_v11_0_init_golden_registers(struct amdgpu_device *adev)
 						 (const u32)ARRAY_SIZE(stoney_golden_settings_a11));
 		break;
 	case CHIP_POLARIS11:
+	case CHIP_POLARIS12:
 		amdgpu_program_register_sequence(adev,
 						 polaris11_golden_settings_a11,
 						 (const u32)ARRAY_SIZE(polaris11_golden_settings_a11));
@@ -608,6 +609,7 @@ static int dce_v11_0_get_num_crtc (struct amdgpu_device *adev)
 		num_crtc = 6;
 		break;
 	case CHIP_POLARIS11:
+	case CHIP_POLARIS12:
 		num_crtc = 5;
 		break;
 	default:
@@ -1589,6 +1591,7 @@ static int dce_v11_0_audio_init(struct amdgpu_device *adev)
 		adev->mode_info.audio.num_pins = 8;
 		break;
 	case CHIP_POLARIS11:
+	case CHIP_POLARIS12:
 		adev->mode_info.audio.num_pins = 6;
 		break;
 	default:
@@ -2013,7 +2016,7 @@ static int dce_v11_0_crtc_do_set_base(struct drm_crtc *crtc,
 	u32 tmp, viewport_w, viewport_h;
 	int r;
 	bool bypass_lut = false;
-	char *format_name;
+	struct drm_format_name_buf format_name;
 
 	/* no fb bound */
 	if (!atomic && !crtc->primary->fb) {
@@ -2053,7 +2056,7 @@ static int dce_v11_0_crtc_do_set_base(struct drm_crtc *crtc,
 
 	pipe_config = AMDGPU_TILING_GET(tiling_flags, PIPE_CONFIG);
 
-	switch (target_fb->pixel_format) {
+	switch (target_fb->format->format) {
 	case DRM_FORMAT_C8:
 		fb_format = REG_SET_FIELD(0, GRPH_CONTROL, GRPH_DEPTH, 0);
 		fb_format = REG_SET_FIELD(fb_format, GRPH_CONTROL, GRPH_FORMAT, 0);
@@ -2125,9 +2128,8 @@ static int dce_v11_0_crtc_do_set_base(struct drm_crtc *crtc,
 		bypass_lut = true;
 		break;
 	default:
-		format_name = drm_get_format_name(target_fb->pixel_format);
-		DRM_ERROR("Unsupported screen format %s\n", format_name);
-		kfree(format_name);
+		DRM_ERROR("Unsupported screen format %s\n",
+		          drm_get_format_name(target_fb->format->format, &format_name));
 		return -EINVAL;
 	}
 
@@ -2202,7 +2204,7 @@ static int dce_v11_0_crtc_do_set_base(struct drm_crtc *crtc,
 	WREG32(mmGRPH_X_END + amdgpu_crtc->crtc_offset, target_fb->width);
 	WREG32(mmGRPH_Y_END + amdgpu_crtc->crtc_offset, target_fb->height);
 
-	fb_pitch_pixels = target_fb->pitches[0] / (target_fb->bits_per_pixel / 8);
+	fb_pitch_pixels = target_fb->pitches[0] / target_fb->format->cpp[0];
 	WREG32(mmGRPH_PITCH + amdgpu_crtc->crtc_offset, fb_pitch_pixels);
 
 	dce_v11_0_grph_enable(crtc, true);
@@ -2389,7 +2391,8 @@ static u32 dce_v11_0_pick_pll(struct drm_crtc *crtc)
 	int pll;
 
 	if ((adev->asic_type == CHIP_POLARIS10) ||
-	    (adev->asic_type == CHIP_POLARIS11)) {
+	    (adev->asic_type == CHIP_POLARIS11) ||
+	    (adev->asic_type == CHIP_POLARIS12)) {
 		struct amdgpu_encoder *amdgpu_encoder =
 			to_amdgpu_encoder(amdgpu_crtc->encoder);
 		struct amdgpu_encoder_atom_dig *dig = amdgpu_encoder->enc_priv;
@@ -2510,6 +2513,9 @@ static int dce_v11_0_cursor_move_locked(struct drm_crtc *crtc,
 	struct amdgpu_device *adev = crtc->dev->dev_private;
 	int xorigin = 0, yorigin = 0;
 
+	amdgpu_crtc->cursor_x = x;
+	amdgpu_crtc->cursor_y = y;
+
 	/* avivo cursor are offset into the total surface */
 	x += crtc->x;
 	y += crtc->y;
@@ -2528,9 +2534,6 @@ static int dce_v11_0_cursor_move_locked(struct drm_crtc *crtc,
 	WREG32(mmCUR_HOT_SPOT + amdgpu_crtc->crtc_offset, (xorigin << 16) | yorigin);
 	WREG32(mmCUR_SIZE + amdgpu_crtc->crtc_offset,
 	       ((amdgpu_crtc->cursor_width - 1) << 16) | (amdgpu_crtc->cursor_height - 1));
-
-	amdgpu_crtc->cursor_x = x;
-	amdgpu_crtc->cursor_y = y;
 
 	return 0;
 }
@@ -2594,12 +2597,11 @@ static int dce_v11_0_crtc_cursor_set2(struct drm_crtc *crtc,
 		return ret;
 	}
 
-	amdgpu_crtc->cursor_width = width;
-	amdgpu_crtc->cursor_height = height;
-
 	dce_v11_0_lock_cursor(crtc, true);
 
-	if (hot_x != amdgpu_crtc->cursor_hot_x ||
+	if (width != amdgpu_crtc->cursor_width ||
+	    height != amdgpu_crtc->cursor_height ||
+	    hot_x != amdgpu_crtc->cursor_hot_x ||
 	    hot_y != amdgpu_crtc->cursor_hot_y) {
 		int x, y;
 
@@ -2608,6 +2610,8 @@ static int dce_v11_0_crtc_cursor_set2(struct drm_crtc *crtc,
 
 		dce_v11_0_cursor_move_locked(crtc, x, y);
 
+		amdgpu_crtc->cursor_width = width;
+		amdgpu_crtc->cursor_height = height;
 		amdgpu_crtc->cursor_hot_x = hot_x;
 		amdgpu_crtc->cursor_hot_y = hot_y;
 	}
@@ -2814,7 +2818,8 @@ static int dce_v11_0_crtc_mode_set(struct drm_crtc *crtc,
 		return -EINVAL;
 
 	if ((adev->asic_type == CHIP_POLARIS10) ||
-	    (adev->asic_type == CHIP_POLARIS11)) {
+	    (adev->asic_type == CHIP_POLARIS11) ||
+	    (adev->asic_type == CHIP_POLARIS12)) {
 		struct amdgpu_encoder *amdgpu_encoder =
 			to_amdgpu_encoder(amdgpu_crtc->encoder);
 		int encoder_mode =
@@ -2984,6 +2989,7 @@ static int dce_v11_0_early_init(void *handle)
 		adev->mode_info.num_dig = 6;
 		break;
 	case CHIP_POLARIS11:
+	case CHIP_POLARIS12:
 		adev->mode_info.num_hpd = 5;
 		adev->mode_info.num_dig = 5;
 		break;
@@ -3093,7 +3099,8 @@ static int dce_v11_0_hw_init(void *handle)
 	amdgpu_atombios_crtc_powergate_init(adev);
 	amdgpu_atombios_encoder_init_dig(adev);
 	if ((adev->asic_type == CHIP_POLARIS10) ||
-	    (adev->asic_type == CHIP_POLARIS11)) {
+	    (adev->asic_type == CHIP_POLARIS11) ||
+	    (adev->asic_type == CHIP_POLARIS12)) {
 		amdgpu_atombios_crtc_set_dce_clock(adev, adev->clock.default_dispclk,
 						   DCE_CLOCK_TYPE_DISPCLK, ATOM_GCK_DFS);
 		amdgpu_atombios_crtc_set_dce_clock(adev, 0,
@@ -3806,7 +3813,6 @@ static const struct amdgpu_display_funcs dce_v11_0_display_funcs = {
 	.bandwidth_update = &dce_v11_0_bandwidth_update,
 	.vblank_get_counter = &dce_v11_0_vblank_get_counter,
 	.vblank_wait = &dce_v11_0_vblank_wait,
-	.is_display_hung = &dce_v11_0_is_display_hung,
 	.backlight_set_level = &amdgpu_atombios_encoder_set_backlight_level,
 	.backlight_get_level = &amdgpu_atombios_encoder_get_backlight_level,
 	.hpd_sense = &dce_v11_0_hpd_sense,

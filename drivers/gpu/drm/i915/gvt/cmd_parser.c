@@ -1145,7 +1145,7 @@ static int skl_decode_mi_display_flip(struct parser_exec_state *s,
 		info->event = PRIMARY_B_FLIP_DONE;
 		break;
 	case MI_DISPLAY_FLIP_SKL_PLANE_1_C:
-		info->pipe = PIPE_B;
+		info->pipe = PIPE_C;
 		info->event = PRIMARY_C_FLIP_DONE;
 		break;
 	default:
@@ -1201,20 +1201,19 @@ static int gen8_update_plane_mmio_from_mi_display_flip(
 	struct drm_i915_private *dev_priv = s->vgpu->gvt->dev_priv;
 	struct intel_vgpu *vgpu = s->vgpu;
 
-#define write_bits(reg, e, s, v) do { \
-	vgpu_vreg(vgpu, reg) &= ~GENMASK(e, s); \
-	vgpu_vreg(vgpu, reg) |= (v << s); \
-} while (0)
-
-	write_bits(info->surf_reg, 31, 12, info->surf_val);
-	if (IS_SKYLAKE(dev_priv))
-		write_bits(info->stride_reg, 9, 0, info->stride_val);
-	else
-		write_bits(info->stride_reg, 15, 6, info->stride_val);
-	write_bits(info->ctrl_reg, IS_SKYLAKE(dev_priv) ? 12 : 10,
-		   10, info->tile_val);
-
-#undef write_bits
+	set_mask_bits(&vgpu_vreg(vgpu, info->surf_reg), GENMASK(31, 12),
+		      info->surf_val << 12);
+	if (IS_SKYLAKE(dev_priv)) {
+		set_mask_bits(&vgpu_vreg(vgpu, info->stride_reg), GENMASK(9, 0),
+			      info->stride_val);
+		set_mask_bits(&vgpu_vreg(vgpu, info->ctrl_reg), GENMASK(12, 10),
+			      info->tile_val << 10);
+	} else {
+		set_mask_bits(&vgpu_vreg(vgpu, info->stride_reg), GENMASK(15, 6),
+			      info->stride_val << 6);
+		set_mask_bits(&vgpu_vreg(vgpu, info->ctrl_reg), GENMASK(10, 10),
+			      info->tile_val << 10);
+	}
 
 	vgpu_vreg(vgpu, PIPE_FRMCOUNT_G4X(info->pipe))++;
 	intel_vgpu_trigger_virtual_event(vgpu, info->event);
@@ -1419,8 +1418,8 @@ static int cmd_handler_mi_op_2e(struct parser_exec_state *s)
 static int cmd_handler_mi_op_2f(struct parser_exec_state *s)
 {
 	int gmadr_bytes = s->vgpu->gvt->device_info.gmadr_bytes_in_cmd;
-	int op_size = ((1 << (cmd_val(s, 0) & GENMASK(20, 19) >> 19)) *
-			sizeof(u32));
+	int op_size = (1 << ((cmd_val(s, 0) & GENMASK(20, 19)) >> 19)) *
+			sizeof(u32);
 	unsigned long gma, gma_high;
 	int ret = 0;
 
@@ -1603,7 +1602,7 @@ static int perform_bb_shadow(struct parser_exec_state *s)
 		return -ENOMEM;
 
 	entry_obj->obj =
-		i915_gem_object_create(&(s->vgpu->gvt->dev_priv->drm),
+		i915_gem_object_create(s->vgpu->gvt->dev_priv,
 				       roundup(bb_size, PAGE_SIZE));
 	if (IS_ERR(entry_obj->obj)) {
 		ret = PTR_ERR(entry_obj->obj);
@@ -2538,7 +2537,8 @@ static int scan_workload(struct intel_vgpu_workload *workload)
 	s.rb_va = workload->shadow_ring_buffer_va;
 	s.workload = workload;
 
-	if (bypass_scan_mask & (1 << workload->ring_id))
+	if ((bypass_scan_mask & (1 << workload->ring_id)) ||
+		gma_head == gma_tail)
 		return 0;
 
 	ret = ip_gma_set(&s, gma_head);
@@ -2665,14 +2665,13 @@ int intel_gvt_scan_and_shadow_workload(struct intel_vgpu_workload *workload)
 
 static int shadow_indirect_ctx(struct intel_shadow_wa_ctx *wa_ctx)
 {
-	struct drm_device *dev = &wa_ctx->workload->vgpu->gvt->dev_priv->drm;
 	int ctx_size = wa_ctx->indirect_ctx.size;
 	unsigned long guest_gma = wa_ctx->indirect_ctx.guest_gma;
 	struct drm_i915_gem_object *obj;
 	int ret = 0;
 	void *map;
 
-	obj = i915_gem_object_create(dev,
+	obj = i915_gem_object_create(wa_ctx->workload->vgpu->gvt->dev_priv,
 				     roundup(ctx_size + CACHELINE_BYTES,
 					     PAGE_SIZE));
 	if (IS_ERR(obj))

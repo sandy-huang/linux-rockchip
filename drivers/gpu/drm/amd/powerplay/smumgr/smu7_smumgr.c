@@ -22,12 +22,12 @@
  */
 
 
+#include "pp_debug.h"
 #include "smumgr.h"
 #include "smu_ucode_xfer_vi.h"
 #include "smu/smu_7_1_3_d.h"
 #include "smu/smu_7_1_3_sh_mask.h"
 #include "ppatomctrl.h"
-#include "pp_debug.h"
 #include "cgs_common.h"
 #include "smu7_ppsmc.h"
 #include "smu7_smumgr.h"
@@ -175,7 +175,7 @@ int smu7_send_msg_to_smc(struct pp_smumgr *smumgr, uint16_t msg)
 	ret = SMUM_READ_FIELD(smumgr->device, SMC_RESP_0, SMC_RESP);
 
 	if (ret != 1)
-		printk("\n failed to send pre message %x ret is %d \n",  msg, ret);
+		pr_info("\n failed to send pre message %x ret is %d \n",  msg, ret);
 
 	cgs_write_register(smumgr->device, mmSMC_MESSAGE_0, msg);
 
@@ -184,7 +184,7 @@ int smu7_send_msg_to_smc(struct pp_smumgr *smumgr, uint16_t msg)
 	ret = SMUM_READ_FIELD(smumgr->device, SMC_RESP_0, SMC_RESP);
 
 	if (ret != 1)
-		printk("\n failed to send message %x ret is %d \n",  msg, ret);
+		pr_info("\n failed to send message %x ret is %d \n",  msg, ret);
 
 	return 0;
 }
@@ -225,7 +225,7 @@ int smu7_send_msg_to_smc_offset(struct pp_smumgr *smumgr)
 	SMUM_WAIT_FIELD_UNEQUAL(smumgr, SMC_RESP_0, SMC_RESP, 0);
 
 	if (1 != SMUM_READ_FIELD(smumgr->device, SMC_RESP_0, SMC_RESP))
-		printk("Failed to send Message.\n");
+		pr_info("Failed to send Message.\n");
 
 	return 0;
 }
@@ -347,7 +347,7 @@ static uint32_t smu7_get_mask_for_firmware_type(uint32_t fw_type)
 		result = UCODE_ID_RLC_G_MASK;
 		break;
 	default:
-		printk("UCode type is out of range! \n");
+		pr_info("UCode type is out of range! \n");
 		result = 0;
 	}
 
@@ -366,12 +366,16 @@ static int smu7_populate_single_firmware_entry(struct pp_smumgr *smumgr,
 				&info);
 
 	if (!result) {
-		entry->version = info.version;
+		entry->version = info.fw_version;
 		entry->id = (uint16_t)fw_type;
 		entry->image_addr_high = smu_upper_32_bits(info.mc_addr);
 		entry->image_addr_low = smu_lower_32_bits(info.mc_addr);
 		entry->meta_data_addr_high = 0;
 		entry->meta_data_addr_low = 0;
+
+		/* digest need be excluded out */
+		if (cgs_is_virtualization_enabled(smumgr->device))
+			info.image_size -= 20;
 		entry->data_size_byte = info.image_size;
 		entry->num_register_entries = 0;
 	}
@@ -392,7 +396,7 @@ int smu7_request_smu_load_fw(struct pp_smumgr *smumgr)
 	struct SMU_DRAMData_TOC *toc;
 
 	if (!smumgr->reload_fw) {
-		printk(KERN_INFO "[ powerplay ] skip reloading...\n");
+		pr_info("skip reloading...\n");
 		return 0;
 	}
 
@@ -403,8 +407,14 @@ int smu7_request_smu_load_fw(struct pp_smumgr *smumgr)
 					0x0);
 
 	if (smumgr->chip_id > CHIP_TOPAZ) { /* add support for Topaz */
-		smu7_send_msg_to_smc_with_parameter(smumgr, PPSMC_MSG_SMU_DRAM_ADDR_HI, smu_data->smu_buffer.mc_addr_high);
-		smu7_send_msg_to_smc_with_parameter(smumgr, PPSMC_MSG_SMU_DRAM_ADDR_LO, smu_data->smu_buffer.mc_addr_low);
+		if (!cgs_is_virtualization_enabled(smumgr->device)) {
+			smu7_send_msg_to_smc_with_parameter(smumgr,
+						PPSMC_MSG_SMU_DRAM_ADDR_HI,
+						smu_data->smu_buffer.mc_addr_high);
+			smu7_send_msg_to_smc_with_parameter(smumgr,
+						PPSMC_MSG_SMU_DRAM_ADDR_LO,
+						smu_data->smu_buffer.mc_addr_low);
+		}
 		fw_to_load = UCODE_ID_RLC_G_MASK
 			   + UCODE_ID_SDMA0_MASK
 			   + UCODE_ID_SDMA1_MASK
@@ -464,7 +474,7 @@ int smu7_request_smu_load_fw(struct pp_smumgr *smumgr)
 	smu7_send_msg_to_smc_with_parameter(smumgr, PPSMC_MSG_DRV_DRAM_ADDR_LO, smu_data->header_buffer.mc_addr_low);
 
 	if (smu7_send_msg_to_smc_with_parameter(smumgr, PPSMC_MSG_LoadUcodes, fw_to_load))
-		printk(KERN_ERR "Fail to Request SMU Load uCode");
+		pr_err("Fail to Request SMU Load uCode");
 
 	return result;
 }
@@ -539,7 +549,6 @@ int smu7_init(struct pp_smumgr *smumgr)
 	smu_data = (struct smu7_smumgr *)(smumgr->backend);
 	smu_data->header_buffer.data_size =
 			((sizeof(struct SMU_DRAMData_TOC) / 4096) + 1) * 4096;
-	smu_data->smu_buffer.data_size = 200*4096;
 
 /* Allocate FW image data structure and header buffer and
  * send the header buffer address to SMU */
@@ -562,6 +571,10 @@ int smu7_init(struct pp_smumgr *smumgr)
 		(cgs_handle_t)smu_data->header_buffer.handle);
 		return -EINVAL);
 
+	if (cgs_is_virtualization_enabled(smumgr->device))
+		return 0;
+
+	smu_data->smu_buffer.data_size = 200*4096;
 	smu_allocate_memory(smumgr->device,
 		smu_data->smu_buffer.data_size,
 		CGS_GPU_MEM_TYPE__VISIBLE_CONTIG_FB,

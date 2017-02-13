@@ -74,18 +74,12 @@ radeonfb_release(struct fb_info *info, int user)
 
 static struct fb_ops radeonfb_ops = {
 	.owner = THIS_MODULE,
+	DRM_FB_HELPER_DEFAULT_OPS,
 	.fb_open = radeonfb_open,
 	.fb_release = radeonfb_release,
-	.fb_check_var = drm_fb_helper_check_var,
-	.fb_set_par = drm_fb_helper_set_par,
 	.fb_fillrect = drm_fb_helper_cfb_fillrect,
 	.fb_copyarea = drm_fb_helper_cfb_copyarea,
 	.fb_imageblit = drm_fb_helper_cfb_imageblit,
-	.fb_pan_display = drm_fb_helper_pan_display,
-	.fb_blank = drm_fb_helper_blank,
-	.fb_setcmap = drm_fb_helper_setcmap,
-	.fb_debug_enter = drm_fb_helper_debug_enter,
-	.fb_debug_leave = drm_fb_helper_debug_leave,
 };
 
 
@@ -269,7 +263,7 @@ static int radeonfb_create(struct drm_fb_helper *helper,
 
 	strcpy(info->fix.id, "radeondrmfb");
 
-	drm_fb_helper_fill_fix(info, fb->pitches[0], fb->depth);
+	drm_fb_helper_fill_fix(info, fb->pitches[0], fb->format->depth);
 
 	info->flags = FBINFO_DEFAULT | FBINFO_CAN_FORCE_OUTPUT;
 	info->fbops = &radeonfb_ops;
@@ -296,7 +290,7 @@ static int radeonfb_create(struct drm_fb_helper *helper,
 	DRM_INFO("fb mappable at 0x%lX\n",  info->fix.smem_start);
 	DRM_INFO("vram apper at 0x%lX\n",  (unsigned long)rdev->mc.aper_base);
 	DRM_INFO("size %lu\n", (unsigned long)radeon_bo_size(rbo));
-	DRM_INFO("fb depth is %d\n", fb->depth);
+	DRM_INFO("fb depth is %d\n", fb->format->depth);
 	DRM_INFO("   pitch is %d\n", fb->pitches[0]);
 
 	vga_switcheroo_client_fb_set(rdev->ddev->pdev, info);
@@ -372,7 +366,6 @@ int radeon_fbdev_init(struct radeon_device *rdev)
 			      &radeon_fb_helper_funcs);
 
 	ret = drm_fb_helper_init(rdev->ddev, &rfbdev->helper,
-				 rdev->num_crtc,
 				 RADEONFB_CONN_LIMIT);
 	if (ret)
 		goto free;

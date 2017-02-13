@@ -128,17 +128,6 @@ static void amdgpu_ttm_placement_init(struct amdgpu_device *adev,
 		if (flags & AMDGPU_GEM_CREATE_VRAM_CONTIGUOUS)
 			lpfn = adev->mc.real_vram_size >> PAGE_SHIFT;
 
-		if (flags & AMDGPU_GEM_CREATE_NO_CPU_ACCESS &&
-		    !(flags & AMDGPU_GEM_CREATE_CPU_ACCESS_REQUIRED) &&
-		    adev->mc.visible_vram_size < adev->mc.real_vram_size) {
-			places[c].fpfn = visible_pfn;
-			places[c].lpfn = lpfn;
-			places[c].flags = TTM_PL_FLAG_WC |
-				TTM_PL_FLAG_UNCACHED | TTM_PL_FLAG_VRAM |
-				TTM_PL_FLAG_TOPDOWN;
-			c++;
-		}
-
 		places[c].fpfn = 0;
 		places[c].lpfn = lpfn;
 		places[c].flags = TTM_PL_FLAG_WC | TTM_PL_FLAG_UNCACHED |
@@ -374,47 +363,69 @@ int amdgpu_bo_create_restricted(struct amdgpu_device *adev,
 
 	bo->flags = flags;
 
+#ifdef CONFIG_X86_32
+	/* XXX: Write-combined CPU mappings of GTT seem broken on 32-bit
+	 * See https://bugs.freedesktop.org/show_bug.cgi?id=84627
+	 */
+	bo->flags &= ~AMDGPU_GEM_CREATE_CPU_GTT_USWC;
+#elif defined(CONFIG_X86) && !defined(CONFIG_X86_PAT)
+	/* Don't try to enable write-combining when it can't work, or things
+	 * may be slow
+	 * See https://bugs.freedesktop.org/show_bug.cgi?id=88758
+	 */
+
+#warning Please enable CONFIG_MTRR and CONFIG_X86_PAT for better performance \
+	 thanks to write-combining
+
+	if (bo->flags & AMDGPU_GEM_CREATE_CPU_GTT_USWC)
+		DRM_INFO_ONCE("Please enable CONFIG_MTRR and CONFIG_X86_PAT for "
+			      "better performance thanks to write-combining\n");
+	bo->flags &= ~AMDGPU_GEM_CREATE_CPU_GTT_USWC;
+#else
 	/* For architectures that don't support WC memory,
 	 * mask out the WC flag from the BO
 	 */
 	if (!drm_arch_can_wc_memory())
 		bo->flags &= ~AMDGPU_GEM_CREATE_CPU_GTT_USWC;
+#endif
 
 	amdgpu_fill_placement_to_bo(bo, placement);
 	/* Kernel allocation are uninterruptible */
+
+	if (!resv) {
+		bool locked;
+
+		reservation_object_init(&bo->tbo.ttm_resv);
+		locked = ww_mutex_trylock(&bo->tbo.ttm_resv.lock);
+		WARN_ON(!locked);
+	}
 	r = ttm_bo_init(&adev->mman.bdev, &bo->tbo, size, type,
 			&bo->placement, page_align, !kernel, NULL,
-			acc_size, sg, resv, &amdgpu_ttm_bo_destroy);
-	if (unlikely(r != 0)) {
+			acc_size, sg, resv ? resv : &bo->tbo.ttm_resv,
+			&amdgpu_ttm_bo_destroy);
+	if (unlikely(r != 0))
 		return r;
-	}
+
+	bo->tbo.priority = ilog2(bo->tbo.num_pages);
+	if (kernel)
+		bo->tbo.priority *= 2;
+	bo->tbo.priority = min(bo->tbo.priority, (unsigned)(TTM_MAX_BO_PRIORITY - 1));
 
 	if (flags & AMDGPU_GEM_CREATE_VRAM_CLEARED &&
 	    bo->tbo.mem.placement & TTM_PL_FLAG_VRAM) {
 		struct dma_fence *fence;
 
-		if (adev->mman.buffer_funcs_ring == NULL ||
-		   !adev->mman.buffer_funcs_ring->ready) {
-			r = -EBUSY;
-			goto fail_free;
-		}
-
-		r = amdgpu_bo_reserve(bo, false);
-		if (unlikely(r != 0))
-			goto fail_free;
-
-		amdgpu_ttm_placement_from_domain(bo, AMDGPU_GEM_DOMAIN_VRAM);
-		r = ttm_bo_validate(&bo->tbo, &bo->placement, false, false);
-		if (unlikely(r != 0))
+		r = amdgpu_fill_buffer(bo, 0, bo->tbo.resv, &fence);
+		if (unlikely(r))
 			goto fail_unreserve;
 
-		amdgpu_fill_buffer(bo, 0, bo->tbo.resv, &fence);
 		amdgpu_bo_fence(bo, fence, false);
-		amdgpu_bo_unreserve(bo);
 		dma_fence_put(bo->tbo.moving);
 		bo->tbo.moving = dma_fence_get(fence);
 		dma_fence_put(fence);
 	}
+	if (!resv)
+		ww_mutex_unlock(&bo->tbo.resv->lock);
 	*bo_ptr = bo;
 
 	trace_amdgpu_bo_create(bo);
@@ -422,8 +433,8 @@ int amdgpu_bo_create_restricted(struct amdgpu_device *adev,
 	return 0;
 
 fail_unreserve:
-	amdgpu_bo_unreserve(bo);
-fail_free:
+	if (!resv)
+		ww_mutex_unlock(&bo->tbo.resv->lock);
 	amdgpu_bo_unref(&bo);
 	return r;
 }
@@ -487,7 +498,16 @@ int amdgpu_bo_create(struct amdgpu_device *adev,
 		return r;
 
 	if (amdgpu_need_backup(adev) && (flags & AMDGPU_GEM_CREATE_SHADOW)) {
+		if (!resv) {
+			r = ww_mutex_lock(&(*bo_ptr)->tbo.resv->lock, NULL);
+			WARN_ON(r != 0);
+		}
+
 		r = amdgpu_bo_create_shadow(adev, size, byte_align, (*bo_ptr));
+
+		if (!resv)
+			ww_mutex_unlock(&(*bo_ptr)->tbo.resv->lock);
+
 		if (r)
 			amdgpu_bo_unref(bo_ptr);
 	}
@@ -864,6 +884,7 @@ int amdgpu_bo_get_metadata(struct amdgpu_bo *bo, void *buffer,
 }
 
 void amdgpu_bo_move_notify(struct ttm_buffer_object *bo,
+			   bool evict,
 			   struct ttm_mem_reg *new_mem)
 {
 	struct amdgpu_device *adev = amdgpu_ttm_adev(bo->bdev);
@@ -875,6 +896,10 @@ void amdgpu_bo_move_notify(struct ttm_buffer_object *bo,
 
 	abo = container_of(bo, struct amdgpu_bo, tbo);
 	amdgpu_vm_bo_invalidate(adev, abo);
+
+	/* remember the eviction */
+	if (evict)
+		atomic64_inc(&adev->num_evictions);
 
 	/* update statistics */
 	if (!new_mem)

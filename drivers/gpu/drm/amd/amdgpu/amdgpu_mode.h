@@ -32,6 +32,7 @@
 
 #include <drm/drm_crtc.h>
 #include <drm/drm_edid.h>
+#include <drm/drm_encoder.h>
 #include <drm/drm_dp_helper.h>
 #include <drm/drm_fixed.h>
 #include <drm/drm_crtc_helper.h>
@@ -271,8 +272,6 @@ struct amdgpu_display_funcs {
 	u32 (*vblank_get_counter)(struct amdgpu_device *adev, int crtc);
 	/* wait for vblank */
 	void (*vblank_wait)(struct amdgpu_device *adev, int crtc);
-	/* is dce hung */
-	bool (*is_display_hung)(struct amdgpu_device *adev);
 	/* set backlight level */
 	void (*backlight_set_level)(struct amdgpu_encoder *amdgpu_encoder,
 				    u8 level);
@@ -596,6 +595,21 @@ int amdgpu_crtc_page_flip_target(struct drm_crtc *crtc,
 				 struct drm_framebuffer *fb,
 				 struct drm_pending_vblank_event *event,
 				 uint32_t page_flip_flags, uint32_t target);
+void amdgpu_crtc_cleanup_flip_ctx(struct amdgpu_flip_work *work,
+				  struct amdgpu_bo *new_abo);
+int amdgpu_crtc_prepare_flip(struct drm_crtc *crtc,
+			     struct drm_framebuffer *fb,
+			     struct drm_pending_vblank_event *event,
+			     uint32_t page_flip_flags,
+			     uint32_t target,
+			     struct amdgpu_flip_work **work,
+			     struct amdgpu_bo **new_abo);
+
+void amdgpu_crtc_submit_flip(struct drm_crtc *crtc,
+			     struct drm_framebuffer *fb,
+			     struct amdgpu_flip_work *work,
+			     struct amdgpu_bo *new_abo);
+
 extern const struct drm_mode_config_funcs amdgpu_mode_funcs;
 
 #endif

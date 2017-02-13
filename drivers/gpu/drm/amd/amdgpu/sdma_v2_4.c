@@ -701,7 +701,7 @@ static int sdma_v2_4_ring_test_ib(struct amdgpu_ring *ring, long timeout)
 	ib.ptr[7] = SDMA_PKT_HEADER_OP(SDMA_OP_NOP);
 	ib.length_dw = 8;
 
-	r = amdgpu_ib_schedule(ring, 1, &ib, NULL, NULL, &f);
+	r = amdgpu_ib_schedule(ring, 1, &ib, NULL, &f);
 	if (r)
 		goto err1;
 
@@ -775,11 +775,11 @@ static void sdma_v2_4_vm_write_pte(struct amdgpu_ib *ib, uint64_t pe,
 	unsigned ndw = count * 2;
 
 	ib->ptr[ib->length_dw++] = SDMA_PKT_HEADER_OP(SDMA_OP_WRITE) |
-		SDMA_PKT_HEADER_SUB_OP(SDMA_SUBOP_COPY_LINEAR);
+		SDMA_PKT_HEADER_SUB_OP(SDMA_SUBOP_WRITE_LINEAR);
 	ib->ptr[ib->length_dw++] = pe;
 	ib->ptr[ib->length_dw++] = upper_32_bits(pe);
 	ib->ptr[ib->length_dw++] = ndw;
-	for (; ndw > 0; ndw -= 2, --count, pe += 8) {
+	for (; ndw > 0; ndw -= 2) {
 		ib->ptr[ib->length_dw++] = lower_32_bits(value);
 		ib->ptr[ib->length_dw++] = upper_32_bits(value);
 		value += incr;
