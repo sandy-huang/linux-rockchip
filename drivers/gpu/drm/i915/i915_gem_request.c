@@ -24,6 +24,9 @@
 
 #include <linux/prefetch.h>
 #include <linux/dma-fence-array.h>
+#include <linux/sched.h>
+#include <linux/sched/clock.h>
+#include <linux/sched/signal.h>
 
 #include "i915_drv.h"
 
@@ -1025,8 +1028,13 @@ __i915_request_wait_for_execute(struct drm_i915_gem_request *request,
 			break;
 		}
 
+		if (!timeout) {
+			timeout = -ETIME;
+			break;
+		}
+
 		timeout = io_schedule_timeout(timeout);
-	} while (timeout);
+	} while (1);
 	finish_wait(&request->execute.wait, &wait);
 
 	if (flags & I915_WAIT_LOCKED)

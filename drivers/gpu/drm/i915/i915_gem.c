@@ -440,7 +440,7 @@ i915_gem_object_wait_reservation(struct reservation_object *resv,
 			timeout = i915_gem_object_wait_fence(shared[i],
 							     flags, timeout,
 							     rps);
-			if (timeout <= 0)
+			if (timeout < 0)
 				break;
 
 			dma_fence_put(shared[i]);
@@ -453,7 +453,7 @@ i915_gem_object_wait_reservation(struct reservation_object *resv,
 		excl = reservation_object_get_excl_rcu(resv);
 	}
 
-	if (excl && timeout > 0)
+	if (excl && timeout >= 0)
 		timeout = i915_gem_object_wait_fence(excl, flags, timeout, rps);
 
 	dma_fence_put(excl);
@@ -1772,7 +1772,6 @@ compute_partial_view(struct drm_i915_gem_object *obj,
 
 /**
  * i915_gem_fault - fault a page into the GTT
- * @area: CPU VMA in question
  * @vmf: fault info
  *
  * The fault handler is set up by drm_gem_mmap() when a object is GTT mapped
@@ -1789,9 +1788,10 @@ compute_partial_view(struct drm_i915_gem_object *obj,
  * The current feature set supported by i915_gem_fault() and thus GTT mmaps
  * is exposed via I915_PARAM_MMAP_GTT_VERSION (see i915_gem_mmap_gtt_version).
  */
-int i915_gem_fault(struct vm_area_struct *area, struct vm_fault *vmf)
+int i915_gem_fault(struct vm_fault *vmf)
 {
 #define MIN_CHUNK_PAGES ((1 << 20) >> PAGE_SHIFT) /* 1 MiB */
+	struct vm_area_struct *area = vmf->vma;
 	struct drm_i915_gem_object *obj = to_intel_bo(area->vm_private_data);
 	struct drm_device *dev = obj->base.dev;
 	struct drm_i915_private *dev_priv = to_i915(dev);
@@ -2743,21 +2743,17 @@ static void i915_gem_reset_engine(struct intel_engine_cs *engine)
 		engine->irq_seqno_barrier(engine);
 
 	request = i915_gem_find_active_request(engine);
-	if (!request)
-		return;
+	if (request && i915_gem_reset_request(request)) {
+		DRM_DEBUG_DRIVER("resetting %s to restart from tail of request 0x%x\n",
+				 engine->name, request->global_seqno);
 
-	if (!i915_gem_reset_request(request))
-		return;
-
-	DRM_DEBUG_DRIVER("resetting %s to restart from tail of request 0x%x\n",
-			 engine->name, request->global_seqno);
+		/* If this context is now banned, skip all pending requests. */
+		if (i915_gem_context_is_banned(request->ctx))
+			engine_skip_context(request);
+	}
 
 	/* Setup the CS to resume from the breadcrumb of the hung request */
 	engine->reset_hw(engine, request);
-
-	/* If this context is now banned, skip all of its pending requests. */
-	if (i915_gem_context_is_banned(request->ctx))
-		engine_skip_context(request);
 }
 
 void i915_gem_reset_finish(struct drm_i915_private *dev_priv)

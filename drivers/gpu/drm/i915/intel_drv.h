@@ -28,6 +28,7 @@
 #include <linux/async.h>
 #include <linux/i2c.h>
 #include <linux/hdmi.h>
+#include <linux/sched/clock.h>
 #include <drm/i915_drm.h>
 #include "i915_drv.h"
 #include <drm/drm_crtc.h>
@@ -371,6 +372,8 @@ struct intel_atomic_state {
 	struct skl_wm_values wm_results;
 
 	struct i915_sw_fence commit_ready;
+
+	struct llist_node freed;
 };
 
 struct intel_plane_state {
@@ -1225,6 +1228,8 @@ void intel_audio_codec_enable(struct intel_encoder *encoder,
 void intel_audio_codec_disable(struct intel_encoder *encoder);
 void i915_audio_component_init(struct drm_i915_private *dev_priv);
 void i915_audio_component_cleanup(struct drm_i915_private *dev_priv);
+void intel_audio_init(struct drm_i915_private *dev_priv);
+void intel_audio_deinit(struct drm_i915_private *dev_priv);
 
 /* intel_display.c */
 enum transcoder intel_crtc_pch_transcoder(struct intel_crtc *crtc);
@@ -1485,6 +1490,8 @@ bool __intel_dp_read_desc(struct intel_dp *intel_dp,
 bool intel_dp_read_desc(struct intel_dp *intel_dp);
 int intel_dp_link_required(int pixel_clock, int bpp);
 int intel_dp_max_data_rate(int max_link_clock, int max_lanes);
+bool intel_digital_port_connected(struct drm_i915_private *dev_priv,
+				  struct intel_digital_port *port);
 
 /* intel_dp_aux_backlight.c */
 int intel_dp_aux_init_backlight_funcs(struct intel_connector *intel_connector);
