@@ -293,6 +293,7 @@ enum plane_id {
 	PLANE_PRIMARY,
 	PLANE_SPRITE0,
 	PLANE_SPRITE1,
+	PLANE_SPRITE2,
 	PLANE_CURSOR,
 	I915_MAX_PLANES,
 };
@@ -1324,7 +1325,7 @@ struct intel_gen6_power_mgmt {
 	unsigned boosts;
 
 	/* manual wa residency calculations */
-	struct intel_rps_ei up_ei, down_ei;
+	struct intel_rps_ei ei;
 
 	/*
 	 * Protects RPS/RC6 register access and PCU communication.
@@ -2063,8 +2064,6 @@ struct drm_i915_private {
 
 	const struct intel_device_info info;
 
-	int relative_constants_mode;
-
 	void __iomem *regs;
 
 	struct intel_uncore uncore;
@@ -2241,6 +2240,11 @@ struct drm_i915_private {
 	struct i915_workarounds workarounds;
 
 	struct i915_frontbuffer_tracking fb_tracking;
+
+	struct intel_atomic_helper {
+		struct llist_head free_list;
+		struct work_struct free_work;
+	} atomic_helper;
 
 	u16 orig_clock;
 
@@ -2453,6 +2457,12 @@ struct drm_i915_private {
 
 	/* Used to save the pipe-to-encoder mapping for audio */
 	struct intel_encoder *av_enc_map[I915_MAX_PIPES];
+
+	/* necessary resource sharing with HDMI LPE audio driver. */
+	struct {
+		struct platform_device *platdev;
+		int	irq;
+	} lpe_audio;
 
 	/*
 	 * NOTE: This is the dri1/ums dungeon, don't add stuff here. Your patch
@@ -3330,6 +3340,7 @@ static inline u32 i915_reset_count(struct i915_gpu_error *error)
 }
 
 int i915_gem_reset_prepare(struct drm_i915_private *dev_priv);
+void i915_gem_reset(struct drm_i915_private *dev_priv);
 void i915_gem_reset_finish(struct drm_i915_private *dev_priv);
 void i915_gem_set_wedged(struct drm_i915_private *dev_priv);
 void i915_gem_clflush_object(struct drm_i915_gem_object *obj, bool force);
@@ -3341,7 +3352,7 @@ int __must_check i915_gem_wait_for_idle(struct drm_i915_private *dev_priv,
 					unsigned int flags);
 int __must_check i915_gem_suspend(struct drm_i915_private *dev_priv);
 void i915_gem_resume(struct drm_i915_private *dev_priv);
-int i915_gem_fault(struct vm_area_struct *vma, struct vm_fault *vmf);
+int i915_gem_fault(struct vm_fault *vmf);
 int i915_gem_object_wait(struct drm_i915_gem_object *obj,
 			 unsigned int flags,
 			 long timeout,
@@ -3591,6 +3602,14 @@ extern int i915_restore_state(struct drm_i915_private *dev_priv);
 /* i915_sysfs.c */
 void i915_setup_sysfs(struct drm_i915_private *dev_priv);
 void i915_teardown_sysfs(struct drm_i915_private *dev_priv);
+
+/* intel_lpe_audio.c */
+int  intel_lpe_audio_init(struct drm_i915_private *dev_priv);
+void intel_lpe_audio_teardown(struct drm_i915_private *dev_priv);
+void intel_lpe_audio_irq_handler(struct drm_i915_private *dev_priv);
+void intel_lpe_audio_notify(struct drm_i915_private *dev_priv,
+			    void *eld, int port, int pipe, int tmds_clk_speed,
+			    bool dp_output, int link_rate);
 
 /* intel_i2c.c */
 extern int intel_setup_gmbus(struct drm_i915_private *dev_priv);

@@ -2578,8 +2578,9 @@ intel_fill_fb_info(struct drm_i915_private *dev_priv,
 			 * We only keep the x/y offsets, so push all of the
 			 * gtt offset into the x/y offsets.
 			 */
-			_intel_adjust_tile_offset(&x, &y, tile_size,
-						  tile_width, tile_height, pitch_tiles,
+			_intel_adjust_tile_offset(&x, &y,
+						  tile_width, tile_height,
+						  tile_size, pitch_tiles,
 						  gtt_offset_rotated * tile_size, 0);
 
 			gtt_offset_rotated += rot_info->plane[i].width * rot_info->plane[i].height;
@@ -3667,10 +3668,6 @@ static void intel_update_pipe_config(struct intel_crtc *crtc,
 
 	/* drm_atomic_helper_update_legacy_modeset_state might not be called. */
 	crtc->base.mode = crtc->base.state->mode;
-
-	DRM_DEBUG_KMS("Updating pipe size %ix%i -> %ix%i\n",
-		      old_crtc_state->pipe_src_w, old_crtc_state->pipe_src_h,
-		      pipe_config->pipe_src_w, pipe_config->pipe_src_h);
 
 	/*
 	 * Update pipe size and adjust fitter if needed: the reason for this is
@@ -4795,23 +4792,17 @@ static void skylake_pfit_enable(struct intel_crtc *crtc)
 	struct intel_crtc_scaler_state *scaler_state =
 		&crtc->config->scaler_state;
 
-	DRM_DEBUG_KMS("for crtc_state = %p\n", crtc->config);
-
 	if (crtc->config->pch_pfit.enabled) {
 		int id;
 
-		if (WARN_ON(crtc->config->scaler_state.scaler_id < 0)) {
-			DRM_ERROR("Requesting pfit without getting a scaler first\n");
+		if (WARN_ON(crtc->config->scaler_state.scaler_id < 0))
 			return;
-		}
 
 		id = scaler_state->scaler_id;
 		I915_WRITE(SKL_PS_CTRL(pipe, id), PS_SCALER_EN |
 			PS_FILTER_MEDIUM | scaler_state->scalers[id].mode);
 		I915_WRITE(SKL_PS_WIN_POS(pipe, id), crtc->config->pch_pfit.pos);
 		I915_WRITE(SKL_PS_WIN_SZ(pipe, id), crtc->config->pch_pfit.size);
-
-		DRM_DEBUG_KMS("for crtc_state = %p scaler_id = %d\n", crtc->config, id);
 	}
 }
 
@@ -6881,6 +6872,12 @@ static void intel_crtc_disable_noatomic(struct drm_crtc *crtc)
 	}
 
 	state = drm_atomic_state_alloc(crtc->dev);
+	if (!state) {
+		DRM_DEBUG_KMS("failed to disable [CRTC:%d:%s], out of memory",
+			      crtc->base.id, crtc->name);
+		return;
+	}
+
 	state->acquire_ctx = crtc->dev->mode_config.acquire_ctx;
 
 	/* Everything's already locked, -EDEADLK can't happen. */
@@ -14372,6 +14369,24 @@ static void skl_update_crtcs(struct drm_atomic_state *state,
 	} while (progress);
 }
 
+static void intel_atomic_helper_free_state(struct drm_i915_private *dev_priv)
+{
+	struct intel_atomic_state *state, *next;
+	struct llist_node *freed;
+
+	freed = llist_del_all(&dev_priv->atomic_helper.free_list);
+	llist_for_each_entry_safe(state, next, freed, freed)
+		drm_atomic_state_put(&state->base);
+}
+
+static void intel_atomic_helper_free_state_worker(struct work_struct *work)
+{
+	struct drm_i915_private *dev_priv =
+		container_of(work, typeof(*dev_priv), atomic_helper.free_work);
+
+	intel_atomic_helper_free_state(dev_priv);
+}
+
 static void intel_atomic_commit_tail(struct drm_atomic_state *state)
 {
 	struct drm_device *dev = state->dev;
@@ -14538,6 +14553,8 @@ static void intel_atomic_commit_tail(struct drm_atomic_state *state)
 	 * can happen also when the device is completely off.
 	 */
 	intel_uncore_arm_unclaimed_mmio_detection(dev_priv);
+
+	intel_atomic_helper_free_state(dev_priv);
 }
 
 static void intel_atomic_commit_work(struct work_struct *work)
@@ -14562,8 +14579,14 @@ intel_atomic_commit_ready(struct i915_sw_fence *fence,
 		break;
 
 	case FENCE_FREE:
-		drm_atomic_state_put(&state->base);
-		break;
+		{
+			struct intel_atomic_helper *helper =
+				&to_i915(state->base.dev)->atomic_helper;
+
+			if (llist_add(&state->freed, &helper->free_list))
+				schedule_work(&helper->free_work);
+			break;
+		}
 	}
 
 	return NOTIFY_DONE;
@@ -14933,16 +14956,18 @@ static void intel_begin_crtc_commit(struct drm_crtc *crtc,
 		to_intel_atomic_state(old_crtc_state->state);
 	bool modeset = needs_modeset(crtc->state);
 
+	if (!modeset &&
+	    (intel_cstate->base.color_mgmt_changed ||
+	     intel_cstate->update_pipe)) {
+		intel_color_set_csc(crtc->state);
+		intel_color_load_luts(crtc->state);
+	}
+
 	/* Perform vblank evasion around commit operation */
 	intel_pipe_update_start(intel_crtc);
 
 	if (modeset)
 		goto out;
-
-	if (crtc->state->color_mgmt_changed || to_intel_crtc_state(crtc->state)->update_pipe) {
-		intel_color_set_csc(crtc->state);
-		intel_color_load_luts(crtc->state);
-	}
 
 	if (intel_cstate->update_pipe)
 		intel_update_pipe_config(intel_crtc, old_intel_cstate);
@@ -16605,6 +16630,9 @@ int intel_modeset_init(struct drm_device *dev)
 
 	dev->mode_config.funcs = &intel_mode_funcs;
 
+	INIT_WORK(&dev_priv->atomic_helper.free_work,
+		  intel_atomic_helper_free_state_worker);
+
 	intel_init_quirks(dev);
 
 	intel_init_pm(dev_priv);
@@ -16668,11 +16696,10 @@ int intel_modeset_init(struct drm_device *dev)
 		}
 	}
 
-	intel_update_czclk(dev_priv);
-	intel_update_cdclk(dev_priv);
-	dev_priv->atomic_cdclk_freq = dev_priv->cdclk_freq;
-
 	intel_shared_dpll_init(dev);
+
+	intel_update_czclk(dev_priv);
+	intel_modeset_init_hw(dev);
 
 	if (dev_priv->max_cdclk_freq == 0)
 		intel_update_max_cdclk(dev_priv);
@@ -17230,8 +17257,6 @@ void intel_modeset_gem_init(struct drm_device *dev)
 
 	intel_init_gt_powersave(dev_priv);
 
-	intel_modeset_init_hw(dev);
-
 	intel_setup_overlay(dev_priv);
 }
 
@@ -17261,6 +17286,9 @@ void intel_connector_unregister(struct drm_connector *connector)
 void intel_modeset_cleanup(struct drm_device *dev)
 {
 	struct drm_i915_private *dev_priv = to_i915(dev);
+
+	flush_work(&dev_priv->atomic_helper.free_work);
+	WARN_ON(!llist_empty(&dev_priv->atomic_helper.free_list));
 
 	intel_disable_gt_powersave(dev_priv);
 

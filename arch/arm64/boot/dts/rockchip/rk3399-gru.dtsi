@@ -1,7 +1,7 @@
 /*
  * Google Gru (and derivatives) board device tree source
  *
- * Copyright 2016 Google, Inc
+ * Copyright 2016-2017 Google, Inc
  *
  * This file is dual-licensed: you can use it either under the terms
  * of the GPL or the X11 license, at your option. Note that this dual
@@ -43,7 +43,6 @@
  */
 
 #include <dt-bindings/input/input.h>
-#include <dt-bindings/pwm/pwm.h>
 #include "rk3399.dtsi"
 #include "rk3399-opp.dtsi"
 
@@ -76,16 +75,12 @@
 	 *   schematic.
 	 */
 
-	/* parentless regulators */
-
 	ppvar_sys: ppvar-sys {
 		compatible = "regulator-fixed";
 		regulator-name = "ppvar_sys";
 		regulator-always-on;
 		regulator-boot-on;
 	};
-
-	/* ppvar_sys children, sorted by name */
 
 	pp900_ap: pp900-ap {
 		compatible = "regulator-fixed";
@@ -94,7 +89,6 @@
 		/* EC turns on w/ pp900_ap_en; always on for AP */
 		regulator-always-on;
 		regulator-boot-on;
-
 		regulator-min-microvolt = <900000>;
 		regulator-max-microvolt = <900000>;
 
@@ -108,7 +102,6 @@
 		/* EC turns on w/ lpddr_pwr_en; always on for AP */
 		regulator-always-on;
 		regulator-boot-on;
-
 		regulator-min-microvolt = <1200000>;
 		regulator-max-microvolt = <1200000>;
 
@@ -122,9 +115,9 @@
 		/* Always on when ppvar_sys shows power good */
 		regulator-always-on;
 		regulator-boot-on;
-
 		regulator-min-microvolt = <1800000>;
 		regulator-max-microvolt = <1800000>;
+
 		vin-supply = <&ppvar_sys>;
 	};
 
@@ -139,7 +132,6 @@
 
 		regulator-always-on;
 		regulator-boot-on;
-
 		regulator-min-microvolt = <3000000>;
 		regulator-max-microvolt = <3000000>;
 
@@ -153,7 +145,6 @@
 		/* Always on; plain and simple */
 		regulator-always-on;
 		regulator-boot-on;
-
 		regulator-min-microvolt = <3300000>;
 		regulator-max-microvolt = <3300000>;
 
@@ -167,7 +158,6 @@
 		/* EC turns on w/ pp5000_en; always on for AP */
 		regulator-always-on;
 		regulator-boot-on;
-
 		regulator-min-microvolt = <5000000>;
 		regulator-max-microvolt = <5000000>;
 
@@ -177,93 +167,85 @@
 	ppvar_bigcpu: ppvar-bigcpu {
 		compatible = "pwm-regulator";
 		regulator-name = "ppvar_bigcpu";
-		status = "okay";
+		/*
+		 * OVP circuit requires special handling which is not yet
+		 * represented. Keep disabled for now.
+		 */
+		status = "disabled";
 
 		pwms = <&pwm1 0 3337 0>;
+		pwm-supply = <&ppvar_sys>;
+		pwm-dutycycle-range = <100 0>;
+		pwm-dutycycle-unit = <100>;
 
 		/* EC turns on w/ ap_core_en; always on for AP */
 		regulator-always-on;
 		regulator-boot-on;
-
 		regulator-min-microvolt = <798674>;
 		regulator-max-microvolt = <1302172>;
-
-		settle-time-up-us = <322>;
-		slowest-decay-rate = <225>;
-		safe-fall-percent = <16>;
-
-		pwm-supply = <&ppvar_sys>;
-		pwm-dutycycle-range = <100 0>;
-		pwm-dutycycle-unit = <100>;
 	};
 
 	ppvar_litcpu: ppvar-litcpu {
 		compatible = "pwm-regulator";
 		regulator-name = "ppvar_litcpu";
-		status = "okay";
+		/*
+		 * OVP circuit requires special handling which is not yet
+		 * represented. Keep disabled for now.
+		 */
+		status = "disabled";
 
 		pwms = <&pwm2 0 3337 0>;
+		pwm-supply = <&ppvar_sys>;
+		pwm-dutycycle-range = <100 0>;
+		pwm-dutycycle-unit = <100>;
 
 		/* EC turns on w/ ap_core_en; always on for AP */
 		regulator-always-on;
 		regulator-boot-on;
-
 		regulator-min-microvolt = <799065>;
 		regulator-max-microvolt = <1303738>;
-
-		settle-time-up-us = <384>;
-		slowest-decay-rate = <225>;
-		safe-fall-percent = <16>;
-
-		pwm-supply = <&ppvar_sys>;
-		pwm-dutycycle-range = <100 0>;
-		pwm-dutycycle-unit = <100>;
 	};
 
 	ppvar_gpu: ppvar-gpu {
 		compatible = "pwm-regulator";
 		regulator-name = "ppvar_gpu";
-		status = "okay";
+		/*
+		 * OVP circuit requires special handling which is not yet
+		 * represented. Keep disabled for now.
+		 */
+		status = "disabled";
 
 		pwms = <&pwm0 0 3337 0>;
+		pwm-supply = <&ppvar_sys>;
+		pwm-dutycycle-range = <100 0>;
+		pwm-dutycycle-unit = <100>;
 
 		/* EC turns on w/ ap_core_en; always on for AP */
 		regulator-always-on;
 		regulator-boot-on;
-
 		regulator-min-microvolt = <785782>;
 		regulator-max-microvolt = <1217729>;
-
-		settle-time-up-us = <390>;
-		slowest-decay-rate = <225>;
-		safe-fall-percent = <16>;
-
-		pwm-supply = <&ppvar_sys>;
-		pwm-dutycycle-range = <100 0>;
-		pwm-dutycycle-unit = <100>;
 	};
 
 	ppvar_centerlogic: ppvar-centerlogic {
 		compatible = "pwm-regulator";
 		regulator-name = "ppvar_centerlogic";
-		status = "okay";
+		/*
+		 * OVP circuit requires special handling which is not yet
+		 * represented. Keep disabled for now.
+		 */
+		status = "disabled";
 
 		pwms = <&pwm3 0 3337 0>;
+		pwm-supply = <&ppvar_sys>;
+		pwm-dutycycle-range = <100 0>;
+		pwm-dutycycle-unit = <100>;
 
 		/* EC turns on w/ ppvar_centerlogic_en; always on for AP */
 		regulator-always-on;
 		regulator-boot-on;
-
 		regulator-min-microvolt = <800069>;
 		regulator-max-microvolt = <1049692>;
-
-		settle-time-up-us = <378>;
-		slowest-decay-rate = <225>;
-		safe-fall-percent = <16>;
-
-		pwm-supply = <&ppvar_sys>;
-		pwm-dutycycle-range = <100 0>;
-		pwm-dutycycle-unit = <100>;
 	};
 
 	/* Schematics call this PPVAR even though it's fixed */
@@ -274,14 +256,11 @@
 		/* EC turns on w/ ppvar_logic_en; always on for AP */
 		regulator-always-on;
 		regulator-boot-on;
-
 		regulator-min-microvolt = <900000>;
 		regulator-max-microvolt = <900000>;
 
 		vin-supply = <&ppvar_sys>;
 	};
-
-	/* pp900_ap aliases; these are always on for AP so just use alias */
 
 	/* EC turns on w/ pp900_ddrpll_en */
 	pp900_ddrpll: pp900-ap {
@@ -302,8 +281,6 @@
 	/* EC turns on w/ pp900_usb_en */
 	pp900_usb: pp900-ap {
 	};
-
-	/* pp1800 aliases; these are always on for AP so just use alias */
 
 	/* EC turns on w/ pp1800_s0_en_l */
 	pp1800_ap_io: pp1800_emmc: pp1800_nfc: pp1800_s0: pp1800 {
@@ -329,8 +306,6 @@
 	pp1800_usb: pp1800 {
 	};
 
-	/* pp1800 children */
-
 	pp1500_ap_io: pp1500-ap-io {
 		compatible = "regulator-fixed";
 		regulator-name = "pp1500_ap_io";
@@ -354,20 +329,24 @@
 		pinctrl-names = "default";
 		pinctrl-0 = <&pp1800_audio_en>;
 
-		regulator-always-on;
-		regulator-boot-on;
-
 		enable-active-high;
 		gpio = <&gpio0 2 GPIO_ACTIVE_HIGH>;
+
+		regulator-always-on;
+		regulator-boot-on;
 
 		vin-supply = <&pp1800>;
 	};
 
+	/* gpio is shared with pp3300_wifi_bt */
 	pp1800_pcie: pp1800-pcie {
 		compatible = "regulator-fixed";
 		regulator-name = "pp1800_pcie";
 		pinctrl-names = "default";
 		pinctrl-0 = <&wlan_module_pd_l>;
+
+		enable-active-high;
+		gpio = <&gpio0 4 GPIO_ACTIVE_HIGH>;
 
 		/*
 		 * Need to wait 1ms + ramp-up time before we can power on WiFi.
@@ -375,15 +354,10 @@
 		 */
 		regulator-enable-ramp-delay = <8000>;
 
-		enable-active-high;
-		gpio = <&gpio0 4 GPIO_ACTIVE_HIGH>;
-
 		vin-supply = <&pp1800>;
 	};
 
 	/*
-	 * See http://crosbug.com/p/56069/
-	 *
 	 * This is a bit of a hack. The WiFi module should be reset at least
 	 * 1ms after its regulators have ramped up (max rampup time is ~7ms).
 	 * With some stretching of the imagination, we can call the 1.8V
@@ -400,13 +374,9 @@
 		vin-supply = <&pp1800_pcie>;
 	};
 
-	/* pp3000 aliases; these are always on for AP so just use alias */
-
 	/* Always on; plain and simple */
 	pp3000_ap: pp3000_emmc: pp3000 {
 	};
-
-	/* pp3000 children */
 
 	pp3000_sd_slot: pp3000-sd-slot {
 		compatible = "regulator-fixed";
@@ -420,6 +390,12 @@
 		vin-supply = <&pp3000>;
 	};
 
+	/*
+	 * Technically, this is a small abuse of 'regulator-gpio'; this
+	 * regulator is a mux between pp1800 and pp3300. pp1800 and pp3300 are
+	 * always on though, so it is sufficient to simply control the mux
+	 * here.
+	 */
 	ppvar_sd_card_io: ppvar-sd-card-io {
 		compatible = "regulator-gpio";
 		regulator-name = "ppvar_sd_card_io";
@@ -434,12 +410,7 @@
 
 		regulator-min-microvolt = <1800000>;
 		regulator-max-microvolt = <3000000>;
-
-		// TODO: add support in driver for input supplies.
-		// ...and specify pp3000 and pp1800.
 	};
-
-	/* pp3300 aliases; these are always on for AP so just use alias */
 
 	/* EC turns on w/ pp3300_trackpad_en_l */
 	pp3300_trackpad: pp3300-trackpad {
@@ -449,8 +420,6 @@
 	pp3300_usb: pp3300 {
 	};
 
-	/* pp3300 children */
-
 	pp3300_disp: pp3300-disp {
 		compatible = "regulator-fixed";
 		regulator-name = "pp3300_disp";
@@ -458,88 +427,54 @@
 		pinctrl-0 = <&pp3300_disp_en>;
 
 		enable-active-high;
-
 		gpio = <&gpio4 27 GPIO_ACTIVE_HIGH>;
 
 		startup-delay-us = <2000>;
 		vin-supply = <&pp3300>;
 	};
 
+	/* gpio is shared with pp1800_pcie and pinctrl is set there */
 	pp3300_wifi_bt: pp3300-wifi-bt {
 		compatible = "regulator-fixed";
 		regulator-name = "pp3300_wifi_bt";
-		/* NOTE: wlan_module_pd_l pinctrl in pp1800_pcie */
 
 		enable-active-high;
-
-		// TODO: I _think_ it's OK to specify the same GPIO in two
-		// regulator-fixed regulators.  See pp1800_pcie
 		gpio = <&gpio0 4 GPIO_ACTIVE_HIGH>;
 
 		vin-supply = <&pp3300>;
 	};
 
-	/* pp5000 aliases; these are always on for AP so just use alias */
-
 	/* EC turns on w/ usb_a_en */
 	pp5000_usb_a_vbus: pp5000 {
 	};
 
-	/* END REGULATORS */
-	firmware {
-		chromeos {
-			pinctrl-names = "default";
-			pinctrl-0 = <&ap_fw_wp>;
-			write-protect-gpio = <&gpio1 18 GPIO_ACTIVE_HIGH>;
+	gpio_keys: gpio-keys {
+		compatible = "gpio-keys";
+		pinctrl-names = "default";
+		pinctrl-0 = <&bt_host_wake_l>;
+
+		wake-on-bt {
+			label = "Wake-on-Bluetooth";
+			gpios = <&gpio0 3 GPIO_ACTIVE_LOW>;
+			linux,code = <KEY_WAKEUP>;
+			wakeup-source;
 		};
 	};
 
-	io-domains {
-		compatible = "rockchip,rk3399-io-voltage-domain";
-		rockchip,grf = <&grf>;
-
-		bt656-supply = <&pp1800_ap_io>;		/* APIO2_VDD;  2a 2b */
-		audio-supply = <&pp1800_audio>;		/* APIO5_VDD;  3d 4a */
-		sdmmc-supply = <&ppvar_sd_card_io>;	/* SDMMC0_VDD; 4b    */
-		gpio1830-supply = <&pp3000_ap>;		/* APIO4_VDD;  4c 4d */
-	};
-
 	max98357a: max98357a {
-		#sound-dai-cells = <0>;
-		status = "okay";
-
+		compatible = "maxim,max98357a";
 		pinctrl-names = "default";
 		pinctrl-0 = <&sdmode_en>;
-
-		compatible = "maxim,max98357a";
 		sdmode-gpios = <&gpio1 2 GPIO_ACTIVE_HIGH>;
 		sdmode-delay = <2>;
-	};
-
-	pmu-io-domains {
-		compatible = "rockchip,rk3399-pmu-io-voltage-domain";
-		rockchip,grf = <&pmugrf>;
-
-		pmu1830-supply = <&pp1800_pmu>;		/* PMUIO2_VDD */
+		#sound-dai-cells = <0>;
+		status = "okay";
 	};
 
 	sound {
 		compatible = "rockchip,rk3399-gru-sound";
 		rockchip,cpu = <&i2s0 &i2s2>;
-		rockchip,codec = <&max98357a &headsetcodec &codec &cdn_dp>;
-		dmic-delay = <20>;
-	};
-};
-
-&cdn_dp {
-	status = "okay";
-	extcon = <&usbc_extcon0>, <&usbc_extcon1>;
-
-	ports {
-		/* Don't use vopl for dp, save it for edp */
-		dp_in: port {
-			/delete-node/ endpoint@1;
-		};
+		rockchip,codec = <&max98357a &headsetcodec &codec>;
 	};
 };
 
@@ -551,8 +486,7 @@
  * voltage we get when we set the PWM pins to "input").
  *
  * This quick transition under light load has the possibility to trigger the
- * regulator "over voltage protection" (OVP).  See the "safe-fall-percent"
- * property of the regulators themselves for more details.
+ * regulator "over voltage protection" (OVP).
  *
  * To make extra certain that we don't hit this OVP at suspend time, we'll
  * transition to a voltage that's much closer to the default (~1.0 V) so that
@@ -608,7 +542,7 @@
 		<&cru PCLK_PERILP0>, <&cru ACLK_CCI>,
 		<&cru HCLK_PERILP1>, <&cru PCLK_PERILP1>;
 	assigned-clock-rates =
-		<594000000>, <800000000>,
+		<600000000>, <800000000>,
 		<1000000000>,
 		<150000000>, <75000000>,
 		<37500000>,
@@ -617,38 +551,27 @@
 		<100000000>, <50000000>;
 };
 
-&display_subsystem {
-	status = "okay";
-};
-
 &emmc_phy {
-	status = "okay";
-};
-
-&gpu {
-	mali-supply = <&ppvar_gpu>;
 	status = "okay";
 };
 
 ap_i2c_mic: &i2c1 {
 	status = "okay";
 
-	// TODO: device can handle 1MHz, can the bus?
-	// http://crosbug.com/p/53683
 	clock-frequency = <400000>;
 
-	/* These are relatively safe rise/fall times; TODO: measure */
+	/* These are relatively safe rise/fall times */
 	i2c-scl-falling-time-ns = <50>;
 	i2c-scl-rising-time-ns = <300>;
 
 	headsetcodec: rt5514@57 {
 		compatible = "realtek,rt5514";
 		reg = <0x57>;
-		pinctrl-names = "default";
-		pinctrl-0 = <&mic_int>;
-
 		interrupt-parent = <&gpio1>;
 		interrupts = <13 IRQ_TYPE_LEVEL_HIGH>;
+		pinctrl-names = "default";
+		pinctrl-0 = <&mic_int>;
+		realtek,dmic-init-delay = <20>;
 		wakeup-source;
 	};
 };
@@ -658,13 +581,19 @@ ap_i2c_ts: &i2c3 {
 
 	clock-frequency = <400000>;
 
-	/* These are relatively safe rise/fall times; TODO: measure */
+	/* These are relatively safe rise/fall times */
 	i2c-scl-falling-time-ns = <50>;
 	i2c-scl-rising-time-ns = <300>;
 };
 
 ap_i2c_tp: &i2c5 {
 	status = "okay";
+
+	clock-frequency = <400000>;
+
+	/* These are relatively safe rise/fall times */
+	i2c-scl-falling-time-ns = <50>;
+	i2c-scl-rising-time-ns = <300>;
 
 	/*
 	 * Note strange pullup enable.  Apparently this avoids leakage but
@@ -673,50 +602,35 @@ ap_i2c_tp: &i2c5 {
 	 * alive, so the "en" pin just gets set to output high.
 	 */
 	pinctrl-0 = <&i2c5_xfer &ap_i2c_tp_pu_en>;
-
-	clock-frequency = <400000>;
-
-	/* These are relatively safe rise/fall times; TODO: measure */
-	i2c-scl-falling-time-ns = <50>;
-	i2c-scl-rising-time-ns = <300>;
 };
 
 ap_i2c_audio: &i2c8 {
 	status = "okay";
 
-	// TODO: device can handle 1MHz, can the bus?  Probably...
-	// http://crosbug.com/p/53683
 	clock-frequency = <400000>;
 
-	/* These are relatively safe rise/fall times; TODO: measure */
+	/* These are relatively safe rise/fall times */
 	i2c-scl-falling-time-ns = <50>;
 	i2c-scl-rising-time-ns = <300>;
 
-	// TODO: Put dlg,da7219 here
 	codec: da7219@1a {
 		compatible = "dlg,da7219";
 		reg = <0x1a>;
-
-		pinctrl-names = "default";
-		pinctrl-0 = <&headset_int_l>;
-
 		interrupt-parent = <&gpio1>;
 		interrupts = <23 IRQ_TYPE_LEVEL_LOW>;
-
+		clocks = <&cru SCLK_I2S_8CH_OUT>;
+		clock-names = "mclk";
+		dlg,micbias-lvl = <2600>;
+		dlg,mic-amp-in-sel = "diff";
+		pinctrl-names = "default";
+		pinctrl-0 = <&headset_int_l>;
 		VDD-supply = <&pp1800>;
 		VDDMIC-supply = <&pp3300>;
 		VDDIO-supply = <&pp1800>;
 
-		// TODO: I THINK this is right, but it's a bit of a guess.
-		clocks = <&cru SCLK_I2S_8CH_OUT>;
-		clock-names = "mclk";
-
-// Below is from bindings; we need to adjust for our SoC / board.
-		dlg,ldo-lvl = <1200>;
-		dlg,micbias-lvl = <2600>;
-		dlg,mic-amp-in-sel = "diff";
-
 		da7219_aad {
+			dlg,adc-1bit-rpt = <1>;
+			dlg,btn-avg = <4>;
 			dlg,btn-cfg = <50>;
 			dlg,mic-det-thr = <500>;
 			dlg,jack-ins-deb = <20>;
@@ -727,9 +641,6 @@ ap_i2c_audio: &i2c8 {
 			dlg,d-b-btn-thr = <0x16>;
 			dlg,b-c-btn-thr = <0x21>;
 			dlg,c-mic-btn-thr = <0x3E>;
-
-			dlg,btn-avg = <4>;
-			dlg,adc-1bit-rpt = <1>;
 		};
 	};
 };
@@ -742,14 +653,21 @@ ap_i2c_audio: &i2c8 {
 	status = "okay";
 };
 
+&io_domains {
+	status = "okay";
+
+	audio-supply = <&pp1800_audio>;		/* APIO5_VDD;  3d 4a */
+	bt656-supply = <&pp1800_ap_io>;		/* APIO2_VDD;  2a 2b */
+	gpio1830-supply = <&pp3000_ap>;		/* APIO4_VDD;  4c 4d */
+	sdmmc-supply = <&ppvar_sd_card_io>;	/* SDMMC0_VDD; 4b    */
+};
+
 &pcie0 {
 	status = "okay";
-	pinctrl-names = "default";
-	pinctrl-0 = <&pcie_clkreqn>, <&wifi_perst_l>;
+
 	ep-gpios = <&gpio2 27 GPIO_ACTIVE_HIGH>;
-
-	rockchip,disable-gen2;
-
+	pinctrl-names = "default";
+	pinctrl-0 = <&pcie_clkreqn_cpm>, <&wifi_perst_l>;
 	vpcie3v3-supply = <&pp3300_wifi_bt>;
 	vpcie1v8-supply = <&wlan_pd_n>; /* HACK: see &wlan_pd_n */
 	vpcie0v9-supply = <&pp900_pcie>;
@@ -761,13 +679,13 @@ ap_i2c_audio: &i2c8 {
 		ranges;
 
 		mvl_wifi: wifi@0,0 {
-			compatible = "marvell,pcie8997";
+			compatible = "pci1b4b,2b42";
 			reg = <0x83010000 0x0 0x00000000 0x0 0x00100000
 			       0x83010000 0x0 0x00100000 0x0 0x00100000>;
-			pinctrl-names = "default";
-			pinctrl-0 = <&wlan_host_wake_l>;
 			interrupt-parent = <&gpio0>;
 			interrupts = <8 IRQ_TYPE_LEVEL_LOW>;
+			pinctrl-names = "default";
+			pinctrl-0 = <&wlan_host_wake_l>;
 			wakeup-source;
 		};
 	};
@@ -775,6 +693,12 @@ ap_i2c_audio: &i2c8 {
 
 &pcie_phy {
 	status = "okay";
+};
+
+&pmu_io_domains {
+	status = "okay";
+
+	pmu1830-supply = <&pp1800_pmu>;		/* PMUIO2_VDD */
 };
 
 &pwm0 {
@@ -824,16 +748,14 @@ ap_i2c_audio: &i2c8 {
 		     &sdmmc_bus4>;
 
 	bus-width = <4>;
-	cd-gpios = <&gpio4 24 GPIO_ACTIVE_LOW>;
-	disable-wp;
-
 	cap-mmc-highspeed;
 	cap-sd-highspeed;
+	cd-gpios = <&gpio4 24 GPIO_ACTIVE_LOW>;
+	disable-wp;
 	sd-uhs-sdr12;
 	sd-uhs-sdr25;
 	sd-uhs-sdr50;
 	sd-uhs-sdr104;
-
 	vmmc-supply = <&pp3000_sd_slot>;
 	vqmmc-supply = <&ppvar_sd_card_io>;
 };
@@ -841,13 +763,15 @@ ap_i2c_audio: &i2c8 {
 &spi1 {
 	status = "okay";
 
+	pinctrl-names = "default", "sleep";
+	pinctrl-1 = <&spi1_sleep>;
+
 	spiflash@0 {
 		compatible = "jedec,spi-nor";
-
-		// TODO: can run faster once verified.
-		// TODO: add rx-sample-delay-ns.
-		spi-max-frequency = <10000000>;
 		reg = <0>;
+
+		/* May run faster once verified. */
+		spi-max-frequency = <10000000>;
 	};
 };
 
@@ -858,8 +782,7 @@ ap_i2c_audio: &i2c8 {
 		compatible = "realtek,rt5514";
 		reg = <0>;
 
-		// TODO: can run faster once verified.
-		// TODO: add rx-sample-delay-ns.
+		/* May run faster once verified. */
 		spi-max-frequency = <10000000>;
 	};
 };
@@ -870,13 +793,11 @@ ap_i2c_audio: &i2c8 {
 	cros_ec: ec@0 {
 		compatible = "google,cros-ec-spi";
 		reg = <0>;
-		pinctrl-names = "default";
-		pinctrl-0 = <&ec_ap_int_l>;
-
-		google,cros-ec-spi-pre-delay = <30>;	// TODO: check
 		interrupt-parent = <&gpio0>;
 		interrupts = <1 IRQ_TYPE_LEVEL_LOW>;
-		spi-max-frequency = <3000000>;		// TODO: check; TODO: rx-sample-delay-ns?
+		pinctrl-names = "default";
+		pinctrl-0 = <&ec_ap_int_l>;
+		spi-max-frequency = <3000000>;
 
 		i2c_tunnel: i2c-tunnel {
 			compatible = "google,cros-ec-i2c-tunnel";
@@ -889,21 +810,6 @@ ap_i2c_audio: &i2c8 {
 			compatible = "google,cros-ec-pwm";
 			#pwm-cells = <1>;
 		};
-
-		usbc_extcon0: extcon@0 {
-			compatible = "google,extcon-cros-ec";
-			google,usb-port-id = <0>;
-
-			#extcon-cells = <0>;
-		};
-
-		usbc_extcon1: extcon@1 {
-			compatible = "google,extcon-cros-ec";
-			google,usb-port-id = <1>;
-
-			#extcon-cells = <0>;
-		};
-
 	};
 };
 
@@ -912,16 +818,6 @@ ap_i2c_audio: &i2c8 {
 
 	rockchip,hw-tshut-mode = <1>; /* tshut mode 0:CRU 1:GPIO */
 	rockchip,hw-tshut-polarity = <1>; /* tshut polarity 0:LOW 1:HIGH */
-};
-
-&tcphy0 {
-	status = "okay";
-	extcon = <&usbc_extcon0>;
-};
-
-&tcphy1 {
-	status = "okay";
-	extcon = <&usbc_extcon1>;
 };
 
 &u2phy0 {
@@ -937,6 +833,14 @@ ap_i2c_audio: &i2c8 {
 };
 
 &u2phy1_host {
+	status = "okay";
+};
+
+&u2phy0_otg {
+	status = "okay";
+};
+
+&u2phy1_otg {
 	status = "okay";
 };
 
@@ -962,7 +866,6 @@ ap_i2c_audio: &i2c8 {
 
 &usbdrd3_0 {
 	status = "okay";
-	extcon = <&usbc_extcon0>;
 };
 
 &usbdrd_dwc3_0 {
@@ -972,7 +875,6 @@ ap_i2c_audio: &i2c8 {
 
 &usbdrd3_1 {
 	status = "okay";
-	extcon = <&usbc_extcon1>;
 };
 
 &usbdrd_dwc3_1 {
@@ -980,51 +882,8 @@ ap_i2c_audio: &i2c8 {
 	dr_mode = "host";
 };
 
-&vopb {
-	status = "okay";
-	assigned-clocks = <&cru ACLK_VOP0>, <&cru HCLK_VOP0>, <&cru DCLK_VOP0>;
-	assigned-clock-rates = <400000000>, <200000000>, <100000000>;
-};
-
-&vopb_mmu {
-	status = "okay";
-};
-
-&vopl {
-	status = "okay";
-	assigned-clocks = <&cru ACLK_VOP1>, <&cru HCLK_VOP1>, <&cru DCLK_VOP1>;
-	assigned-clock-rates = <400000000>, <200000000>, <100000000>;
-
-	/* Don't use vopl for dp, save it for edp */
-	vopl_out: port {
-		/delete-node/ endpoint@1;
-	};
-};
-
-&vopl_mmu {
-	status = "okay";
-};
-
-&vpu {
-	status = "okay";
-};
-
-&vpu_mmu {
-	status = "okay";
-};
-
-&vdec {
-	status = "okay";
-};
-
-&vdec_mmu {
-	status = "okay";
-};
-
-#include "common/cros-ec-keyboard.dtsi"
-#include "common/cros-ec-sbs.dtsi"
-
-/* PINCTRL: always below everything else */
+#include <arm/cros-ec-keyboard.dtsi>
+#include <arm/cros-ec-sbs.dtsi>
 
 &pinctrl {
 	/*
@@ -1056,6 +915,12 @@ ap_i2c_audio: &i2c8 {
 	pcfg_pull_none_8ma: pcfg-pull-none-8ma {
 		bias-disable;
 		drive-strength = <8>;
+	};
+
+	backlight-enable {
+		bl_en: bl-en {
+			rockchip,pins = <1 17 RK_FUNC_GPIO &pcfg_pull_none>;
+		};
 	};
 
 	cros-ec {
@@ -1112,7 +977,6 @@ ap_i2c_audio: &i2c8 {
 			rockchip,pins = <1 23 RK_FUNC_GPIO &pcfg_pull_none>;
 		};
 
-		// TODO: check pull.  From signal name assume active high.
 		mic_int: mic-int {
 			rockchip,pins = <1 13 RK_FUNC_GPIO &pcfg_pull_down>;
 		};
@@ -1121,6 +985,17 @@ ap_i2c_audio: &i2c8 {
 	max98357a {
 		sdmode_en: sdmode-en {
 			rockchip,pins = <1 2 RK_FUNC_GPIO &pcfg_pull_down>;
+		};
+	};
+
+	pcie {
+		pcie_clkreqn_cpm: pci-clkreqn-cpm {
+			/*
+			 * Since our pcie doesn't support ClockPM(CPM), we want
+			 * to hack this as gpio, so the EP could be able to
+			 * de-assert it along and make ClockPM(CPM) work.
+			 */
+			rockchip,pins = <2 26 RK_FUNC_GPIO &pcfg_pull_none>;
 		};
 	};
 
@@ -1167,13 +1042,16 @@ ap_i2c_audio: &i2c8 {
 		};
 	};
 
-	trackpad {
-		ap_i2c_tp_pu_en: ap-i2c-tp-pu-en {
-			rockchip,pins = <3 12 RK_FUNC_GPIO &pcfg_output_high>;
-		};
-
-		trackpad_int_l: trackpad-int-l {
-			rockchip,pins = <1 4 RK_FUNC_GPIO &pcfg_pull_up>;
+	spi1 {
+		spi1_sleep: spi1-sleep {
+			/*
+			 * Pull down SPI1 CLK/CS/RX/TX during suspend, to
+			 * prevent leakage.
+			 */
+			rockchip,pins = <1 9 RK_FUNC_GPIO &pcfg_pull_down>,
+					<1 10 RK_FUNC_GPIO &pcfg_pull_down>,
+					<1 7 RK_FUNC_GPIO &pcfg_pull_down>,
+					<1 8 RK_FUNC_GPIO &pcfg_pull_down>;
 		};
 	};
 
@@ -1184,6 +1062,16 @@ ap_i2c_audio: &i2c8 {
 
 		touch_reset_l: touch-reset-l {
 			rockchip,pins = <4 26 RK_FUNC_GPIO &pcfg_pull_none>;
+		};
+	};
+
+	trackpad {
+		ap_i2c_tp_pu_en: ap-i2c-tp-pu-en {
+			rockchip,pins = <3 12 RK_FUNC_GPIO &pcfg_output_high>;
+		};
+
+		trackpad_int_l: trackpad-int-l {
+			rockchip,pins = <1 4 RK_FUNC_GPIO &pcfg_pull_up>;
 		};
 	};
 
@@ -1201,14 +1089,9 @@ ap_i2c_audio: &i2c8 {
 			rockchip,pins = <1 11 RK_FUNC_GPIO &pcfg_output_low>;
 		};
 
-		wlan_host_wake_l: wlan-host-wake-l {
-			rockchip,pins = <0 8 RK_FUNC_GPIO &pcfg_pull_none>;
-		};
-	};
-
-	backlight-enable {
-		bl_en: bl-en {
-			rockchip,pins = <1 17 RK_FUNC_GPIO &pcfg_pull_none>;
+		bt_host_wake_l: bt-host-wake-l {
+			/* Kevin has an external pull up, but Gru does not */
+			rockchip,pins = <0 3 RK_FUNC_GPIO &pcfg_pull_up>;
 		};
 	};
 
@@ -1218,8 +1101,3 @@ ap_i2c_audio: &i2c8 {
 		};
 	};
 };
-
-/* DON'T PUT ANYTHING BELOW HERE.  PUT IT ABOVE PINCTRL */
-/* DON'T PUT ANYTHING BELOW HERE.  PUT IT ABOVE PINCTRL */
-/* DON'T PUT ANYTHING BELOW HERE.  PUT IT ABOVE PINCTRL */
-
