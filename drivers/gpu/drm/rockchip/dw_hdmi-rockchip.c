@@ -23,6 +23,9 @@
 #define RK3288_GRF_SOC_CON6		0x025c
 #define RK3288_HDMI_SEL_VOP_LIT		(1 << 4)
 
+#define RK3399_GRF_SOC_CON20		0x6250
+#define RK3399_HDMI_SEL_VOP_LIT		BIT(6)
+
 struct dw_hdmi_rockchip_plat_data {
 	const struct dw_hdmi_plat_data *dw_hdmi_plat_data;
 	int grf_vop_select;
@@ -269,12 +272,27 @@ static const struct dw_hdmi_rockchip_plat_data rk3368_hdmi_drv_data = {
 	.grf_vop_select = -1,
 };
 
+int rk3399_vop_select[] = {
+		RK3399_HDMI_SEL_VOP_LIT << 16,
+		RK3399_HDMI_SEL_VOP_LIT | (RK3399_HDMI_SEL_VOP_LIT << 16)
+};
+
+static const struct dw_hdmi_rockchip_plat_data rk3399_hdmi_drv_data = {
+	.dw_hdmi_plat_data = &rockchip_hdmi_drv_data,
+	.grf_vop_select = RK3399_GRF_SOC_CON20,
+	.vop_selects = rk3399_vop_select,
+	.nvop_selects = ARRAY_SIZE(rk3399_vop_select),
+};
+
 static const struct of_device_id dw_hdmi_rockchip_dt_ids[] = {
 	{ .compatible = "rockchip,rk3288-dw-hdmi",
 	  .data = &rk3288_hdmi_drv_data
 	},
 	{ .compatible = "rockchip,rk3368-dw-hdmi",
 	  .data = &rk3368_hdmi_drv_data
+	},
+	{ .compatible = "rockchip,rk3399-dw-hdmi",
+	  .data = &rk3399_hdmi_drv_data
 	},
 	{},
 };
