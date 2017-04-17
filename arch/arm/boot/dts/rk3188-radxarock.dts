@@ -262,6 +262,14 @@
 	};
 };
 
+&vop0 {
+	status = "okay";
+};
+
+&vop1 {
+	status = "okay";
+};
+
 &mmc0 {
 	status = "okay";
 	pinctrl-names = "default";
