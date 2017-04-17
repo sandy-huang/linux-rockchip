@@ -20,13 +20,21 @@
 #include "rockchip_drm_drv.h"
 #include "rockchip_drm_vop.h"
 
-#define GRF_SOC_CON6                    0x025c
-#define HDMI_SEL_VOP_LIT                (1 << 4)
+#define RK3288_GRF_SOC_CON6		0x025c
+#define RK3288_HDMI_SEL_VOP_LIT		(1 << 4)
+
+struct dw_hdmi_rockchip_plat_data {
+	const struct dw_hdmi_plat_data *dw_hdmi_plat_data;
+	int grf_vop_select;
+	int *vop_selects;
+	int nvop_selects;
+};
 
 struct rockchip_hdmi {
 	struct device *dev;
 	struct regmap *regmap;
 	struct drm_encoder encoder;
+	const struct dw_hdmi_rockchip_plat_data *plat_data;
 };
 
 #define to_rockchip_hdmi(x)	container_of(x, struct rockchip_hdmi, x)
@@ -200,13 +208,18 @@ static void dw_hdmi_rockchip_encoder_enable(struct drm_encoder *encoder)
 	u32 val;
 	int mux;
 
-	mux = drm_of_encoder_active_endpoint_id(hdmi->dev->of_node, encoder);
-	if (mux)
-		val = HDMI_SEL_VOP_LIT | (HDMI_SEL_VOP_LIT << 16);
-	else
-		val = HDMI_SEL_VOP_LIT << 16;
+	if (hdmi->plat_data->grf_vop_select < 0)
+		return;
 
-	regmap_write(hdmi->regmap, GRF_SOC_CON6, val);
+	mux = drm_of_encoder_active_endpoint_id(hdmi->dev->of_node, encoder);
+	if (mux >= hdmi->plat_data->nvop_selects) {
+		dev_err(hdmi->dev,
+			"vop %d is out of range of supported vops\n", mux);
+		return;
+	}
+
+	val = hdmi->plat_data->vop_selects[mux];
+	regmap_write(hdmi->regmap, hdmi->plat_data->grf_vop_select, val);
 	dev_dbg(hdmi->dev, "vop %s output to hdmi\n",
 		(mux) ? "LIT" : "BIG");
 }
@@ -239,9 +252,21 @@ static const struct dw_hdmi_plat_data rockchip_hdmi_drv_data = {
 	.phy_config = rockchip_phy_config,
 };
 
+int rk3288_vop_select[] = {
+		RK3288_HDMI_SEL_VOP_LIT << 16,
+		RK3288_HDMI_SEL_VOP_LIT | (RK3288_HDMI_SEL_VOP_LIT << 16)
+};
+
+static const struct dw_hdmi_rockchip_plat_data rk3288_hdmi_drv_data = {
+	.dw_hdmi_plat_data = &rockchip_hdmi_drv_data,
+	.grf_vop_select = RK3288_GRF_SOC_CON6,
+	.vop_selects = rk3288_vop_select,
+	.nvop_selects = ARRAY_SIZE(rk3288_vop_select),
+};
+
 static const struct of_device_id dw_hdmi_rockchip_dt_ids[] = {
 	{ .compatible = "rockchip,rk3288-dw-hdmi",
-	  .data = &rockchip_hdmi_drv_data
+	  .data = &rk3288_hdmi_drv_data
 	},
 	{},
 };
@@ -251,7 +276,7 @@ static int dw_hdmi_rockchip_bind(struct device *dev, struct device *master,
 				 void *data)
 {
 	struct platform_device *pdev = to_platform_device(dev);
-	const struct dw_hdmi_plat_data *plat_data;
+	const struct dw_hdmi_rockchip_plat_data *rk_plat_data;
 	const struct of_device_id *match;
 	struct drm_device *drm = data;
 	struct drm_encoder *encoder;
@@ -266,8 +291,9 @@ static int dw_hdmi_rockchip_bind(struct device *dev, struct device *master,
 		return -ENOMEM;
 
 	match = of_match_node(dw_hdmi_rockchip_dt_ids, pdev->dev.of_node);
-	plat_data = match->data;
+	rk_plat_data = match->data;
 	hdmi->dev = &pdev->dev;
+	hdmi->plat_data = rk_plat_data;
 	encoder = &hdmi->encoder;
 
 	encoder->possible_crtcs = drm_of_find_possible_crtcs(drm, dev->of_node);
@@ -290,7 +316,7 @@ static int dw_hdmi_rockchip_bind(struct device *dev, struct device *master,
 	drm_encoder_init(drm, encoder, &dw_hdmi_rockchip_encoder_funcs,
 			 DRM_MODE_ENCODER_TMDS, NULL);
 
-	ret = dw_hdmi_bind(pdev, encoder, plat_data);
+	ret = dw_hdmi_bind(pdev, encoder, rk_plat_data->dw_hdmi_plat_data);
 
 	/*
 	 * If dw_hdmi_bind() fails we'll never call dw_hdmi_unbind(),
