@@ -264,9 +264,17 @@ static const struct dw_hdmi_rockchip_plat_data rk3288_hdmi_drv_data = {
 	.nvop_selects = ARRAY_SIZE(rk3288_vop_select),
 };
 
+static const struct dw_hdmi_rockchip_plat_data rk3368_hdmi_drv_data = {
+	.dw_hdmi_plat_data = &rockchip_hdmi_drv_data,
+	.grf_vop_select = -1,
+};
+
 static const struct of_device_id dw_hdmi_rockchip_dt_ids[] = {
 	{ .compatible = "rockchip,rk3288-dw-hdmi",
 	  .data = &rk3288_hdmi_drv_data
+	},
+	{ .compatible = "rockchip,rk3368-dw-hdmi",
+	  .data = &rk3368_hdmi_drv_data
 	},
 	{},
 };
