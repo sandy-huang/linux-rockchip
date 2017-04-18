@@ -731,7 +731,7 @@
 
 	vop: vop@ff930000 {
 		compatible = "rockchip,rk3368-vop";
-		reg = <0xff930000 0x2f4>;
+		reg = <0x0 0xff930000 0x0 0x2f4>;
 		interrupts = <GIC_SPI 15 IRQ_TYPE_LEVEL_HIGH>;
 		clocks = <&cru ACLK_VOP>, <&cru DCLK_VOP>, <&cru HCLK_VOP>;
 		clock-names = "aclk_vop", "dclk_vop", "hclk_vop";
@@ -764,7 +764,7 @@
 
 	vop_mmu: iommu@ff930300 {
 		compatible = "rockchip,iommu";
-		reg = <0xff930300 0x100>;
+		reg = <0x0 0xff930300 0x0 0x100>;
 		interrupts = <GIC_SPI 15 IRQ_TYPE_LEVEL_HIGH>;
 		interrupt-names = "vop_mmu";
 //		power-domains = <&power RK3288_PD_VIO>;
@@ -774,7 +774,7 @@
 
 	hdmi: hdmi@ff980000 {
 		compatible = "rockchip,rk3368-dw-hdmi";
-		reg = <0xff980000 0x20000>;
+		reg = <0x0 0xff980000 0x0 0x20000>;
 		reg-io-width = <4>;
 		rockchip,grf = <&grf>;
 		interrupts = <GIC_SPI 103 IRQ_TYPE_LEVEL_HIGH>;
