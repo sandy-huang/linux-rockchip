@@ -77,55 +77,6 @@ void rockchip_drm_dma_detach_device(struct drm_device *drm_dev,
 	iommu_detach_device(domain, dev);
 }
 
-int rockchip_register_crtc_funcs(struct drm_crtc *crtc,
-				 const struct rockchip_crtc_funcs *crtc_funcs)
-{
-	int pipe = drm_crtc_index(crtc);
-	struct rockchip_drm_private *priv = crtc->dev->dev_private;
-
-	if (pipe >= ROCKCHIP_MAX_CRTC)
-		return -EINVAL;
-
-	priv->crtc_funcs[pipe] = crtc_funcs;
-
-	return 0;
-}
-
-void rockchip_unregister_crtc_funcs(struct drm_crtc *crtc)
-{
-	int pipe = drm_crtc_index(crtc);
-	struct rockchip_drm_private *priv = crtc->dev->dev_private;
-
-	if (pipe >= ROCKCHIP_MAX_CRTC)
-		return;
-
-	priv->crtc_funcs[pipe] = NULL;
-}
-
-static int rockchip_drm_crtc_enable_vblank(struct drm_device *dev,
-					   unsigned int pipe)
-{
-	struct rockchip_drm_private *priv = dev->dev_private;
-	struct drm_crtc *crtc = drm_crtc_from_index(dev, pipe);
-
-	if (crtc && priv->crtc_funcs[pipe] &&
-	    priv->crtc_funcs[pipe]->enable_vblank)
-		return priv->crtc_funcs[pipe]->enable_vblank(crtc);
-
-	return 0;
-}
-
-static void rockchip_drm_crtc_disable_vblank(struct drm_device *dev,
-					     unsigned int pipe)
-{
-	struct rockchip_drm_private *priv = dev->dev_private;
-	struct drm_crtc *crtc = drm_crtc_from_index(dev, pipe);
-
-	if (crtc && priv->crtc_funcs[pipe] &&
-	    priv->crtc_funcs[pipe]->enable_vblank)
-		priv->crtc_funcs[pipe]->disable_vblank(crtc);
-}
-
 static int rockchip_drm_init_iommu(struct drm_device *drm_dev)
 {
 	struct rockchip_drm_private *private = drm_dev->dev_private;
@@ -185,21 +136,24 @@ static int rockchip_drm_bind(struct device *dev)
 	INIT_LIST_HEAD(&private->psr_list);
 	spin_lock_init(&private->psr_list_lock);
 
+	ret = rockchip_drm_init_iommu(drm_dev);
+	if (ret)
+		goto err_free;
+
 	drm_mode_config_init(drm_dev);
 
 	rockchip_drm_mode_config_init(drm_dev);
 
-	ret = rockchip_drm_init_iommu(drm_dev);
-	if (ret)
-		goto err_config_cleanup;
-
 	/* Try to bind all sub drivers. */
 	ret = component_bind_all(dev, drm_dev);
 	if (ret)
-		goto err_iommu_cleanup;
+		goto err_mode_config_cleanup;
 
-	/* init kms poll for handling hpd */
-	drm_kms_helper_poll_init(drm_dev);
+	ret = drm_vblank_init(drm_dev, drm_dev->mode_config.num_crtc);
+	if (ret)
+		goto err_unbind_all;
+
+	drm_mode_config_reset(drm_dev);
 
 	/*
 	 * enable drm irq mode.
@@ -207,15 +161,12 @@ static int rockchip_drm_bind(struct device *dev)
 	 */
 	drm_dev->irq_enabled = true;
 
-	ret = drm_vblank_init(drm_dev, ROCKCHIP_MAX_CRTC);
-	if (ret)
-		goto err_kms_helper_poll_fini;
-
-	drm_mode_config_reset(drm_dev);
+	/* init kms poll for handling hpd */
+	drm_kms_helper_poll_init(drm_dev);
 
 	ret = rockchip_drm_fbdev_init(drm_dev);
 	if (ret)
-		goto err_vblank_cleanup;
+		goto err_kms_helper_poll_fini;
 
 	ret = drm_dev_register(drm_dev, 0);
 	if (ret)
@@ -224,17 +175,17 @@ static int rockchip_drm_bind(struct device *dev)
 	return 0;
 err_fbdev_fini:
 	rockchip_drm_fbdev_fini(drm_dev);
-err_vblank_cleanup:
-	drm_vblank_cleanup(drm_dev);
 err_kms_helper_poll_fini:
 	drm_kms_helper_poll_fini(drm_dev);
+	drm_vblank_cleanup(drm_dev);
+err_unbind_all:
 	component_unbind_all(dev, drm_dev);
-err_iommu_cleanup:
-	rockchip_iommu_cleanup(drm_dev);
-err_config_cleanup:
+err_mode_config_cleanup:
 	drm_mode_config_cleanup(drm_dev);
-	drm_dev->dev_private = NULL;
+	rockchip_iommu_cleanup(drm_dev);
 err_free:
+	drm_dev->dev_private = NULL;
+	dev_set_drvdata(dev, NULL);
 	drm_dev_unref(drm_dev);
 	return ret;
 }
@@ -243,16 +194,20 @@ static void rockchip_drm_unbind(struct device *dev)
 {
 	struct drm_device *drm_dev = dev_get_drvdata(dev);
 
-	rockchip_drm_fbdev_fini(drm_dev);
-	drm_vblank_cleanup(drm_dev);
-	drm_kms_helper_poll_fini(drm_dev);
-	component_unbind_all(dev, drm_dev);
-	rockchip_iommu_cleanup(drm_dev);
-	drm_mode_config_cleanup(drm_dev);
-	drm_dev->dev_private = NULL;
 	drm_dev_unregister(drm_dev);
-	drm_dev_unref(drm_dev);
+
+	rockchip_drm_fbdev_fini(drm_dev);
+	drm_kms_helper_poll_fini(drm_dev);
+
+	drm_atomic_helper_shutdown(drm_dev);
+	drm_vblank_cleanup(drm_dev);
+	component_unbind_all(dev, drm_dev);
+	drm_mode_config_cleanup(drm_dev);
+	rockchip_iommu_cleanup(drm_dev);
+
+	drm_dev->dev_private = NULL;
 	dev_set_drvdata(dev, NULL);
+	drm_dev_unref(drm_dev);
 }
 
 static void rockchip_drm_lastclose(struct drm_device *dev)
@@ -277,9 +232,6 @@ static struct drm_driver rockchip_drm_driver = {
 	.driver_features	= DRIVER_MODESET | DRIVER_GEM |
 				  DRIVER_PRIME | DRIVER_ATOMIC,
 	.lastclose		= rockchip_drm_lastclose,
-	.get_vblank_counter	= drm_vblank_no_hw_counter,
-	.enable_vblank		= rockchip_drm_crtc_enable_vblank,
-	.disable_vblank		= rockchip_drm_crtc_disable_vblank,
 	.gem_vm_ops		= &drm_gem_cma_vm_ops,
 	.gem_free_object_unlocked = rockchip_gem_free_object,
 	.dumb_create		= rockchip_gem_dumb_create,
