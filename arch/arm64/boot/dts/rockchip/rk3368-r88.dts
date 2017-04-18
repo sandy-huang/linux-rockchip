@@ -209,6 +209,10 @@
 	status = "ok";
 };
 
+&hdmi {
+	status = "okay";
+};
+
 &i2c0 {
 	status = "okay";
 
@@ -365,6 +369,14 @@
 
 &usb_otg {
 	dr_mode = "host";
+	status = "okay";
+};
+
+&vop {
+	status = "okay";
+};
+
+&vop_mmu {
 	status = "okay";
 };
 
