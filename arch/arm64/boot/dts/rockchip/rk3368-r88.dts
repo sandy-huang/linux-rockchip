@@ -210,6 +210,7 @@
 };
 
 &hdmi {
+	ddc-i2c-bus = <&i2c5>;
 	status = "okay";
 };
 
@@ -238,6 +239,10 @@
 		clock-output-names = "xin32k";
 		/* rtc_int is not connected */
 	};
+};
+
+&i2c5 {
+	status = "okay";
 };
 
 &io_domains {
