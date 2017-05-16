@@ -36,7 +36,8 @@
 #include <linux/spinlock.h>
 #include <linux/smp.h>
 #include <linux/interrupt.h>
-#include <linux/sched.h>
+#include <linux/sched/signal.h>
+#include <linux/sched/debug.h>
 #include <linux/atomic.h>
 #include <linux/bitops.h>
 #include <linux/percpu.h>
@@ -49,6 +50,7 @@
 #include <linux/moduleparam.h>
 #include <linux/kthread.h>
 #include <linux/tick.h>
+#include <linux/rcupdate_wait.h>
 
 #define CREATE_TRACE_POINTS
 
@@ -122,7 +124,7 @@ EXPORT_SYMBOL(rcu_read_lock_sched_held);
  * non-expedited counterparts?  Intended for use within RCU.  Note
  * that if the user specifies both rcu_expedited and rcu_normal, then
  * rcu_normal wins.  (Except during the time period during boot from
- * when the first task is spawned until the rcu_exp_runtime_mode()
+ * when the first task is spawned until the rcu_set_runtime_mode()
  * core_initcall() is invoked, at which point everything is expedited.)
  */
 bool rcu_gp_is_normal(void)
@@ -132,8 +134,7 @@ bool rcu_gp_is_normal(void)
 }
 EXPORT_SYMBOL_GPL(rcu_gp_is_normal);
 
-static atomic_t rcu_expedited_nesting =
-	ATOMIC_INIT(IS_ENABLED(CONFIG_RCU_EXPEDITE_BOOT) ? 1 : 0);
+static atomic_t rcu_expedited_nesting = ATOMIC_INIT(1);
 
 /*
  * Should normal grace-period primitives be expedited?  Intended for
@@ -182,13 +183,45 @@ EXPORT_SYMBOL_GPL(rcu_unexpedite_gp);
  */
 void rcu_end_inkernel_boot(void)
 {
-	if (IS_ENABLED(CONFIG_RCU_EXPEDITE_BOOT))
-		rcu_unexpedite_gp();
+	rcu_unexpedite_gp();
 	if (rcu_normal_after_boot)
 		WRITE_ONCE(rcu_normal, 1);
 }
 
 #endif /* #ifndef CONFIG_TINY_RCU */
+
+/*
+ * Test each non-SRCU synchronous grace-period wait API.  This is
+ * useful just after a change in mode for these primitives, and
+ * during early boot.
+ */
+void rcu_test_sync_prims(void)
+{
+	if (!IS_ENABLED(CONFIG_PROVE_RCU))
+		return;
+	synchronize_rcu();
+	synchronize_rcu_bh();
+	synchronize_sched();
+	synchronize_rcu_expedited();
+	synchronize_rcu_bh_expedited();
+	synchronize_sched_expedited();
+}
+
+#if !defined(CONFIG_TINY_RCU) || defined(CONFIG_SRCU)
+
+/*
+ * Switch to run-time mode once RCU has fully initialized.
+ */
+static int __init rcu_set_runtime_mode(void)
+{
+	rcu_test_sync_prims();
+	rcu_scheduler_active = RCU_SCHEDULER_RUNNING;
+	rcu_test_sync_prims();
+	return 0;
+}
+core_initcall(rcu_set_runtime_mode);
+
+#endif /* #if !defined(CONFIG_TINY_RCU) || defined(CONFIG_SRCU) */
 
 #ifdef CONFIG_PREEMPT_RCU
 
@@ -632,6 +665,7 @@ static void check_holdout_task(struct task_struct *t,
 		put_task_struct(t);
 		return;
 	}
+	rcu_request_urgent_qs_task(t);
 	if (!needreport)
 		return;
 	if (*firstreport) {
@@ -816,23 +850,6 @@ static void rcu_spawn_tasks_kthread(void)
 }
 
 #endif /* #ifdef CONFIG_TASKS_RCU */
-
-/*
- * Test each non-SRCU synchronous grace-period wait API.  This is
- * useful just after a change in mode for these primitives, and
- * during early boot.
- */
-void rcu_test_sync_prims(void)
-{
-	if (!IS_ENABLED(CONFIG_PROVE_RCU))
-		return;
-	synchronize_rcu();
-	synchronize_rcu_bh();
-	synchronize_sched();
-	synchronize_rcu_expedited();
-	synchronize_rcu_bh_expedited();
-	synchronize_sched_expedited();
-}
 
 #ifdef CONFIG_PROVE_RCU
 

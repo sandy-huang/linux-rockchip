@@ -24,7 +24,6 @@
 #include <linux/slab.h>
 #include <linux/mm.h>
 #include <linux/backing-dev.h>
-#include <linux/fscrypto.h>
 
 #include "ext4_jbd2.h"
 #include "xattr.h"
@@ -158,7 +157,7 @@ static int ext4_end_io(ext4_io_end_t *io)
 
 	io->handle = NULL;	/* Following call will use up the handle */
 	ret = ext4_convert_unwritten_extents(handle, inode, offset, size);
-	if (ret < 0) {
+	if (ret < 0 && !ext4_forced_shutdown(EXT4_SB(inode->i_sb))) {
 		ext4_msg(inode->i_sb, KERN_EMERG,
 			 "failed to convert unwritten extents to written "
 			 "extents -- potential data loss!  "
@@ -298,8 +297,17 @@ static void ext4_end_bio(struct bio *bio)
 {
 	ext4_io_end_t *io_end = bio->bi_private;
 	sector_t bi_sector = bio->bi_iter.bi_sector;
+	char b[BDEVNAME_SIZE];
 
-	BUG_ON(!io_end);
+	if (WARN_ONCE(!io_end, "io_end is NULL: %s: sector %Lu len %u err %d\n",
+		      bdevname(bio->bi_bdev, b),
+		      (long long) bio->bi_iter.bi_sector,
+		      (unsigned) bio_sectors(bio),
+		      bio->bi_error)) {
+		ext4_finish_bio(bio);
+		bio_put(bio);
+		return;
+	}
 	bio->bi_end_io = NULL;
 
 	if (bio->bi_error) {

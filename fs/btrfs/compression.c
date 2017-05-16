@@ -44,7 +44,7 @@
 
 struct compressed_bio {
 	/* number of bios pending for this compressed extent */
-	atomic_t pending_bios;
+	refcount_t pending_bios;
 
 	/* the pages with the compressed data on them */
 	struct page **compressed_pages;
@@ -100,7 +100,7 @@ static struct bio *compressed_bio_alloc(struct block_device *bdev,
 	return btrfs_bio_alloc(bdev, first_byte >> 9, BIO_MAX_PAGES, gfp_flags);
 }
 
-static int check_compressed_csum(struct inode *inode,
+static int check_compressed_csum(struct btrfs_inode *inode,
 				 struct compressed_bio *cb,
 				 u64 disk_start)
 {
@@ -111,7 +111,7 @@ static int check_compressed_csum(struct inode *inode,
 	u32 csum;
 	u32 *cb_sum = &cb->sums;
 
-	if (BTRFS_I(inode)->flags & BTRFS_INODE_NODATASUM)
+	if (inode->flags & BTRFS_INODE_NODATASUM)
 		return 0;
 
 	for (i = 0; i < cb->nr_pages; i++) {
@@ -124,10 +124,8 @@ static int check_compressed_csum(struct inode *inode,
 		kunmap_atomic(kaddr);
 
 		if (csum != *cb_sum) {
-			btrfs_info(BTRFS_I(inode)->root->fs_info,
-			   "csum failed ino %llu extent %llu csum %u wanted %u mirror %d",
-			   btrfs_ino(inode), disk_start, csum, *cb_sum,
-			   cb->mirror_num);
+			btrfs_print_data_csum_error(inode, disk_start, csum,
+					*cb_sum, cb->mirror_num);
 			ret = -EIO;
 			goto fail;
 		}
@@ -163,11 +161,11 @@ static void end_compressed_bio_read(struct bio *bio)
 	/* if there are more bios still pending for this compressed
 	 * extent, just exit
 	 */
-	if (!atomic_dec_and_test(&cb->pending_bios))
+	if (!refcount_dec_and_test(&cb->pending_bios))
 		goto out;
 
 	inode = cb->inode;
-	ret = check_compressed_csum(inode, cb,
+	ret = check_compressed_csum(BTRFS_I(inode), cb,
 				    (u64)bio->bi_iter.bi_sector << 9);
 	if (ret)
 		goto csum_failed;
@@ -276,7 +274,7 @@ static void end_compressed_bio_write(struct bio *bio)
 	/* if there are more bios still pending for this compressed
 	 * extent, just exit
 	 */
-	if (!atomic_dec_and_test(&cb->pending_bios))
+	if (!refcount_dec_and_test(&cb->pending_bios))
 		goto out;
 
 	/* ok, we're the last bio for this extent, step one is to
@@ -344,7 +342,7 @@ int btrfs_submit_compressed_write(struct inode *inode, u64 start,
 	cb = kmalloc(compressed_bio_size(fs_info, compressed_len), GFP_NOFS);
 	if (!cb)
 		return -ENOMEM;
-	atomic_set(&cb->pending_bios, 0);
+	refcount_set(&cb->pending_bios, 0);
 	cb->errors = 0;
 	cb->inode = inode;
 	cb->start = start;
@@ -365,7 +363,7 @@ int btrfs_submit_compressed_write(struct inode *inode, u64 start,
 	bio_set_op_attrs(bio, REQ_OP_WRITE, 0);
 	bio->bi_private = cb;
 	bio->bi_end_io = end_compressed_bio_write;
-	atomic_inc(&cb->pending_bios);
+	refcount_set(&cb->pending_bios, 1);
 
 	/* create and submit bios for the compressed pages */
 	bytes_left = compressed_len;
@@ -390,7 +388,7 @@ int btrfs_submit_compressed_write(struct inode *inode, u64 start,
 			 * we inc the count.  Otherwise, the cb might get
 			 * freed before we're done setting it up
 			 */
-			atomic_inc(&cb->pending_bios);
+			refcount_inc(&cb->pending_bios);
 			ret = btrfs_bio_wq_end_io(fs_info, bio,
 						  BTRFS_WQ_ENDIO_DATA);
 			BUG_ON(ret); /* -ENOMEM */
@@ -609,7 +607,7 @@ int btrfs_submit_compressed_read(struct inode *inode, struct bio *bio,
 	if (!cb)
 		goto out;
 
-	atomic_set(&cb->pending_bios, 0);
+	refcount_set(&cb->pending_bios, 0);
 	cb->errors = 0;
 	cb->inode = inode;
 	cb->mirror_num = mirror_num;
@@ -658,7 +656,7 @@ int btrfs_submit_compressed_read(struct inode *inode, struct bio *bio,
 	bio_set_op_attrs (comp_bio, REQ_OP_READ, 0);
 	comp_bio->bi_private = cb;
 	comp_bio->bi_end_io = end_compressed_bio_read;
-	atomic_inc(&cb->pending_bios);
+	refcount_set(&cb->pending_bios, 1);
 
 	for (pg_index = 0; pg_index < nr_pages; pg_index++) {
 		page = cb->compressed_pages[pg_index];
@@ -687,7 +685,7 @@ int btrfs_submit_compressed_read(struct inode *inode, struct bio *bio,
 			 * we inc the count.  Otherwise, the cb might get
 			 * freed before we're done setting it up
 			 */
-			atomic_inc(&cb->pending_bios);
+			refcount_inc(&cb->pending_bios);
 
 			if (!(BTRFS_I(inode)->flags & BTRFS_INODE_NODATASUM)) {
 				ret = btrfs_lookup_bio_sums(inode, comp_bio,
@@ -913,32 +911,28 @@ static void free_workspaces(void)
 }
 
 /*
- * given an address space and start/len, compress the bytes.
+ * Given an address space and start and length, compress the bytes into @pages
+ * that are allocated on demand.
  *
- * pages are allocated to hold the compressed result and stored
- * in 'pages'
+ * @out_pages is an in/out parameter, holds maximum number of pages to allocate
+ * and returns number of actually allocated pages
  *
- * out_pages is used to return the number of pages allocated.  There
- * may be pages allocated even if we return an error
- *
- * total_in is used to return the number of bytes actually read.  It
- * may be smaller then len if we had to exit early because we
+ * @total_in is used to return the number of bytes actually read.  It
+ * may be smaller than the input length if we had to exit early because we
  * ran out of room in the pages array or because we cross the
  * max_out threshold.
  *
- * total_out is used to return the total number of compressed bytes
+ * @total_out is an in/out parameter, must be set to the input length and will
+ * be also used to return the total number of compressed bytes
  *
- * max_out tells us the max number of bytes that we're allowed to
+ * @max_out tells us the max number of bytes that we're allowed to
  * stuff into pages
  */
 int btrfs_compress_pages(int type, struct address_space *mapping,
-			 u64 start, unsigned long len,
-			 struct page **pages,
-			 unsigned long nr_dest_pages,
+			 u64 start, struct page **pages,
 			 unsigned long *out_pages,
 			 unsigned long *total_in,
-			 unsigned long *total_out,
-			 unsigned long max_out)
+			 unsigned long *total_out)
 {
 	struct list_head *workspace;
 	int ret;
@@ -946,10 +940,9 @@ int btrfs_compress_pages(int type, struct address_space *mapping,
 	workspace = find_workspace(type);
 
 	ret = btrfs_compress_op[type-1]->compress_pages(workspace, mapping,
-						      start, len, pages,
-						      nr_dest_pages, out_pages,
-						      total_in, total_out,
-						      max_out);
+						      start, pages,
+						      out_pages,
+						      total_in, total_out);
 	free_workspace(type, workspace);
 	return ret;
 }
@@ -1017,13 +1010,14 @@ void btrfs_exit_compress(void)
  *
  * total_out is the last byte of the buffer
  */
-int btrfs_decompress_buf2page(char *buf, unsigned long buf_start,
+int btrfs_decompress_buf2page(const char *buf, unsigned long buf_start,
 			      unsigned long total_out, u64 disk_start,
 			      struct bio *bio)
 {
 	unsigned long buf_offset;
 	unsigned long current_buf_start;
 	unsigned long start_byte;
+	unsigned long prev_start_byte;
 	unsigned long working_bytes = total_out - buf_start;
 	unsigned long bytes;
 	char *kaddr;
@@ -1071,26 +1065,34 @@ int btrfs_decompress_buf2page(char *buf, unsigned long buf_start,
 		if (!bio->bi_iter.bi_size)
 			return 0;
 		bvec = bio_iter_iovec(bio, bio->bi_iter);
-
+		prev_start_byte = start_byte;
 		start_byte = page_offset(bvec.bv_page) - disk_start;
 
 		/*
-		 * make sure our new page is covered by this
-		 * working buffer
+		 * We need to make sure we're only adjusting
+		 * our offset into compression working buffer when
+		 * we're switching pages.  Otherwise we can incorrectly
+		 * keep copying when we were actually done.
 		 */
-		if (total_out <= start_byte)
-			return 1;
+		if (start_byte != prev_start_byte) {
+			/*
+			 * make sure our new page is covered by this
+			 * working buffer
+			 */
+			if (total_out <= start_byte)
+				return 1;
 
-		/*
-		 * the next page in the biovec might not be adjacent
-		 * to the last page, but it might still be found
-		 * inside this working buffer. bump our offset pointer
-		 */
-		if (total_out > start_byte &&
-		    current_buf_start < start_byte) {
-			buf_offset = start_byte - buf_start;
-			working_bytes = total_out - start_byte;
-			current_buf_start = buf_start + buf_offset;
+			/*
+			 * the next page in the biovec might not be adjacent
+			 * to the last page, but it might still be found
+			 * inside this working buffer. bump our offset pointer
+			 */
+			if (total_out > start_byte &&
+			    current_buf_start < start_byte) {
+				buf_offset = start_byte - buf_start;
+				working_bytes = total_out - start_byte;
+				current_buf_start = buf_start + buf_offset;
+			}
 		}
 	}
 

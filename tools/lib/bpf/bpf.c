@@ -27,7 +27,7 @@
 #include "bpf.h"
 
 /*
- * When building perf, unistd.h is overrided. __NR_bpf is
+ * When building perf, unistd.h is overridden. __NR_bpf is
  * required to be defined explicitly.
  */
 #ifndef __NR_bpf
@@ -37,18 +37,20 @@
 #  define __NR_bpf 321
 # elif defined(__aarch64__)
 #  define __NR_bpf 280
+# elif defined(__sparc__)
+#  define __NR_bpf 349
 # else
 #  error __NR_bpf not defined. libbpf does not support your arch.
 # endif
 #endif
 
-static __u64 ptr_to_u64(void *ptr)
+static inline __u64 ptr_to_u64(const void *ptr)
 {
 	return (__u64) (unsigned long) ptr;
 }
 
-static int sys_bpf(enum bpf_cmd cmd, union bpf_attr *attr,
-		   unsigned int size)
+static inline int sys_bpf(enum bpf_cmd cmd, union bpf_attr *attr,
+			  unsigned int size)
 {
 	return syscall(__NR_bpf, cmd, attr, size);
 }
@@ -69,8 +71,25 @@ int bpf_create_map(enum bpf_map_type map_type, int key_size,
 	return sys_bpf(BPF_MAP_CREATE, &attr, sizeof(attr));
 }
 
-int bpf_load_program(enum bpf_prog_type type, struct bpf_insn *insns,
-		     size_t insns_cnt, char *license,
+int bpf_create_map_in_map(enum bpf_map_type map_type, int key_size,
+			  int inner_map_fd, int max_entries, __u32 map_flags)
+{
+	union bpf_attr attr;
+
+	memset(&attr, '\0', sizeof(attr));
+
+	attr.map_type = map_type;
+	attr.key_size = key_size;
+	attr.value_size = 4;
+	attr.inner_map_fd = inner_map_fd;
+	attr.max_entries = max_entries;
+	attr.map_flags = map_flags;
+
+	return sys_bpf(BPF_MAP_CREATE, &attr, sizeof(attr));
+}
+
+int bpf_load_program(enum bpf_prog_type type, const struct bpf_insn *insns,
+		     size_t insns_cnt, const char *license,
 		     __u32 kern_version, char *log_buf, size_t log_buf_sz)
 {
 	int fd;
@@ -98,7 +117,7 @@ int bpf_load_program(enum bpf_prog_type type, struct bpf_insn *insns,
 	return sys_bpf(BPF_PROG_LOAD, &attr, sizeof(attr));
 }
 
-int bpf_map_update_elem(int fd, void *key, void *value,
+int bpf_map_update_elem(int fd, const void *key, const void *value,
 			__u64 flags)
 {
 	union bpf_attr attr;
@@ -112,7 +131,7 @@ int bpf_map_update_elem(int fd, void *key, void *value,
 	return sys_bpf(BPF_MAP_UPDATE_ELEM, &attr, sizeof(attr));
 }
 
-int bpf_map_lookup_elem(int fd, void *key, void *value)
+int bpf_map_lookup_elem(int fd, const void *key, void *value)
 {
 	union bpf_attr attr;
 
@@ -124,7 +143,7 @@ int bpf_map_lookup_elem(int fd, void *key, void *value)
 	return sys_bpf(BPF_MAP_LOOKUP_ELEM, &attr, sizeof(attr));
 }
 
-int bpf_map_delete_elem(int fd, void *key)
+int bpf_map_delete_elem(int fd, const void *key)
 {
 	union bpf_attr attr;
 
@@ -135,7 +154,7 @@ int bpf_map_delete_elem(int fd, void *key)
 	return sys_bpf(BPF_MAP_DELETE_ELEM, &attr, sizeof(attr));
 }
 
-int bpf_map_get_next_key(int fd, void *key, void *next_key)
+int bpf_map_get_next_key(int fd, const void *key, void *next_key)
 {
 	union bpf_attr attr;
 
@@ -168,7 +187,8 @@ int bpf_obj_get(const char *pathname)
 	return sys_bpf(BPF_OBJ_GET, &attr, sizeof(attr));
 }
 
-int bpf_prog_attach(int prog_fd, int target_fd, enum bpf_attach_type type)
+int bpf_prog_attach(int prog_fd, int target_fd, enum bpf_attach_type type,
+		    unsigned int flags)
 {
 	union bpf_attr attr;
 
@@ -176,6 +196,7 @@ int bpf_prog_attach(int prog_fd, int target_fd, enum bpf_attach_type type)
 	attr.target_fd	   = target_fd;
 	attr.attach_bpf_fd = prog_fd;
 	attr.attach_type   = type;
+	attr.attach_flags  = flags;
 
 	return sys_bpf(BPF_PROG_ATTACH, &attr, sizeof(attr));
 }
@@ -189,4 +210,28 @@ int bpf_prog_detach(int target_fd, enum bpf_attach_type type)
 	attr.attach_type = type;
 
 	return sys_bpf(BPF_PROG_DETACH, &attr, sizeof(attr));
+}
+
+int bpf_prog_test_run(int prog_fd, int repeat, void *data, __u32 size,
+		      void *data_out, __u32 *size_out, __u32 *retval,
+		      __u32 *duration)
+{
+	union bpf_attr attr;
+	int ret;
+
+	bzero(&attr, sizeof(attr));
+	attr.test.prog_fd = prog_fd;
+	attr.test.data_in = ptr_to_u64(data);
+	attr.test.data_out = ptr_to_u64(data_out);
+	attr.test.data_size_in = size;
+	attr.test.repeat = repeat;
+
+	ret = sys_bpf(BPF_PROG_TEST_RUN, &attr, sizeof(attr));
+	if (size_out)
+		*size_out = attr.test.data_size_out;
+	if (retval)
+		*retval = attr.test.retval;
+	if (duration)
+		*duration = attr.test.duration;
+	return ret;
 }

@@ -101,7 +101,7 @@ int lwtunnel_encap_del_ops(const struct lwtunnel_encap_ops *ops,
 }
 EXPORT_SYMBOL(lwtunnel_encap_del_ops);
 
-int lwtunnel_build_state(struct net_device *dev, u16 encap_type,
+int lwtunnel_build_state(u16 encap_type,
 			 struct nlattr *encap, unsigned int family,
 			 const void *cfg, struct lwtunnel_state **lws)
 {
@@ -116,7 +116,7 @@ int lwtunnel_build_state(struct net_device *dev, u16 encap_type,
 	rcu_read_lock();
 	ops = rcu_dereference(lwtun_encaps[encap_type]);
 	if (likely(ops && ops->build_state && try_module_get(ops->owner))) {
-		ret = ops->build_state(dev, encap, family, cfg, lws);
+		ret = ops->build_state(encap, family, cfg, lws);
 		if (ret)
 			module_put(ops->owner);
 	}
@@ -162,7 +162,6 @@ int lwtunnel_valid_encap_type_attr(struct nlattr *attr, int remaining)
 	struct rtnexthop *rtnh = (struct rtnexthop *)attr;
 	struct nlattr *nla_entype;
 	struct nlattr *attrs;
-	struct nlattr *nla;
 	u16 encap_type;
 	int attrlen;
 
@@ -170,7 +169,6 @@ int lwtunnel_valid_encap_type_attr(struct nlattr *attr, int remaining)
 		attrlen = rtnh_attrlen(rtnh);
 		if (attrlen > 0) {
 			attrs = rtnh_attrs(rtnh);
-			nla = nla_find(attrs, attrlen, RTA_ENCAP);
 			nla_entype = nla_find(attrs, attrlen, RTA_ENCAP_TYPE);
 
 			if (nla_entype) {
@@ -205,7 +203,7 @@ int lwtunnel_fill_encap(struct sk_buff *skb, struct lwtunnel_state *lwtstate)
 {
 	const struct lwtunnel_encap_ops *ops;
 	struct nlattr *nest;
-	int ret = -EINVAL;
+	int ret;
 
 	if (!lwtstate)
 		return 0;
@@ -214,8 +212,11 @@ int lwtunnel_fill_encap(struct sk_buff *skb, struct lwtunnel_state *lwtstate)
 	    lwtstate->type > LWTUNNEL_ENCAP_MAX)
 		return 0;
 
-	ret = -EOPNOTSUPP;
 	nest = nla_nest_start(skb, RTA_ENCAP);
+	if (!nest)
+		return -EMSGSIZE;
+
+	ret = -EOPNOTSUPP;
 	rcu_read_lock();
 	ops = rcu_dereference(lwtun_encaps[lwtstate->type]);
 	if (likely(ops && ops->fill_encap))

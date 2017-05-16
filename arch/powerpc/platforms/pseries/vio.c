@@ -615,7 +615,7 @@ static u64 vio_dma_get_required_mask(struct device *dev)
         return dma_iommu_ops.get_required_mask(dev);
 }
 
-static struct dma_map_ops vio_dma_mapping_ops = {
+static const struct dma_map_ops vio_dma_mapping_ops = {
 	.alloc             = vio_dma_iommu_alloc_coherent,
 	.free              = vio_dma_iommu_free_coherent,
 	.mmap		   = dma_direct_mmap_coherent,
@@ -1318,7 +1318,7 @@ static void vio_dev_release(struct device *dev)
 	struct iommu_table *tbl = get_iommu_table_base(dev);
 
 	if (tbl)
-		iommu_free_table(tbl, of_node_full_name(dev->of_node));
+		iommu_tce_table_put(tbl);
 	of_node_put(dev->of_node);
 	kfree(to_vio_dev(dev));
 }

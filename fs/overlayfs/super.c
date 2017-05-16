@@ -7,6 +7,7 @@
  * the Free Software Foundation.
  */
 
+#include <uapi/linux/magic.h>
 #include <linux/fs.h>
 #include <linux/namei.h>
 #include <linux/xattr.h>
@@ -48,11 +49,28 @@ static void ovl_dentry_release(struct dentry *dentry)
 	}
 }
 
+static int ovl_check_append_only(struct inode *inode, int flag)
+{
+	/*
+	 * This test was moot in vfs may_open() because overlay inode does
+	 * not have the S_APPEND flag, so re-check on real upper inode
+	 */
+	if (IS_APPEND(inode)) {
+		if  ((flag & O_ACCMODE) != O_RDONLY && !(flag & O_APPEND))
+			return -EPERM;
+		if (flag & O_TRUNC)
+			return -EPERM;
+	}
+
+	return 0;
+}
+
 static struct dentry *ovl_d_real(struct dentry *dentry,
 				 const struct inode *inode,
 				 unsigned int open_flags)
 {
 	struct dentry *real;
+	int err;
 
 	if (!d_is_reg(dentry)) {
 		if (!inode || inode == d_inode(dentry))
@@ -64,15 +82,20 @@ static struct dentry *ovl_d_real(struct dentry *dentry,
 		return dentry;
 
 	if (open_flags) {
-		int err = ovl_open_maybe_copy_up(dentry, open_flags);
-
+		err = ovl_open_maybe_copy_up(dentry, open_flags);
 		if (err)
 			return ERR_PTR(err);
 	}
 
 	real = ovl_dentry_upper(dentry);
-	if (real && (!inode || inode == d_inode(real)))
+	if (real && (!inode || inode == d_inode(real))) {
+		if (!inode) {
+			err = ovl_check_append_only(d_inode(real), open_flags);
+			if (err)
+				return ERR_PTR(err);
+		}
 		return real;
+	}
 
 	real = ovl_dentry_lower(dentry);
 	if (!real)
@@ -160,6 +183,25 @@ static void ovl_put_super(struct super_block *sb)
 	kfree(ufs);
 }
 
+static int ovl_sync_fs(struct super_block *sb, int wait)
+{
+	struct ovl_fs *ufs = sb->s_fs_info;
+	struct super_block *upper_sb;
+	int ret;
+
+	if (!ufs->upper_mnt)
+		return 0;
+	upper_sb = ufs->upper_mnt->mnt_sb;
+	if (!upper_sb->s_op->sync_fs)
+		return 0;
+
+	/* real inodes have already been synced by sync_filesystem(ovl_sb) */
+	down_read(&upper_sb->s_umount);
+	ret = upper_sb->s_op->sync_fs(upper_sb, wait);
+	up_read(&upper_sb->s_umount);
+	return ret;
+}
+
 /**
  * ovl_statfs
  * @sb: The overlayfs super block
@@ -222,6 +264,7 @@ static int ovl_remount(struct super_block *sb, int *flags, char *data)
 
 static const struct super_operations ovl_super_operations = {
 	.put_super	= ovl_put_super,
+	.sync_fs	= ovl_sync_fs,
 	.statfs		= ovl_statfs,
 	.show_options	= ovl_show_options,
 	.remount_fs	= ovl_remount,
@@ -688,8 +731,8 @@ static const struct xattr_handler *ovl_xattr_handlers[] = {
 
 static int ovl_fill_super(struct super_block *sb, void *data, int silent)
 {
-	struct path upperpath = { NULL, NULL };
-	struct path workpath = { NULL, NULL };
+	struct path upperpath = { };
+	struct path workpath = { };
 	struct dentry *root_dentry;
 	struct inode *realinode;
 	struct ovl_entry *oe;
@@ -701,6 +744,7 @@ static int ovl_fill_super(struct super_block *sb, void *data, int silent)
 	unsigned int stacklen = 0;
 	unsigned int i;
 	bool remote = false;
+	struct cred *cred;
 	int err;
 
 	err = -ENOMEM;
@@ -708,6 +752,7 @@ static int ovl_fill_super(struct super_block *sb, void *data, int silent)
 	if (!ufs)
 		goto out;
 
+	init_waitqueue_head(&ufs->copyup_wq);
 	ufs->config.redirect_dir = ovl_redirect_dir_def;
 	err = ovl_parse_opt((char *) data, &ufs->config);
 	if (err)
@@ -825,6 +870,8 @@ static int ovl_fill_super(struct super_block *sb, void *data, int silent)
 		 * creation of workdir in previous step.
 		 */
 		if (ufs->workdir) {
+			struct dentry *temp;
+
 			err = ovl_check_d_type_supported(&workpath);
 			if (err < 0)
 				goto out_put_workdir;
@@ -836,6 +883,14 @@ static int ovl_fill_super(struct super_block *sb, void *data, int silent)
 			 */
 			if (!err)
 				pr_warn("overlayfs: upper fs needs to support d_type.\n");
+
+			/* Check if upper/work fs supports O_TMPFILE */
+			temp = ovl_do_tmpfile(ufs->workdir, S_IFREG | 0);
+			ufs->tmpfile = !IS_ERR(temp);
+			if (ufs->tmpfile)
+				dput(temp);
+			else
+				pr_warn("overlayfs: upper fs does not support tmpfile.\n");
 		}
 	}
 
@@ -859,20 +914,31 @@ static int ovl_fill_super(struct super_block *sb, void *data, int silent)
 
 		ufs->lower_mnt[ufs->numlower] = mnt;
 		ufs->numlower++;
+
+		/* Check if all lower layers are on same sb */
+		if (i == 0)
+			ufs->same_sb = mnt->mnt_sb;
+		else if (ufs->same_sb != mnt->mnt_sb)
+			ufs->same_sb = NULL;
 	}
 
 	/* If the upper fs is nonexistent, we mark overlayfs r/o too */
 	if (!ufs->upper_mnt)
 		sb->s_flags |= MS_RDONLY;
+	else if (ufs->upper_mnt->mnt_sb != ufs->same_sb)
+		ufs->same_sb = NULL;
 
 	if (remote)
 		sb->s_d_op = &ovl_reval_dentry_operations;
 	else
 		sb->s_d_op = &ovl_dentry_operations;
 
-	ufs->creator_cred = prepare_creds();
-	if (!ufs->creator_cred)
+	ufs->creator_cred = cred = prepare_creds();
+	if (!cred)
 		goto out_put_lower_mnt;
+
+	/* Never override disk quota limits or use reserved space */
+	cap_lower(cred->cap_effective, CAP_SYS_RESOURCE);
 
 	err = -ENOMEM;
 	oe = ovl_alloc_entry(numlower);

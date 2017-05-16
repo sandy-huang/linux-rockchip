@@ -289,9 +289,10 @@ static const struct {
 	u32 			value;
 	char			*name;
 } fc_port_role_names[] = {
-	{ FC_PORT_ROLE_FCP_TARGET,	"FCP Target" },
-	{ FC_PORT_ROLE_FCP_INITIATOR,	"FCP Initiator" },
-	{ FC_PORT_ROLE_IP_PORT,		"IP Port" },
+	{ FC_PORT_ROLE_FCP_TARGET,		"FCP Target" },
+	{ FC_PORT_ROLE_FCP_INITIATOR,		"FCP Initiator" },
+	{ FC_PORT_ROLE_IP_PORT,			"IP Port" },
+	{ FC_PORT_ROLE_FCP_DUMMY_INITIATOR,	"FCP Dummy Initiator" },
 };
 fc_bitfield_name_search(port_roles, fc_port_role_names)
 
@@ -850,7 +851,7 @@ static int fc_str_to_dev_loss(const char *buf, unsigned long *val)
 	char *cp;
 
 	*val = simple_strtoul(buf, &cp, 0);
-	if ((*cp && (*cp != '\n')) || (*val < 0))
+	if (*cp && (*cp != '\n'))
 		return -EINVAL;
 	/*
 	 * Check for overflow; dev_loss_tmo is u32
@@ -2055,7 +2056,7 @@ static int fc_vport_match(struct attribute_container *cont,
 
 
 /**
- * fc_timed_out - FC Transport I/O timeout intercept handler
+ * fc_eh_timed_out - FC Transport I/O timeout intercept handler
  * @scmd:	The SCSI command which timed out
  *
  * This routine protects against error handlers getting invoked while a
@@ -2076,8 +2077,8 @@ static int fc_vport_match(struct attribute_container *cont,
  * Notes:
  *	This routine assumes no locks are held on entry.
  */
-static enum blk_eh_timer_return
-fc_timed_out(struct scsi_cmnd *scmd)
+enum blk_eh_timer_return
+fc_eh_timed_out(struct scsi_cmnd *scmd)
 {
 	struct fc_rport *rport = starget_to_rport(scsi_target(scmd->device));
 
@@ -2086,6 +2087,7 @@ fc_timed_out(struct scsi_cmnd *scmd)
 
 	return BLK_EH_NOT_HANDLED;
 }
+EXPORT_SYMBOL(fc_eh_timed_out);
 
 /*
  * Called by fc_user_scan to locate an rport on the shost that
@@ -2159,19 +2161,6 @@ fc_user_scan(struct Scsi_Host *shost, uint channel, uint id, u64 lun)
 	return 0;
 }
 
-static int fc_tsk_mgmt_response(struct Scsi_Host *shost, u64 nexus, u64 tm_id,
-				int result)
-{
-	struct fc_internal *i = to_fc_internal(shost->transportt);
-	return i->f->tsk_mgmt_response(shost, nexus, tm_id, result);
-}
-
-static int fc_it_nexus_response(struct Scsi_Host *shost, u64 nexus, int result)
-{
-	struct fc_internal *i = to_fc_internal(shost->transportt);
-	return i->f->it_nexus_response(shost, nexus, result);
-}
-
 struct scsi_transport_template *
 fc_attach_transport(struct fc_function_template *ft)
 {
@@ -2211,13 +2200,7 @@ fc_attach_transport(struct fc_function_template *ft)
 	/* Transport uses the shost workq for scsi scanning */
 	i->t.create_work_queue = 1;
 
-	i->t.eh_timed_out = fc_timed_out;
-
 	i->t.user_scan = fc_user_scan;
-
-	/* target-mode drivers' functions */
-	i->t.tsk_mgmt_response = fc_tsk_mgmt_response;
-	i->t.it_nexus_response = fc_it_nexus_response;
 
 	/*
 	 * Setup SCSI Target Attributes.
@@ -2646,7 +2629,8 @@ fc_remote_port_create(struct Scsi_Host *shost, int channel,
 	spin_lock_irqsave(shost->host_lock, flags);
 
 	rport->number = fc_host->next_rport_number++;
-	if (rport->roles & FC_PORT_ROLE_FCP_TARGET)
+	if ((rport->roles & FC_PORT_ROLE_FCP_TARGET) ||
+	    (rport->roles & FC_PORT_ROLE_FCP_DUMMY_INITIATOR))
 		rport->scsi_target_id = fc_host->next_target_id++;
 	else
 		rport->scsi_target_id = -1;
@@ -3765,7 +3749,6 @@ fc_bsg_hostadd(struct Scsi_Host *shost, struct fc_host_attrs *fc_host)
 	struct device *dev = &shost->shost_gendev;
 	struct fc_internal *i = to_fc_internal(shost->transportt);
 	struct request_queue *q;
-	int err;
 	char bsg_name[20];
 
 	fc_host->rqst_q = NULL;
@@ -3776,23 +3759,14 @@ fc_bsg_hostadd(struct Scsi_Host *shost, struct fc_host_attrs *fc_host)
 	snprintf(bsg_name, sizeof(bsg_name),
 		 "fc_host%d", shost->host_no);
 
-	q = __scsi_alloc_queue(shost, bsg_request_fn);
-	if (!q) {
-		dev_err(dev,
-			"fc_host%d: bsg interface failed to initialize - no request queue\n",
-			shost->host_no);
-		return -ENOMEM;
-	}
-
-	err = bsg_setup_queue(dev, q, bsg_name, fc_bsg_dispatch,
-				 i->f->dd_bsg_size);
-	if (err) {
+	q = bsg_setup_queue(dev, bsg_name, fc_bsg_dispatch, i->f->dd_bsg_size);
+	if (IS_ERR(q)) {
 		dev_err(dev,
 			"fc_host%d: bsg interface failed to initialize - setup queue\n",
 			shost->host_no);
-		blk_cleanup_queue(q);
-		return err;
+		return PTR_ERR(q);
 	}
+	__scsi_init_queue(shost, q);
 	blk_queue_rq_timed_out(q, fc_bsg_job_timeout);
 	blk_queue_rq_timeout(q, FC_DEFAULT_BSG_TIMEOUT);
 	fc_host->rqst_q = q;
@@ -3824,26 +3798,18 @@ fc_bsg_rportadd(struct Scsi_Host *shost, struct fc_rport *rport)
 	struct device *dev = &rport->dev;
 	struct fc_internal *i = to_fc_internal(shost->transportt);
 	struct request_queue *q;
-	int err;
 
 	rport->rqst_q = NULL;
 
 	if (!i->f->bsg_request)
 		return -ENOTSUPP;
 
-	q = __scsi_alloc_queue(shost, bsg_request_fn);
-	if (!q) {
-		dev_err(dev, "bsg interface failed to initialize - no request queue\n");
-		return -ENOMEM;
-	}
-
-	err = bsg_setup_queue(dev, q, NULL, fc_bsg_dispatch, i->f->dd_bsg_size);
-	if (err) {
+	q = bsg_setup_queue(dev, NULL, fc_bsg_dispatch, i->f->dd_bsg_size);
+	if (IS_ERR(q)) {
 		dev_err(dev, "failed to setup bsg queue\n");
-		blk_cleanup_queue(q);
-		return err;
+		return PTR_ERR(q);
 	}
-
+	__scsi_init_queue(shost, q);
 	blk_queue_prep_rq(q, fc_bsg_rport_prep);
 	blk_queue_rq_timed_out(q, fc_bsg_job_timeout);
 	blk_queue_rq_timeout(q, BLK_DEFAULT_SG_TIMEOUT);

@@ -26,10 +26,6 @@
  *  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
  *  GNU General Public License for more details.
  *
- *  You should have received a copy of the GNU General Public License
- *  along with this program; if not, write to the Free Software
- *  Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA
- *
  */
 
 #include <linux/module.h>
@@ -1554,9 +1550,8 @@ int fmc_prepare(struct fmdev *fmdev)
 	atomic_set(&fmdev->tx_cnt, 1);
 	fmdev->resp_comp = NULL;
 
-	init_timer(&fmdev->irq_info.timer);
-	fmdev->irq_info.timer.function = &int_timeout_handler;
-	fmdev->irq_info.timer.data = (unsigned long)fmdev;
+	setup_timer(&fmdev->irq_info.timer, &int_timeout_handler,
+		    (unsigned long)fmdev);
 	/*TODO: add FM_STIC_EVENT later */
 	fmdev->irq_info.mask = FM_MAL_EVENT;
 

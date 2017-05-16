@@ -115,7 +115,7 @@ static const struct nla_policy ila_nl_policy[ILA_ATTR_MAX + 1] = {
 	[ILA_ATTR_CSUM_MODE] = { .type = NLA_U8, },
 };
 
-static int ila_build_state(struct net_device *dev, struct nlattr *nla,
+static int ila_build_state(struct nlattr *nla,
 			   unsigned int family, const void *cfg,
 			   struct lwtunnel_state **ts)
 {
@@ -146,8 +146,7 @@ static int ila_build_state(struct net_device *dev, struct nlattr *nla,
 		return -EINVAL;
 	}
 
-	ret = nla_parse_nested(tb, ILA_ATTR_MAX, nla,
-			       ila_nl_policy);
+	ret = nla_parse_nested(tb, ILA_ATTR_MAX, nla, ila_nl_policy, NULL);
 	if (ret < 0)
 		return ret;
 

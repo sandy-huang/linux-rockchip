@@ -126,6 +126,7 @@ static int ll_ddelete(const struct dentry *de)
 static int ll_d_init(struct dentry *de)
 {
 	struct ll_dentry_data *lld = kzalloc(sizeof(*lld), GFP_KERNEL);
+
 	if (unlikely(!lld))
 		return -ENOMEM;
 	lld->lld_invalid = 1;
@@ -247,16 +248,13 @@ static int ll_revalidate_dentry(struct dentry *dentry,
 		return 1;
 
 	/*
-	 * if open&create is set, talk to MDS to make sure file is created if
-	 * necessary, because we can't do this in ->open() later since that's
-	 * called on an inode. return 0 here to let lookup to handle this.
+	 * VFS warns us that this is the second go around and previous
+	 * operation failed (most likely open|creat), so this time
+	 * we better talk to the server via the lookup path by name,
+	 * not by fid.
 	 */
-	if ((lookup_flags & (LOOKUP_OPEN | LOOKUP_CREATE)) ==
-	    (LOOKUP_OPEN | LOOKUP_CREATE))
+	if (lookup_flags & LOOKUP_REVAL)
 		return 0;
-
-	if (lookup_flags & (LOOKUP_PARENT | LOOKUP_OPEN | LOOKUP_CREATE))
-		return 1;
 
 	if (!dentry_may_statahead(dir, dentry))
 		return 1;

@@ -164,13 +164,13 @@ struct rvt_driver_params {
 /* Protection domain */
 struct rvt_pd {
 	struct ib_pd ibpd;
-	int user;               /* non-zero if created from user space */
+	bool user;
 };
 
 /* Address handle */
 struct rvt_ah {
 	struct ib_ah ibah;
-	struct ib_ah_attr attr;
+	struct rdma_ah_attr attr;
 	atomic_t refcount;
 	u8 vl;
 	u8 log_pmtu;
@@ -311,10 +311,10 @@ struct rvt_driver_provided {
 	unsigned (*free_all_qps)(struct rvt_dev_info *rdi);
 
 	/* Driver specific AH validation */
-	int (*check_ah)(struct ib_device *, struct ib_ah_attr *);
+	int (*check_ah)(struct ib_device *, struct rdma_ah_attr *);
 
 	/* Inform the driver a new AH has been created */
-	void (*notify_new_ah)(struct ib_device *, struct ib_ah_attr *,
+	void (*notify_new_ah)(struct ib_device *, struct rdma_ah_attr *,
 			      struct rvt_ah *);
 
 	/* Let the driver pick the next queue pair number*/
@@ -335,6 +335,8 @@ struct rvt_driver_provided {
 	/* Notify driver a mad agent has been removed */
 	void (*notify_free_mad_agent)(struct rvt_dev_info *rdi, int port_idx);
 
+	/* Notify driver to restart rc */
+	void (*notify_restart_rc)(struct rvt_qp *qp, u32 psn, int wait);
 };
 
 struct rvt_dev_info {
@@ -483,11 +485,28 @@ static inline struct rvt_qp *rvt_lookup_qpn(struct rvt_dev_info *rdi,
 	return qp;
 }
 
+/**
+ * rvt_mod_retry_timer - mod a retry timer
+ * @qp - the QP
+ * Modify a potentially already running retry timer
+ */
+static inline void rvt_mod_retry_timer(struct rvt_qp *qp)
+{
+	struct ib_qp *ibqp = &qp->ibqp;
+	struct rvt_dev_info *rdi = ib_to_rvt(ibqp->device);
+
+	lockdep_assert_held(&qp->s_lock);
+	qp->s_flags |= RVT_S_TIMER;
+	/* 4.096 usec. * (1 << qp->timeout) */
+	mod_timer(&qp->s_timer, jiffies + qp->timeout_jiffies +
+		  rdi->busy_jiffies);
+}
+
 struct rvt_dev_info *rvt_alloc_device(size_t size, int nports);
 void rvt_dealloc_device(struct rvt_dev_info *rdi);
 int rvt_register_device(struct rvt_dev_info *rvd);
 void rvt_unregister_device(struct rvt_dev_info *rvd);
-int rvt_check_ah(struct ib_device *ibdev, struct ib_ah_attr *ah_attr);
+int rvt_check_ah(struct ib_device *ibdev, struct rdma_ah_attr *ah_attr);
 int rvt_init_port(struct rvt_dev_info *rdi, struct rvt_ibport *port,
 		  int port_index, u16 *pkey_table);
 int rvt_fast_reg_mr(struct rvt_qp *qp, struct ib_mr *ibmr, u32 key,
@@ -497,6 +516,7 @@ int rvt_rkey_ok(struct rvt_qp *qp, struct rvt_sge *sge,
 		u32 len, u64 vaddr, u32 rkey, int acc);
 int rvt_lkey_ok(struct rvt_lkey_table *rkt, struct rvt_pd *pd,
 		struct rvt_sge *isge, struct ib_sge *sge, int acc);
-struct rvt_mcast *rvt_mcast_find(struct rvt_ibport *ibp, union ib_gid *mgid);
+struct rvt_mcast *rvt_mcast_find(struct rvt_ibport *ibp, union ib_gid *mgid,
+				 u16 lid);
 
 #endif          /* DEF_RDMA_VT_H */

@@ -758,7 +758,7 @@ void pnv_tce_free(struct iommu_table *tbl, long index, long npages)
 
 unsigned long pnv_tce_get(struct iommu_table *tbl, long index)
 {
-	return *(pnv_tce(tbl, index - tbl->it_offset));
+	return be64_to_cpu(*(pnv_tce(tbl, index - tbl->it_offset)));
 }
 
 struct iommu_table *pnv_pci_table_alloc(int nid)
@@ -766,7 +766,11 @@ struct iommu_table *pnv_pci_table_alloc(int nid)
 	struct iommu_table *tbl;
 
 	tbl = kzalloc_node(sizeof(struct iommu_table), GFP_KERNEL, nid);
+	if (!tbl)
+		return NULL;
+
 	INIT_LIST_HEAD_RCU(&tbl->it_group_list);
+	kref_init(&tbl->it_kref);
 
 	return tbl;
 }
@@ -938,6 +942,13 @@ void __init pnv_pci_init(void)
 
 	/* Look for NPU PHBs */
 	for_each_compatible_node(np, NULL, "ibm,ioda2-npu-phb")
+		pnv_pci_init_npu_phb(np);
+
+	/*
+	 * Look for NPU2 PHBs which we treat mostly as NPU PHBs with
+	 * the exception of TCE kill which requires an OPAL call.
+	 */
+	for_each_compatible_node(np, NULL, "ibm,ioda2-npu2-phb")
 		pnv_pci_init_npu_phb(np);
 
 	/* Configure IOMMU DMA hooks */

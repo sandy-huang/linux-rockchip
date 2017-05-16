@@ -18,7 +18,6 @@
 #include <linux/string.h>
 #include <linux/ctype.h>
 #include <linux/errno.h>
-#include <linux/string.h>
 #include <linux/slab.h>
 
 /* illegal phandle value (set when unresolved) */
@@ -93,7 +92,7 @@ static void adjust_overlay_phandles(struct device_node *overlay,
 		if (phandle == OF_PHANDLE_ILLEGAL)
 			continue;
 
-		*(uint32_t *)prop->value = cpu_to_be32(overlay->phandle);
+		*(__be32 *)prop->value = cpu_to_be32(overlay->phandle);
 	}
 
 	for_each_child_of_node(overlay, child)

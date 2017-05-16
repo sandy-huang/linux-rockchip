@@ -27,6 +27,10 @@ struct ovl_fs {
 	struct ovl_config config;
 	/* creds of process who forced instantiation of super block */
 	const struct cred *creator_cred;
+	bool tmpfile;
+	wait_queue_head_t copyup_wq;
+	/* sb common to all layers */
+	struct super_block *same_sb;
 };
 
 /* private information held for every overlayfs dentry */
@@ -38,6 +42,7 @@ struct ovl_entry {
 			u64 version;
 			const char *redirect;
 			bool opaque;
+			bool copying;
 		};
 		struct rcu_head rcu;
 	};
