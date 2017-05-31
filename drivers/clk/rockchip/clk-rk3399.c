@@ -1515,6 +1515,8 @@ static const char *const rk3399_cru_critical_clocks[] __initconst = {
 
 	/* ddrc */
 	"sclk_ddrc"
+
+	, "pclk_vio_grf"
 };
 
 static const char *const rk3399_pmucru_critical_clocks[] __initconst = {
