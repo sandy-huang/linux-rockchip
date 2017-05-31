@@ -234,6 +234,10 @@
 	cpu-supply = <&vdd_cpu_b>;
 };
 
+&display_subsystem {
+	status = "okay";
+};
+
 &emmc_phy {
 	status = "okay";
 };
@@ -251,6 +255,11 @@
 	snps,reset-delays-us = <0 10000 50000>;
 	tx_delay = <0x28>;
 	rx_delay = <0x11>;
+	status = "okay";
+};
+
+&hdmi {
+	ddc-i2c-bus = <&i2c3>;
 	status = "okay";
 };
 
@@ -715,4 +724,24 @@
 &usbdrd_dwc3_1 {
 	status = "okay";
 	dr_mode = "host";
+};
+
+&vopb {
+	assigned-clocks = <&cru ACLK_VOP0>, <&cru HCLK_VOP0>, <&cru DCLK_VOP0>;
+	assigned-clock-rates = <400000000>, <200000000>, <100000000>;
+	status = "okay";
+};
+
+&vopb_mmu {
+	status = "okay";
+};
+
+&vopl {
+	assigned-clocks = <&cru ACLK_VOP1>, <&cru HCLK_VOP1>, <&cru DCLK_VOP1>;
+	assigned-clock-rates = <400000000>, <200000000>, <100000000>;
+	status = "okay";
+};
+
+&vopl_mmu {
+	status = "okay";
 };
