@@ -1844,8 +1844,8 @@ F:	drivers/i2c/busses/i2c-st.c
 F:	drivers/media/rc/st_rc.c
 F:	drivers/media/platform/sti/c8sectpfe/
 F:	drivers/mmc/host/sdhci-st.c
-F:	drivers/phy/phy-miphy28lp.c
-F:	drivers/phy/phy-stih407-usb.c
+F:	drivers/phy/st/phy-miphy28lp.c
+F:	drivers/phy/st/phy-stih407-usb.c
 F:	drivers/pinctrl/pinctrl-st.c
 F:	drivers/remoteproc/st_remoteproc.c
 F:	drivers/remoteproc/st_slim_rproc.c
@@ -8509,7 +8509,7 @@ S:	Odd Fixes
 F:	drivers/media/radio/radio-miropcm20*
 
 MELLANOX MLX4 core VPI driver
-M:	Yishai Hadas <yishaih@mellanox.com>
+M:	Tariq Toukan <tariqt@mellanox.com>
 L:	netdev@vger.kernel.org
 L:	linux-rdma@vger.kernel.org
 W:	http://www.mellanox.com
@@ -8517,7 +8517,6 @@ Q:	http://patchwork.ozlabs.org/project/netdev/list/
 S:	Supported
 F:	drivers/net/ethernet/mellanox/mlx4/
 F:	include/linux/mlx4/
-F:	include/uapi/rdma/mlx4-abi.h
 
 MELLANOX MLX4 IB driver
 M:	Yishai Hadas <yishaih@mellanox.com>
@@ -8527,6 +8526,7 @@ Q:	http://patchwork.kernel.org/project/linux-rdma/list/
 S:	Supported
 F:	drivers/infiniband/hw/mlx4/
 F:	include/linux/mlx4/
+F:	include/uapi/rdma/mlx4-abi.h
 
 MELLANOX MLX5 core VPI driver
 M:	Saeed Mahameed <saeedm@mellanox.com>
@@ -8539,7 +8539,6 @@ Q:	http://patchwork.ozlabs.org/project/netdev/list/
 S:	Supported
 F:	drivers/net/ethernet/mellanox/mlx5/core/
 F:	include/linux/mlx5/
-F:	include/uapi/rdma/mlx5-abi.h
 
 MELLANOX MLX5 IB driver
 M:	Matan Barak <matanb@mellanox.com>
@@ -8550,6 +8549,7 @@ Q:	http://patchwork.kernel.org/project/linux-rdma/list/
 S:	Supported
 F:	drivers/infiniband/hw/mlx5/
 F:	include/linux/mlx5/
+F:	include/uapi/rdma/mlx5-abi.h
 
 MELEXIS MLX90614 DRIVER
 M:	Crt Mori <cmo@melexis.com>
@@ -10451,7 +10451,7 @@ S:	Orphan
 
 PXA RTC DRIVER
 M:	Robert Jarzmik <robert.jarzmik@free.fr>
-L:	rtc-linux@googlegroups.com
+L:	linux-rtc@vger.kernel.org
 S:	Maintained
 
 QAT DRIVER
@@ -10758,7 +10758,7 @@ X:	kernel/torture.c
 REAL TIME CLOCK (RTC) SUBSYSTEM
 M:	Alessandro Zummo <a.zummo@towertech.it>
 M:	Alexandre Belloni <alexandre.belloni@free-electrons.com>
-L:	rtc-linux@googlegroups.com
+L:	linux-rtc@vger.kernel.org
 Q:	http://patchwork.ozlabs.org/project/rtc-linux/list/
 T:	git git://git.kernel.org/pub/scm/linux/kernel/git/abelloni/linux.git
 S:	Maintained
@@ -10837,7 +10837,7 @@ RENESAS USB2 PHY DRIVER
 M:	Yoshihiro Shimoda <yoshihiro.shimoda.uh@renesas.com>
 L:	linux-renesas-soc@vger.kernel.org
 S:	Maintained
-F:	drivers/phy/phy-rcar-gen3-usb2.c
+F:	drivers/phy/renesas/phy-rcar-gen3-usb2.c
 
 RESET CONTROLLER FRAMEWORK
 M:	Philipp Zabel <p.zabel@pengutronix.de>
@@ -11239,12 +11239,12 @@ L:	linux-kernel@vger.kernel.org
 S:	Supported
 F:	Documentation/devicetree/bindings/phy/samsung-phy.txt
 F:	Documentation/phy/samsung-usb2.txt
-F:	drivers/phy/phy-exynos4210-usb2.c
-F:	drivers/phy/phy-exynos4x12-usb2.c
-F:	drivers/phy/phy-exynos5250-usb2.c
-F:	drivers/phy/phy-s5pv210-usb2.c
-F:	drivers/phy/phy-samsung-usb2.c
-F:	drivers/phy/phy-samsung-usb2.h
+F:	drivers/phy/samsung/phy-exynos4210-usb2.c
+F:	drivers/phy/samsung/phy-exynos4x12-usb2.c
+F:	drivers/phy/samsung/phy-exynos5250-usb2.c
+F:	drivers/phy/samsung/phy-s5pv210-usb2.c
+F:	drivers/phy/samsung/phy-samsung-usb2.c
+F:	drivers/phy/samsung/phy-samsung-usb2.h
 
 SERIAL DRIVERS
 M:	Greg Kroah-Hartman <gregkh@linuxfoundation.org>
