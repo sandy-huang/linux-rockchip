@@ -382,10 +382,14 @@
 		#address-cells = <2>;
 		#size-cells = <2>;
 		ranges;
+
 		clocks = <&cru SCLK_USB3OTG0_REF>, <&cru SCLK_USB3OTG0_SUSPEND>,
 			 <&cru ACLK_USB3OTG0>, <&cru ACLK_USB3_GRF>;
 		clock-names = "ref_clk", "suspend_clk",
 			      "bus_clk", "grf_clk";
+
+		phys = <&tcphy0_usb3>;
+		phy-names = "usb3-phy";
 		status = "disabled";
 
 		usbdrd_dwc3_0: dwc3 {
@@ -409,10 +413,13 @@
 		#address-cells = <2>;
 		#size-cells = <2>;
 		ranges;
+
 		clocks = <&cru SCLK_USB3OTG1_REF>, <&cru SCLK_USB3OTG1_SUSPEND>,
 			 <&cru ACLK_USB3OTG1>, <&cru ACLK_USB3_GRF>;
 		clock-names = "ref_clk", "suspend_clk",
 			      "bus_clk", "grf_clk";
+		phys = <&tcphy1_usb3>;
+		phy-names = "usb3-phy";
 		status = "disabled";
 
 		usbdrd_dwc3_1: dwc3 {

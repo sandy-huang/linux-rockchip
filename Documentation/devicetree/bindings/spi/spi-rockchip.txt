@@ -37,6 +37,8 @@ Optional Properties:
 		"sleep", where the "sleep" configuration may describe the state
 		the pins should be in during system suspend. See also
 		pinctrl/pinctrl-bindings.txt.
+- rockchip,spi-broken-burst-len: quirk for broken burst len on Rockchip platform.
+			Add this property will force driver to set burst ONE.
 
 
 Example:

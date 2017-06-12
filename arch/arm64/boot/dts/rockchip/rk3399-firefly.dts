@@ -43,6 +43,7 @@
 /dts-v1/;
 #include <dt-bindings/pwm/pwm.h>
 #include "rk3399.dtsi"
+#include "rk3399-opp.dtsi"
 
 / {
 	model = "Firefly-RK3399 Board";
@@ -250,7 +251,7 @@
 	snps,reset-active-low;
 	snps,reset-delays-us = <0 10000 50000>;
 	tx_delay = <0x28>;
-	rx_delay = <0x11>;
+	rx_delay = <0x1f>;
 	status = "okay";
 };
 
@@ -446,10 +447,13 @@
 	vdd_cpu_b: regulator@40 {
 		compatible = "silergy,syr827";
 		reg = <0x40>;
-		fcs,suspend-voltage-selector = <0>;
+		fcs,suspend-voltage-selector = <1>;
+		pinctrl-names = "default";
+		pinctrl-0 = <&cpu_b_sleep_h>;
 		regulator-name = "vdd_cpu_b";
 		regulator-min-microvolt = <712500>;
 		regulator-max-microvolt = <1500000>;
+		regulator-enable-ramp-delay = <300>;
 		regulator-ramp-delay = <1000>;
 		regulator-always-on;
 		regulator-boot-on;
@@ -464,9 +468,12 @@
 		compatible = "silergy,syr828";
 		reg = <0x41>;
 		fcs,suspend-voltage-selector = <1>;
+		pinctrl-names = "default";
+		pinctrl-0 = <&gpu_sleep_h>;
 		regulator-name = "vdd_gpu";
 		regulator-min-microvolt = <712500>;
 		regulator-max-microvolt = <1500000>;
+		regulator-enable-ramp-delay = <300>;
 		regulator-ramp-delay = <1000>;
 		regulator-always-on;
 		regulator-boot-on;
@@ -583,11 +590,11 @@
 	};
 
 	pmic {
-		vsel1_gpio: vsel1-gpio {
+		cpu_b_sleep_h: cpu-b-sleep-h {
 			rockchip,pins = <1 RK_PC2 RK_FUNC_GPIO &pcfg_pull_down>;
 		};
 
-		vsel2_gpio: vsel2-gpio {
+		gpu_sleep_h: gpu-sleep-h {
 			rockchip,pins = <1 RK_PB6 RK_FUNC_GPIO &pcfg_pull_down>;
 		};
 	};
