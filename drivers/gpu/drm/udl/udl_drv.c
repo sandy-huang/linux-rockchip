@@ -11,11 +11,6 @@
 #include <drm/drm_crtc_helper.h>
 #include "udl_drv.h"
 
-static int udl_driver_set_busid(struct drm_device *d, struct drm_master *m)
-{
-	return 0;
-}
-
 static int udl_usb_suspend(struct usb_interface *interface,
 			   pm_message_t message)
 {
@@ -52,7 +47,6 @@ static struct drm_driver driver = {
 	.driver_features = DRIVER_MODESET | DRIVER_GEM | DRIVER_PRIME,
 	.load = udl_driver_load,
 	.unload = udl_driver_unload,
-	.set_busid = udl_driver_set_busid,
 
 	/* gem hooks */
 	.gem_free_object = udl_gem_free_object,
@@ -60,7 +54,6 @@ static struct drm_driver driver = {
 
 	.dumb_create = udl_dumb_create,
 	.dumb_map_offset = udl_gem_mmap,
-	.dumb_destroy = drm_gem_dumb_destroy,
 	.fops = &udl_driver_fops,
 
 	.prime_handle_to_fd = drm_gem_prime_handle_to_fd,
@@ -108,7 +101,7 @@ static void udl_usb_disconnect(struct usb_interface *interface)
 	drm_kms_helper_poll_disable(dev);
 	udl_fbdev_unplug(dev);
 	udl_drop_usb(dev);
-	drm_unplug_dev(dev);
+	drm_dev_unplug(dev);
 }
 
 /*
