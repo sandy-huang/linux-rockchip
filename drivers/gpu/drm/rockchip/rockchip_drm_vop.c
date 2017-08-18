@@ -572,7 +572,8 @@ err_put_pm_runtime:
 	return ret;
 }
 
-static void vop_crtc_disable(struct drm_crtc *crtc)
+static void vop_crtc_atomic_disable(struct drm_crtc *crtc,
+				    struct drm_crtc_state *old_state)
 {
 	struct vop *vop = to_vop(crtc);
 
@@ -865,7 +866,8 @@ static bool vop_crtc_mode_fixup(struct drm_crtc *crtc,
 	return true;
 }
 
-static void vop_crtc_enable(struct drm_crtc *crtc)
+static void vop_crtc_atomic_enable(struct drm_crtc *crtc,
+				   struct drm_crtc_state *old_state)
 {
 	struct vop *vop = to_vop(crtc);
 	const struct vop_data *vop_data = vop->data;
@@ -890,42 +892,6 @@ static void vop_crtc_enable(struct drm_crtc *crtc)
 	if (ret) {
 		DRM_DEV_ERROR(vop->dev, "Failed to enable vop (%d)\n", ret);
 		return;
-	}
-
-	/*
-	 * If dclk rate is zero, mean that scanout is stop,
-	 * we don't need wait any more.
-	 */
-	if (clk_get_rate(vop->dclk)) {
-		/*
-		 * Rk3288 vop timing register is immediately, when configure
-		 * display timing on display time, may cause tearing.
-		 *
-		 * Vop standby will take effect at end of current frame,
-		 * if dsp hold valid irq happen, it means standby complete.
-		 *
-		 * mode set:
-		 *    standby and wait complete --> |----
-		 *                                  | display time
-		 *                                  |----
-		 *                                  |---> dsp hold irq
-		 *     configure display timing --> |
-		 *         standby exit             |
-		 *                                  | new frame start.
-		 */
-
-		reinit_completion(&vop->dsp_hold_completion);
-		vop_dsp_hold_valid_irq_enable(vop);
-
-		spin_lock(&vop->reg_lock);
-
-		VOP_REG_SET(vop, common, standby, 1);
-
-		spin_unlock(&vop->reg_lock);
-
-		wait_for_completion(&vop->dsp_hold_completion);
-
-		vop_dsp_hold_valid_irq_disable(vop);
 	}
 
 	pin_pol = BIT(DCLK_INVERT);
@@ -1021,7 +987,7 @@ static void vop_crtc_atomic_flush(struct drm_crtc *crtc,
 				  struct drm_crtc_state *old_crtc_state)
 {
 	struct drm_atomic_state *old_state = old_crtc_state->state;
-	struct drm_plane_state *old_plane_state;
+	struct drm_plane_state *old_plane_state, *new_plane_state;
 	struct vop *vop = to_vop(crtc);
 	struct drm_plane *plane;
 	int i;
@@ -1052,14 +1018,15 @@ static void vop_crtc_atomic_flush(struct drm_crtc *crtc,
 	}
 	spin_unlock_irq(&crtc->dev->event_lock);
 
-	for_each_plane_in_state(old_state, plane, old_plane_state, i) {
+	for_each_oldnew_plane_in_state(old_state, plane, old_plane_state,
+				       new_plane_state, i) {
 		if (!old_plane_state->fb)
 			continue;
 
-		if (old_plane_state->fb == plane->state->fb)
+		if (old_plane_state->fb == new_plane_state->fb)
 			continue;
 
-		drm_framebuffer_reference(old_plane_state->fb);
+		drm_framebuffer_get(old_plane_state->fb);
 		drm_flip_work_queue(&vop->fb_unref_work, old_plane_state->fb);
 		set_bit(VOP_PENDING_FB_UNREF, &vop->pending);
 		WARN_ON(drm_crtc_vblank_get(crtc) != 0);
@@ -1073,11 +1040,11 @@ static void vop_crtc_atomic_begin(struct drm_crtc *crtc,
 }
 
 static const struct drm_crtc_helper_funcs vop_crtc_helper_funcs = {
-	.enable = vop_crtc_enable,
-	.disable = vop_crtc_disable,
 	.mode_fixup = vop_crtc_mode_fixup,
 	.atomic_flush = vop_crtc_atomic_flush,
 	.atomic_begin = vop_crtc_atomic_begin,
+	.atomic_enable = vop_crtc_atomic_enable,
+	.atomic_disable = vop_crtc_atomic_disable,
 };
 
 static void vop_crtc_destroy(struct drm_crtc *crtc)
@@ -1183,7 +1150,7 @@ static void vop_fb_unref_worker(struct drm_flip_work *work, void *val)
 	struct drm_framebuffer *fb = val;
 
 	drm_crtc_vblank_put(&vop->crtc);
-	drm_framebuffer_unreference(fb);
+	drm_framebuffer_put(fb);
 }
 
 static void vop_handle_vblank(struct vop *vop)
@@ -1284,7 +1251,7 @@ static int vop_create_crtc(struct vop *vop)
 					       0, &vop_plane_funcs,
 					       win_data->phy->data_formats,
 					       win_data->phy->nformats,
-					       win_data->type, NULL);
+					       NULL, win_data->type, NULL);
 		if (ret) {
 			DRM_DEV_ERROR(vop->dev, "failed to init plane %d\n",
 				      ret);
@@ -1323,7 +1290,7 @@ static int vop_create_crtc(struct vop *vop)
 					       &vop_plane_funcs,
 					       win_data->phy->data_formats,
 					       win_data->phy->nformats,
-					       win_data->type, NULL);
+					       NULL, win_data->type, NULL);
 		if (ret) {
 			DRM_DEV_ERROR(vop->dev, "failed to init overlay %d\n",
 				      ret);
@@ -1334,8 +1301,8 @@ static int vop_create_crtc(struct vop *vop)
 
 	port = of_get_child_by_name(dev->of_node, "port");
 	if (!port) {
-		DRM_DEV_ERROR(vop->dev, "no port node found in %s\n",
-			      dev->of_node->full_name);
+		DRM_DEV_ERROR(vop->dev, "no port node found in %pOF\n",
+			      dev->of_node);
 		ret = -ENOENT;
 		goto err_cleanup_crtc;
 	}
