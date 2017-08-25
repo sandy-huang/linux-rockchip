@@ -1570,7 +1570,7 @@ M:	Chunfeng Yun <chunfeng.yun@mediatek.com>
 L:	linux-arm-kernel@lists.infradead.org (moderated for non-subscribers)
 L:	linux-mediatek@lists.infradead.org (moderated for non-subscribers)
 S:	Maintained
-F:	drivers/phy/phy-mt65xx-usb3.c
+F:	drivers/phy/mediatek/phy-mtk-tphy.c
 
 ARM/MICREL KS8695 ARCHITECTURE
 M:	Greg Ungerer <gerg@uclinux.org>
@@ -4634,6 +4634,14 @@ F:	drivers/gpu/drm/panel/
 F:	include/drm/drm_panel.h
 F:	Documentation/devicetree/bindings/display/panel/
 
+DRM TINYDRM DRIVERS
+M:	Noralf Trønnes <noralf@tronnes.org>
+W:	https://github.com/notro/tinydrm/wiki/Development
+T:	git git://anongit.freedesktop.org/drm/drm-misc
+S:	Maintained
+F:	drivers/gpu/drm/tinydrm/
+F:	include/drm/tinydrm/
+
 DSBR100 USB FM RADIO DRIVER
 M:	Alexey Klimov <klimov.linux@gmail.com>
 L:	linux-media@vger.kernel.org
@@ -6756,8 +6764,9 @@ S:	Supported
 F:	drivers/scsi/isci/
 
 INTEL DRM DRIVERS (excluding Poulsbo, Moorestown and derivative chipsets)
-M:	Daniel Vetter <daniel.vetter@intel.com>
 M:	Jani Nikula <jani.nikula@linux.intel.com>
+M:	Joonas Lahtinen <joonas.lahtinen@linux.intel.com>
+M:	Rodrigo Vivi <rodrigo.vivi@intel.com>
 L:	intel-gfx@lists.freedesktop.org
 W:	https://01.org/linuxgraphics/
 B:	https://01.org/linuxgraphics/documentation/how-report-bugs
@@ -7122,7 +7131,6 @@ M:	Marc Zyngier <marc.zyngier@arm.com>
 L:	linux-kernel@vger.kernel.org
 S:	Maintained
 T:	git git://git.kernel.org/pub/scm/linux/kernel/git/tip/tip.git irq/core
-T:	git git://git.infradead.org/users/jcooper/linux.git irqchip/core
 F:	Documentation/devicetree/bindings/interrupt-controller/
 F:	drivers/irqchip/
 
@@ -11292,6 +11300,17 @@ M:	Kevin Cernekee <cernekee@gmail.com>
 L:	linux-serial@vger.kernel.org
 S:	Odd Fixes
 F:	drivers/tty/serial/rp2.*
+
+ROHM MULTIFUNCTION BD9571MWV-M PMIC DEVICE DRIVERS
+M:	Marek Vasut <marek.vasut+renesas@gmail.com>
+L:	linux-kernel@vger.kernel.org
+L:	linux-renesas-soc@vger.kernel.org
+S:	Supported
+F:	drivers/mfd/bd9571mwv.c
+F:	drivers/regulator/bd9571mwv-regulator.c
+F:	drivers/gpio/gpio-bd9571mwv.c
+F:	include/linux/mfd/bd9571mwv.h
+F:	Documentation/devicetree/bindings/mfd/bd9571mwv.txt
 
 ROSE NETWORK LAYER
 M:	Ralf Baechle <ralf@linux-mips.org>

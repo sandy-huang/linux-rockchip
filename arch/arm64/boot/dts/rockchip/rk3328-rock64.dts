@@ -58,23 +58,9 @@
 		#clock-cells = <0>;
 	};
 
-	sdio_pwrseq: sdio-pwrseq {
-		compatible = "mmc-pwrseq-simple";
-		pinctrl-names = "default";
-		pinctrl-0 = <&wifi_enable_h>;
-
-		/*
-		 * On the module itself this is one of these (depending
-		 * on the actual card populated):
-		 * - SDIO_RESET_L_WL_REG_ON
-		 * - PDN (power down when low)
-		 */
-		reset-gpios = <&gpio1 18 GPIO_ACTIVE_LOW>;
-	};
-
 	vcc_sd: sdmmc-regulator {
 		compatible = "regulator-fixed";
-		gpio = <&gpio0 30 GPIO_ACTIVE_LOW>;
+		gpio = <&gpio0 RK_PD6 GPIO_ACTIVE_LOW>;
 		pinctrl-names = "default";
 		pinctrl-0 = <&sdmmc0m1_gpio>;
 		regulator-name = "vcc_sd";
@@ -143,16 +129,16 @@
 };
 
 &gmac2io {
+	assigned-clocks = <&cru SCLK_MAC2IO>, <&cru SCLK_MAC2IO_EXT>;
+	assigned-clock-parents = <&gmac_clkin>, <&gmac_clkin>;
+	clock_in_out = "input";
 	phy-supply = <&vcc_io>;
 	phy-mode = "rgmii";
-	clock_in_out = "input";
+	pinctrl-names = "default";
+	pinctrl-0 = <&rgmiim1_pins>;
 	snps,reset-gpio = <&gpio1 RK_PC2 GPIO_ACTIVE_LOW>;
 	snps,reset-active-low;
 	snps,reset-delays-us = <0 10000 50000>;
-	assigned-clocks = <&cru SCLK_MAC2IO>, <&cru SCLK_MAC2IO_EXT>;
-	assigned-clock-parents = <&gmac_clkin>, <&gmac_clkin>;
-	pinctrl-names = "default";
-	pinctrl-0 = <&rgmiim1_pins>;
 	tx_delay = <0x26>;
 	rx_delay = <0x11>;
 	status = "okay";
@@ -185,12 +171,10 @@
 				regulator-name = "vdd_logic";
 				regulator-min-microvolt = <712500>;
 				regulator-max-microvolt = <1450000>;
-				regulator-initial-mode = <0x1>;
 				regulator-ramp-delay = <12500>;
-				regulator-boot-on;
 				regulator-always-on;
+				regulator-boot-on;
 				regulator-state-mem {
-					regulator-mode = <0x2>;
 					regulator-on-in-suspend;
 					regulator-suspend-microvolt = <1000000>;
 				};
@@ -200,12 +184,10 @@
 				regulator-name = "vdd_arm";
 				regulator-min-microvolt = <712500>;
 				regulator-max-microvolt = <1450000>;
-				regulator-initial-mode = <0x1>;
 				regulator-ramp-delay = <12500>;
-				regulator-boot-on;
 				regulator-always-on;
+				regulator-boot-on;
 				regulator-state-mem {
-					regulator-mode = <0x2>;
 					regulator-on-in-suspend;
 					regulator-suspend-microvolt = <950000>;
 				};
@@ -213,11 +195,9 @@
 
 			vcc_ddr: DCDC_REG3 {
 				regulator-name = "vcc_ddr";
-				regulator-initial-mode = <0x1>;
-				regulator-boot-on;
 				regulator-always-on;
+				regulator-boot-on;
 				regulator-state-mem {
-					regulator-mode = <0x2>;
 					regulator-on-in-suspend;
 				};
 			};
@@ -226,11 +206,9 @@
 				regulator-name = "vcc_io";
 				regulator-min-microvolt = <3300000>;
 				regulator-max-microvolt = <3300000>;
-				regulator-initial-mode = <0x1>;
-				regulator-boot-on;
 				regulator-always-on;
+				regulator-boot-on;
 				regulator-state-mem {
-					regulator-mode = <0x2>;
 					regulator-on-in-suspend;
 					regulator-suspend-microvolt = <3300000>;
 				};
@@ -240,8 +218,8 @@
 				regulator-name = "vdd_18";
 				regulator-min-microvolt = <1800000>;
 				regulator-max-microvolt = <1800000>;
-				regulator-boot-on;
 				regulator-always-on;
+				regulator-boot-on;
 				regulator-state-mem {
 					regulator-on-in-suspend;
 					regulator-suspend-microvolt = <1800000>;
@@ -252,8 +230,8 @@
 				regulator-name = "vcc_18emmc";
 				regulator-min-microvolt = <1800000>;
 				regulator-max-microvolt = <1800000>;
-				regulator-boot-on;
 				regulator-always-on;
+				regulator-boot-on;
 				regulator-state-mem {
 					regulator-on-in-suspend;
 					regulator-suspend-microvolt = <1800000>;
@@ -264,8 +242,8 @@
 				regulator-name = "vdd_10";
 				regulator-min-microvolt = <1000000>;
 				regulator-max-microvolt = <1000000>;
-				regulator-boot-on;
 				regulator-always-on;
+				regulator-boot-on;
 				regulator-state-mem {
 					regulator-on-in-suspend;
 					regulator-suspend-microvolt = <1000000>;
@@ -294,12 +272,6 @@
 		};
 	};
 
-	sdio-pwrseq {
-		wifi_enable_h: wifi-enable-h {
-			rockchip,pins = <1 18 RK_FUNC_GPIO &pcfg_pull_none>;
-		};
-	};
-
 	usb2 {
 		usb20_host_drv: usb20-host-drv {
 			rockchip,pins = <0 RK_PD3 RK_FUNC_GPIO &pcfg_pull_none>;
@@ -313,19 +285,6 @@
 	};
 };
 
-&sdio {
-	bus-width = <4>;
-	cap-sd-highspeed;
-	cap-sdio-irq;
-	keep-power-in-suspend;
-	max-frequency = <150000000>;
-	mmc-pwrseq = <&sdio_pwrseq>;
-	non-removable;
-	pinctrl-names = "default";
-	pinctrl-0 = <&sdmmc1_bus4 &sdmmc1_cmd &sdmmc1_clk>;
-	status = "disabled";
-};
-
 &sdmmc {
 	bus-width = <4>;
 	cap-mmc-highspeed;
@@ -334,7 +293,6 @@
 	max-frequency = <150000000>;
 	pinctrl-names = "default";
 	pinctrl-0 = <&sdmmc0_clk &sdmmc0_cmd &sdmmc0_dectn &sdmmc0_bus4>;
-	supports-sd;
 	vmmc-supply = <&vcc_sd>;
 	status = "okay";
 };
