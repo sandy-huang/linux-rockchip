@@ -33,7 +33,9 @@ void _mali_osk_write_mem_barrier(void)
 
 mali_io_address _mali_osk_mem_mapioregion(u32 phys, u32 size, const char *description)
 {
-	return (mali_io_address)ioremap_nocache(phys, size);
+	mali_io_address addr = (mali_io_address)ioremap_nocache(phys, size);
+	printk("%s: remapped 0x%x to 0x%x\n", __func__, phys, addr);
+	return addr;
 }
 
 void _mali_osk_mem_unmapioregion(u32 phys, u32 size, mali_io_address virt)

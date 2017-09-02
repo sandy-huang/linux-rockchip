@@ -131,9 +131,12 @@ extern int mali_debug_level;
 #endif
 
 #define MALI_DEBUG_CODE(code) code
-#define MALI_DEBUG_PRINT(level, args)  do { \
+/*#define MALI_DEBUG_PRINT(level, args)  do { \
 		if((level) <=  mali_debug_level)\
 		{MALI_PRINTF(("Mali<" #level ">: ")); MALI_PRINTF(args); } \
+	} while (0) */
+#define MALI_DEBUG_PRINT(level, args)  do { \
+		MALI_PRINTF(("Mali<" #level ">: ")); MALI_PRINTF(args); \
 	} while (0)
 
 #define MALI_DEBUG_PRINT_ERROR(args) MALI_PRINT_ERROR(args)
