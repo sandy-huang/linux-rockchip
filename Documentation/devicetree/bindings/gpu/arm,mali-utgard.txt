@@ -58,6 +58,13 @@ to specify one more vendor-specific compatible, among:
     Required properties:
       * resets: phandle to the reset line for the GPU
 
+  - rockchip,rk3036-mali
+  - rockchip,rk3066-mali
+  - rockchip,rk3188-mali
+  - rockchip,rk3228-mali
+    Required properties:
+      * resets: phandle to the reset line for the GPU
+
   - stericsson,db8500-mali
     Required properties:
       * interrupt-names and interrupts:
