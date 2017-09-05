@@ -63,7 +63,7 @@ Required properties for child node:
 	   one for each entry in clock-names.
  - clock-names: Must contain following for pcie and usb qmp phys:
 		 "pipe<lane-number>" for pipe clock specific to each lane.
- - clock-output-names: Name of the phy clock that will be the parent for
+ - clock-output-names: Name of the PHY clock that will be the parent for
 		       the above pipe clock.
 
 	For "qcom,ipq8074-qmp-pcie-phy":
