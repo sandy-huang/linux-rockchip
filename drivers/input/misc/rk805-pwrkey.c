@@ -7,10 +7,10 @@
  *
  * This program is free software; you can redistribute it and/or modify it
  * under  the terms of the GNU General  Public License as published by the
- * Free Software Foundation;  either version 2 of the License, or (at your
+ * Free Software Foundation; either version 2 of the License, or (at your
  * option) any later version.
- *
  */
+
 #include <linux/errno.h>
 #include <linux/init.h>
 #include <linux/input.h>
@@ -53,7 +53,7 @@ static int rk805_pwrkey_probe(struct platform_device *pdev)
 
 	pwr->name = "rk805 pwrkey";
 	pwr->phys = "rk805_pwrkey/input0";
-	pwr->dev.parent = &pdev->dev;
+	pwr->id.bustype = BUS_HOST;
 	input_set_capability(pwr, EV_KEY, KEY_POWER);
 
 	fall_irq = platform_get_irq(pdev, 0);
@@ -108,4 +108,4 @@ module_platform_driver(rk805_pwrkey_driver);
 
 MODULE_AUTHOR("Joseph Chen <chenjh@rock-chips.com>");
 MODULE_DESCRIPTION("RK805 PMIC Power Key driver");
-MODULE_LICENSE("GPL v2");
+MODULE_LICENSE("GPL");
