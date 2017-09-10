@@ -84,8 +84,7 @@ struct rockchip_pcie_phy {
 	int init_cnt;
 };
 
-static inline
-struct rockchip_pcie_phy *to_pcie_phy(struct phy_pcie_instance *inst)
+static struct rockchip_pcie_phy *to_pcie_phy(struct phy_pcie_instance *inst)
 {
 	return container_of(inst, struct rockchip_pcie_phy,
 					phys[inst->index]);
@@ -171,7 +170,7 @@ err_out:
 	return 0;
 
 err_restore:
-	++rk_phy->pwr_cnt;
+	rk_phy->pwr_cnt++;
 	regmap_write(rk_phy->reg_base,
 		     rk_phy->phy_data->pcie_laneoff,
 		     HIWORD_UPDATE(!PHY_LANE_IDLE_OFF,
@@ -286,7 +285,7 @@ err_out:
 err_pll_lock:
 	reset_control_assert(rk_phy->phy_rst);
 err_pwr_cnt:
-	--rk_phy->pwr_cnt;
+	rk_phy->pwr_cnt--;
 	mutex_unlock(&rk_phy->pcie_mutex);
 	return err;
 }
@@ -322,7 +321,7 @@ err_reset:
 
 	clk_disable_unprepare(rk_phy->clk_pciephy_ref);
 err_refclk:
-	--rk_phy->init_cnt;
+	rk_phy->init_cnt--;
 	mutex_unlock(&rk_phy->pcie_mutex);
 	return err;
 }
