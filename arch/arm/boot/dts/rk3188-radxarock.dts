@@ -4,6 +4,7 @@
  */
 
 /dts-v1/;
+#include <dt-bindings/i2c/i2c.h>
 #include <dt-bindings/input/input.h>
 #include "rk3188.dtsi"
 
@@ -197,7 +198,7 @@
 				regulator-always-on;
 			};
 
-			vcc_io: REG4 {
+			vcc_io: vcc_hdmi: REG4 {
 				regulator-name = "VCC_IO";
 				regulator-min-microvolt = <3300000>;
 				regulator-max-microvolt = <3300000>;
@@ -259,6 +260,29 @@
 				regulator-always-on;
 			};
 		};
+	};
+};
+
+&i2c2 {
+	status = "okay";
+
+	it66121: hdmi@98 {
+		compatible = "ite,it66121";
+		reg = <(0x98 | I2C_TEN_BIT_ADDRESS)>;
+		interrupt-parent = <&gpio2>;
+		interrupts = <RK_PD6 IRQ_TYPE_LEVEL_LOW>;
+//		pinctrl-names = "default";
+//		pinctrl-0 = <&rtc_int>;
+		reset-gpios = <&gpio3 RK_PB2 GPIO_ACTIVE_LOW>;
+
+		avcc12-supply = <&vdd_hdmi>;
+		dvdd12-supply = <&vdd_hdmi>;
+		ivdd12-supply = <&vdd_hdmi>;
+		ovdd-supply = <&vcc_io>;
+		ovdd33-supply = <&vcc_hdmi>;
+		pvcc12-supply = <&vdd_hdmi>;
+		pvcc33-supply = <&vcc_hdmi>;
+		vcc33-supply = <&vcc_hdmi>;
 	};
 };
 
