@@ -139,6 +139,45 @@ struct reg_sequence {
 	pollret ?: ((cond) ? 0 : -ETIMEDOUT); \
 })
 
+/**
+ * regmap_field_read_poll_timeout - Poll until a condition is met or timeout
+ *
+ * @field: Regmap field to read from
+ * @val: Unsigned integer variable to read the value into
+ * @cond: Break condition (usually involving @val)
+ * @sleep_us: Maximum time to sleep between reads in us (0
+ *            tight-loops).  Should be less than ~20ms since usleep_range
+ *            is used (see Documentation/timers/timers-howto.txt).
+ * @timeout_us: Timeout in us, 0 means never timeout
+ *
+ * Returns 0 on success and -ETIMEDOUT upon a timeout or the regmap_field_read
+ * error return value in case of a error read. In the two former cases,
+ * the last read value at @addr is stored in @val. Must not be called
+ * from atomic context if sleep_us or timeout_us are used.
+ *
+ * This is modelled after the readx_poll_timeout macros in linux/iopoll.h.
+ */
+#define regmap_field_read_poll_timeout(field, val, cond, sleep_us, timeout_us) \
+({ \
+	ktime_t timeout = ktime_add_us(ktime_get(), timeout_us); \
+	int pollret; \
+	might_sleep_if(sleep_us); \
+	for (;;) { \
+		pollret = regmap_field_read((field), &(val)); \
+		if (pollret) \
+			break; \
+		if (cond) \
+			break; \
+		if (timeout_us && ktime_compare(ktime_get(), timeout) > 0) { \
+			pollret = regmap_field_read((field), &(val)); \
+			break; \
+		} \
+		if (sleep_us) \
+			usleep_range((sleep_us >> 2) + 1, sleep_us); \
+	} \
+	pollret ?: ((cond) ? 0 : -ETIMEDOUT); \
+})
+
 #ifdef CONFIG_REGMAP
 
 enum regmap_endian {
@@ -461,6 +500,10 @@ struct regmap *__regmap_init_spmi_ext(struct spmi_device *dev,
 				      const struct regmap_config *config,
 				      struct lock_class_key *lock_key,
 				      const char *lock_name);
+struct regmap *__regmap_init_w1(struct device *w1_dev,
+				 const struct regmap_config *config,
+				 struct lock_class_key *lock_key,
+				 const char *lock_name);
 struct regmap *__regmap_init_mmio_clk(struct device *dev, const char *clk_id,
 				      void __iomem *regs,
 				      const struct regmap_config *config,
@@ -493,6 +536,10 @@ struct regmap *__devm_regmap_init_spmi_ext(struct spmi_device *dev,
 					   const struct regmap_config *config,
 					   struct lock_class_key *lock_key,
 					   const char *lock_name);
+struct regmap *__devm_regmap_init_w1(struct device *w1_dev,
+				      const struct regmap_config *config,
+				      struct lock_class_key *lock_key,
+				      const char *lock_name);
 struct regmap *__devm_regmap_init_mmio_clk(struct device *dev,
 					   const char *clk_id,
 					   void __iomem *regs,
@@ -595,6 +642,19 @@ int regmap_attach_dev(struct device *dev, struct regmap *map,
 #define regmap_init_spmi_ext(dev, config)				\
 	__regmap_lockdep_wrapper(__regmap_init_spmi_ext, #config,	\
 				dev, config)
+
+/**
+ * regmap_init_w1() - Initialise register map
+ *
+ * @w1_dev: Device that will be interacted with
+ * @config: Configuration for register map
+ *
+ * The return value will be an ERR_PTR() on error or a valid pointer to
+ * a struct regmap.
+ */
+#define regmap_init_w1(w1_dev, config)					\
+	__regmap_lockdep_wrapper(__regmap_init_w1, #config,		\
+				w1_dev, config)
 
 /**
  * regmap_init_mmio_clk() - Initialise register map with register clock
@@ -711,6 +771,19 @@ bool regmap_ac97_default_volatile(struct device *dev, unsigned int reg);
 	__regmap_lockdep_wrapper(__devm_regmap_init_spmi_ext, #config,	\
 				dev, config)
 
+/**
+ * devm_regmap_init_w1() - Initialise managed register map
+ *
+ * @w1_dev: Device that will be interacted with
+ * @config: Configuration for register map
+ *
+ * The return value will be an ERR_PTR() on error or a valid pointer
+ * to a struct regmap.  The regmap will be automatically freed by the
+ * device management code.
+ */
+#define devm_regmap_init_w1(w1_dev, config)				\
+	__regmap_lockdep_wrapper(__devm_regmap_init_w1, #config,	\
+				w1_dev, config)
 /**
  * devm_regmap_init_mmio_clk() - Initialise managed register map with clock
  *
@@ -884,6 +957,7 @@ struct regmap_irq {
  *
  * @status_base: Base status register address.
  * @mask_base:   Base mask register address.
+ * @mask_writeonly: Base mask register is write only.
  * @unmask_base:  Base unmask register address. for chips who have
  *                separate mask and unmask registers
  * @ack_base:    Base ack address. If zero then the chip is clear on read.
@@ -927,6 +1001,7 @@ struct regmap_irq_chip {
 	unsigned int wake_base;
 	unsigned int type_base;
 	unsigned int irq_reg_stride;
+	bool mask_writeonly:1;
 	bool init_ack_masked:1;
 	bool mask_invert:1;
 	bool use_ack:1;

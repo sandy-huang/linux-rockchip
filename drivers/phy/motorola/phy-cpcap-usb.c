@@ -468,6 +468,8 @@ static int cpcap_usb_init_optional_pins(struct cpcap_phy_ddata *ddata)
 		dev_info(ddata->dev, "default pins not configured: %ld\n",
 			 PTR_ERR(ddata->pins));
 		ddata->pins = NULL;
+
+		return 0;
 	}
 
 	ddata->pins_ulpi = pinctrl_lookup_state(ddata->pins, "ulpi");
@@ -504,7 +506,7 @@ static void cpcap_usb_init_optional_gpios(struct cpcap_phy_ddata *ddata)
 		if (IS_ERR(ddata->gpio[i])) {
 			dev_info(ddata->dev, "no mode change GPIO%i: %li\n",
 				 i, PTR_ERR(ddata->gpio[i]));
-				 ddata->gpio[i] = NULL;
+			ddata->gpio[i] = NULL;
 		}
 	}
 }
