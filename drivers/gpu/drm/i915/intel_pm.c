@@ -2721,9 +2721,9 @@ static void ilk_compute_wm_level(const struct drm_i915_private *dev_priv,
 				 const struct intel_crtc *intel_crtc,
 				 int level,
 				 struct intel_crtc_state *cstate,
-				 struct intel_plane_state *pristate,
-				 struct intel_plane_state *sprstate,
-				 struct intel_plane_state *curstate,
+				 const struct intel_plane_state *pristate,
+				 const struct intel_plane_state *sprstate,
+				 const struct intel_plane_state *curstate,
 				 struct intel_wm_level *result)
 {
 	uint16_t pri_latency = dev_priv->wm.pri_latency[level];
@@ -3043,28 +3043,24 @@ static int ilk_compute_pipe_wm(struct intel_crtc_state *cstate)
 	struct intel_pipe_wm *pipe_wm;
 	struct drm_device *dev = state->dev;
 	const struct drm_i915_private *dev_priv = to_i915(dev);
-	struct intel_plane *intel_plane;
-	struct intel_plane_state *pristate = NULL;
-	struct intel_plane_state *sprstate = NULL;
-	struct intel_plane_state *curstate = NULL;
+	struct drm_plane *plane;
+	const struct drm_plane_state *plane_state;
+	const struct intel_plane_state *pristate = NULL;
+	const struct intel_plane_state *sprstate = NULL;
+	const struct intel_plane_state *curstate = NULL;
 	int level, max_level = ilk_wm_max_level(dev_priv), usable_level;
 	struct ilk_wm_maximums max;
 
 	pipe_wm = &cstate->wm.ilk.optimal;
 
-	for_each_intel_plane_on_crtc(dev, intel_crtc, intel_plane) {
-		struct intel_plane_state *ps;
+	drm_atomic_crtc_state_for_each_plane_state(plane, plane_state, &cstate->base) {
+		const struct intel_plane_state *ps = to_intel_plane_state(plane_state);
 
-		ps = intel_atomic_get_existing_plane_state(state,
-							   intel_plane);
-		if (!ps)
-			continue;
-
-		if (intel_plane->base.type == DRM_PLANE_TYPE_PRIMARY)
+		if (plane->type == DRM_PLANE_TYPE_PRIMARY)
 			pristate = ps;
-		else if (intel_plane->base.type == DRM_PLANE_TYPE_OVERLAY)
+		else if (plane->type == DRM_PLANE_TYPE_OVERLAY)
 			sprstate = ps;
-		else if (intel_plane->base.type == DRM_PLANE_TYPE_CURSOR)
+		else if (plane->type == DRM_PLANE_TYPE_CURSOR)
 			curstate = ps;
 	}
 
@@ -3086,11 +3082,9 @@ static int ilk_compute_pipe_wm(struct intel_crtc_state *cstate)
 	if (pipe_wm->sprites_scaled)
 		usable_level = 0;
 
-	ilk_compute_wm_level(dev_priv, intel_crtc, 0, cstate,
-			     pristate, sprstate, curstate, &pipe_wm->raw_wm[0]);
-
 	memset(&pipe_wm->wm, 0, sizeof(pipe_wm->wm));
-	pipe_wm->wm[0] = pipe_wm->raw_wm[0];
+	ilk_compute_wm_level(dev_priv, intel_crtc, 0, cstate,
+			     pristate, sprstate, curstate, &pipe_wm->wm[0]);
 
 	if (IS_HASWELL(dev_priv) || IS_BROADWELL(dev_priv))
 		pipe_wm->linetime = hsw_compute_linetime_wm(cstate);
@@ -3100,8 +3094,8 @@ static int ilk_compute_pipe_wm(struct intel_crtc_state *cstate)
 
 	ilk_compute_wm_reg_maximums(dev_priv, 1, &max);
 
-	for (level = 1; level <= max_level; level++) {
-		struct intel_wm_level *wm = &pipe_wm->raw_wm[level];
+	for (level = 1; level <= usable_level; level++) {
+		struct intel_wm_level *wm = &pipe_wm->wm[level];
 
 		ilk_compute_wm_level(dev_priv, intel_crtc, level, cstate,
 				     pristate, sprstate, curstate, wm);
@@ -3111,13 +3105,10 @@ static int ilk_compute_pipe_wm(struct intel_crtc_state *cstate)
 		 * register maximums since such watermarks are
 		 * always invalid.
 		 */
-		if (level > usable_level)
-			continue;
-
-		if (ilk_validate_wm_level(level, &max, wm))
-			pipe_wm->wm[level] = *wm;
-		else
-			usable_level = level;
+		if (!ilk_validate_wm_level(level, &max, wm)) {
+			memset(wm, 0, sizeof(*wm));
+			break;
+		}
 	}
 
 	return 0;
@@ -3133,7 +3124,11 @@ static int ilk_compute_intermediate_wm(struct drm_device *dev,
 				       struct intel_crtc_state *newstate)
 {
 	struct intel_pipe_wm *a = &newstate->wm.ilk.intermediate;
-	struct intel_pipe_wm *b = &intel_crtc->wm.active.ilk;
+	struct intel_atomic_state *intel_state =
+		to_intel_atomic_state(newstate->base.state);
+	const struct intel_crtc_state *oldstate =
+		intel_atomic_get_old_crtc_state(intel_state, intel_crtc);
+	const struct intel_pipe_wm *b = &oldstate->wm.ilk.optimal;
 	int level, max_level = ilk_wm_max_level(to_i915(dev));
 
 	/*
@@ -3142,6 +3137,9 @@ static int ilk_compute_intermediate_wm(struct drm_device *dev,
 	 * and after the vblank.
 	 */
 	*a = newstate->wm.ilk.optimal;
+	if (!newstate->base.active || drm_atomic_crtc_needs_modeset(&newstate->base))
+		return 0;
+
 	a->pipe_enabled |= b->pipe_enabled;
 	a->sprites_enabled |= b->sprites_enabled;
 	a->sprites_scaled |= b->sprites_scaled;
@@ -5755,11 +5753,29 @@ void vlv_wm_sanitize(struct drm_i915_private *dev_priv)
 	mutex_unlock(&dev_priv->wm.wm_mutex);
 }
 
+/*
+ * FIXME should probably kill this and improve
+ * the real watermark readout/sanitation instead
+ */
+static void ilk_init_lp_watermarks(struct drm_i915_private *dev_priv)
+{
+	I915_WRITE(WM3_LP_ILK, I915_READ(WM3_LP_ILK) & ~WM1_LP_SR_EN);
+	I915_WRITE(WM2_LP_ILK, I915_READ(WM2_LP_ILK) & ~WM1_LP_SR_EN);
+	I915_WRITE(WM1_LP_ILK, I915_READ(WM1_LP_ILK) & ~WM1_LP_SR_EN);
+
+	/*
+	 * Don't touch WM1S_LP_EN here.
+	 * Doing so could cause underruns.
+	 */
+}
+
 void ilk_wm_get_hw_state(struct drm_device *dev)
 {
 	struct drm_i915_private *dev_priv = to_i915(dev);
 	struct ilk_wm_values *hw = &dev_priv->wm.hw;
 	struct drm_crtc *crtc;
+
+	ilk_init_lp_watermarks(dev_priv);
 
 	for_each_crtc(dev, crtc)
 		ilk_pipe_wm_get_hw_state(crtc);
@@ -6591,7 +6607,7 @@ static void gen9_enable_rc6(struct drm_i915_private *dev_priv)
 {
 	struct intel_engine_cs *engine;
 	enum intel_engine_id id;
-	uint32_t rc6_mask = 0;
+	u32 rc6_mode, rc6_mask = 0;
 
 	/* 1a: Software RC state - RC0 */
 	I915_WRITE(GEN6_RC_STATE, 0);
@@ -6629,8 +6645,15 @@ static void gen9_enable_rc6(struct drm_i915_private *dev_priv)
 		rc6_mask = GEN6_RC_CTL_RC6_ENABLE;
 	DRM_INFO("RC6 %s\n", onoff(rc6_mask & GEN6_RC_CTL_RC6_ENABLE));
 	I915_WRITE(GEN6_RC6_THRESHOLD, 37500); /* 37.5/125ms per EI */
+
+	/* WaRsUseTimeoutMode:cnl (pre-prod) */
+	if (IS_CNL_REVID(dev_priv, CNL_REVID_A0, CNL_REVID_C0))
+		rc6_mode = GEN7_RC_CTL_TO_MODE;
+	else
+		rc6_mode = GEN6_RC_CTL_EI_MODE(1);
+
 	I915_WRITE(GEN6_RC_CONTROL,
-		   GEN6_RC_CTL_HW_ENABLE | GEN6_RC_CTL_EI_MODE(1) | rc6_mask);
+		   GEN6_RC_CTL_HW_ENABLE | rc6_mode | rc6_mask);
 
 	/*
 	 * 3b: Enable Coarse Power Gating only when RC6 is enabled.
@@ -8200,18 +8223,6 @@ static void g4x_disable_trickle_feed(struct drm_i915_private *dev_priv)
 	}
 }
 
-static void ilk_init_lp_watermarks(struct drm_i915_private *dev_priv)
-{
-	I915_WRITE(WM3_LP_ILK, I915_READ(WM3_LP_ILK) & ~WM1_LP_SR_EN);
-	I915_WRITE(WM2_LP_ILK, I915_READ(WM2_LP_ILK) & ~WM1_LP_SR_EN);
-	I915_WRITE(WM1_LP_ILK, I915_READ(WM1_LP_ILK) & ~WM1_LP_SR_EN);
-
-	/*
-	 * Don't touch WM1S_LP_EN here.
-	 * Doing so could cause underruns.
-	 */
-}
-
 static void ilk_init_clock_gating(struct drm_i915_private *dev_priv)
 {
 	uint32_t dspclk_gate = ILK_VRHUNIT_CLOCK_GATE_DISABLE;
@@ -8244,8 +8255,6 @@ static void ilk_init_clock_gating(struct drm_i915_private *dev_priv)
 	I915_WRITE(DISP_ARB_CTL,
 		   (I915_READ(DISP_ARB_CTL) |
 		    DISP_FBC_WM_DIS));
-
-	ilk_init_lp_watermarks(dev_priv);
 
 	/*
 	 * Based on the document from hardware guys the following bits
@@ -8358,8 +8367,6 @@ static void gen6_init_clock_gating(struct drm_i915_private *dev_priv)
 	 */
 	I915_WRITE(GEN6_GT_MODE,
 		   _MASKED_FIELD(GEN6_WIZ_HASHING_MASK, GEN6_WIZ_HASHING_16x4));
-
-	ilk_init_lp_watermarks(dev_priv);
 
 	I915_WRITE(CACHE_MODE_0,
 		   _MASKED_BIT_DISABLE(CM0_STC_EVICT_DISABLE_LRA_SNB));
@@ -8587,8 +8594,6 @@ static void bdw_init_clock_gating(struct drm_i915_private *dev_priv)
 						 I915_GTT_PAGE_SIZE_2M);
 	enum pipe pipe;
 
-	ilk_init_lp_watermarks(dev_priv);
-
 	/* WaSwitchSolVfFArbitrationPriority:bdw */
 	I915_WRITE(GAM_ECOCHK, I915_READ(GAM_ECOCHK) | HSW_ECOCHK_ARB_PRIO_SOL);
 
@@ -8639,8 +8644,6 @@ static void bdw_init_clock_gating(struct drm_i915_private *dev_priv)
 
 static void hsw_init_clock_gating(struct drm_i915_private *dev_priv)
 {
-	ilk_init_lp_watermarks(dev_priv);
-
 	/* L3 caching of data atomics doesn't work -- disable it. */
 	I915_WRITE(HSW_SCRATCH1, HSW_SCRATCH1_L3_DATA_ATOMICS_DISABLE);
 	I915_WRITE(HSW_ROW_CHICKEN3,
@@ -8684,18 +8687,12 @@ static void hsw_init_clock_gating(struct drm_i915_private *dev_priv)
 	/* WaSwitchSolVfFArbitrationPriority:hsw */
 	I915_WRITE(GAM_ECOCHK, I915_READ(GAM_ECOCHK) | HSW_ECOCHK_ARB_PRIO_SOL);
 
-	/* WaRsPkgCStateDisplayPMReq:hsw */
-	I915_WRITE(CHICKEN_PAR1_1,
-		   I915_READ(CHICKEN_PAR1_1) | FORCE_ARB_IDLE_PLANES);
-
 	lpt_init_clock_gating(dev_priv);
 }
 
 static void ivb_init_clock_gating(struct drm_i915_private *dev_priv)
 {
 	uint32_t snpcr;
-
-	ilk_init_lp_watermarks(dev_priv);
 
 	I915_WRITE(ILK_DSPCLK_GATE_D, ILK_VRHUNIT_CLOCK_GATE_DISABLE);
 

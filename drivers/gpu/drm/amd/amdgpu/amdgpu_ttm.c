@@ -746,7 +746,7 @@ int amdgpu_ttm_tt_get_user_pages(struct ttm_tt *ttm, struct page **pages)
 	return 0;
 
 release_pages:
-	release_pages(pages, pinned, 0);
+	release_pages(pages, pinned);
 	up_read(&current->mm->mmap_sem);
 	return r;
 }
@@ -909,7 +909,8 @@ int amdgpu_ttm_bind(struct ttm_buffer_object *bo, struct ttm_mem_reg *bo_mem)
 	placement.busy_placement = &placements;
 	placements.fpfn = 0;
 	placements.lpfn = adev->mc.gart_size >> PAGE_SHIFT;
-	placements.flags = bo->mem.placement | TTM_PL_FLAG_TT;
+	placements.flags = (bo->mem.placement & ~TTM_PL_MASK_MEM) |
+		TTM_PL_FLAG_TT;
 
 	r = ttm_bo_mem_space(bo, &placement, &tmp, true, false);
 	if (unlikely(r))
@@ -1192,9 +1193,6 @@ static bool amdgpu_ttm_bo_eviction_valuable(struct ttm_buffer_object *bo,
 	unsigned long num_pages = bo->mem.num_pages;
 	struct drm_mm_node *node = bo->mem.mm_node;
 
-	if (bo->mem.start != AMDGPU_BO_INVALID_OFFSET)
-		return ttm_bo_eviction_valuable(bo, place);
-
 	switch (bo->mem.mem_type) {
 	case TTM_PL_TT:
 		return true;
@@ -1209,7 +1207,7 @@ static bool amdgpu_ttm_bo_eviction_valuable(struct ttm_buffer_object *bo,
 			num_pages -= node->size;
 			++node;
 		}
-		break;
+		return false;
 
 	default:
 		break;

@@ -1,3 +1,4 @@
+# SPDX-License-Identifier: GPL-2.0
 #
 # Makefile for the drm device driver.  This driver provides support for the
 # Direct Rendering Infrastructure (DRI) in XFree86 4.1.0 and higher.
@@ -64,7 +65,7 @@ i915-y += intel_uc.o \
 	  intel_guc.o \
 	  intel_guc_ct.o \
 	  intel_guc_log.o \
-	  intel_guc_loader.o \
+	  intel_guc_fw.o \
 	  intel_huc.o \
 	  i915_guc_submission.o
 

@@ -188,7 +188,7 @@ static bool amd_sched_entity_is_ready(struct amd_sched_entity *entity)
 	if (kfifo_is_empty(&entity->job_queue))
 		return false;
 
-	if (ACCESS_ONCE(entity->dependency))
+	if (READ_ONCE(entity->dependency))
 		return false;
 
 	return true;
@@ -209,10 +209,9 @@ void amd_sched_entity_fini(struct amd_gpu_scheduler *sched,
 
 	if (!amd_sched_entity_is_initialized(sched, entity))
 		return;
-
 	/**
 	 * The client will not queue more IBs during this fini, consume existing
-	 * queued IBs
+	 * queued IBs or discard them on SIGKILL
 	*/
 	if ((current->flags & PF_SIGNALED) && current->exit_code == SIGKILL)
 		r = -ERESTARTSYS;
@@ -237,7 +236,7 @@ void amd_sched_entity_fini(struct amd_gpu_scheduler *sched,
 			sched->ops->free_job(job);
 		}
 
-	amd_sched_rq_remove_entity(rq, entity);
+	}
 	kfifo_free(&entity->job_queue);
 }
 
