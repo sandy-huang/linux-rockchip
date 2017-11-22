@@ -267,11 +267,13 @@ static void dw8250_set_termios(struct uart_port *p, struct ktermios *termios,
 
 	for (i = 1; i <= UART_DIV_MAX; i++) {
 		rate = clk_round_rate(d->clk, i * target_rate);
+printk("%s: target %u, rounded %ld\n", __func__, target_rate, rate);
 		if (rate >= i * min_rate && rate <= i * max_rate)
 			break;
 	}
 	if (i <= UART_DIV_MAX) {
 		clk_disable_unprepare(d->clk);
+printk("%s: rate %ld\n", __func__, rate);
 		ret = clk_set_rate(d->clk, rate);
 		clk_prepare_enable(d->clk);
 		if (!ret)
@@ -442,7 +444,7 @@ static int dw8250_probe(struct platform_device *pdev)
 	p->serial_in	= dw8250_serial_in;
 	p->serial_out	= dw8250_serial_out;
 	p->set_ldisc	= dw8250_set_ldisc;
-	p->set_termios	= dw8250_set_termios;
+//	p->set_termios	= dw8250_set_termios;
 
 	p->membase = devm_ioremap(dev, regs->start, resource_size(regs));
 	if (!p->membase)

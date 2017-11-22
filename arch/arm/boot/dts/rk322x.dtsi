@@ -74,6 +74,7 @@
 			enable-method = "psci";
 		};
 
+#if 0
 		cpu1: cpu@f01 {
 			device_type = "cpu";
 			compatible = "arm,cortex-a7";
@@ -100,6 +101,7 @@
 			operating-points-v2 = <&cpu0_opp_table>;
 			enable-method = "psci";
 		};
+#endif
 	};
 
 	cpu0_opp_table: opp_table0 {
@@ -153,7 +155,7 @@
 			     <GIC_SPI 77 IRQ_TYPE_LEVEL_HIGH>,
 			     <GIC_SPI 78 IRQ_TYPE_LEVEL_HIGH>,
 			     <GIC_SPI 79 IRQ_TYPE_LEVEL_HIGH>;
-		interrupt-affinity = <&cpu0>, <&cpu1>, <&cpu2>, <&cpu3>;
+//		interrupt-affinity = <&cpu0>, <&cpu1>, <&cpu2>, <&cpu3>;
 	};
 
 	psci {
@@ -161,7 +163,7 @@
 		method = "smc";
 	};
 
-	timer {
+/*	timer {
 		compatible = "arm,armv7-timer";
 		arm,cpu-registers-not-fw-configured;
 		interrupts = <GIC_PPI 13 (GIC_CPU_MASK_SIMPLE(4) | IRQ_TYPE_LEVEL_HIGH)>,
@@ -169,7 +171,7 @@
 			     <GIC_PPI 11 (GIC_CPU_MASK_SIMPLE(4) | IRQ_TYPE_LEVEL_HIGH)>,
 			     <GIC_PPI 10 (GIC_CPU_MASK_SIMPLE(4) | IRQ_TYPE_LEVEL_HIGH)>;
 		clock-frequency = <24000000>;
-	};
+	};*/
 
 	xin24m: oscillator {
 		compatible = "fixed-clock";
@@ -299,7 +301,7 @@
 		compatible = "snps,dw-apb-uart";
 		reg = <0x11010000 0x100>;
 		interrupts = <GIC_SPI 55 IRQ_TYPE_LEVEL_HIGH>;
-		clock-frequency = <24000000>;
+//		clock-frequency = <24000000>;
 		clocks = <&cru SCLK_UART0>, <&cru PCLK_UART0>;
 		clock-names = "baudclk", "apb_pclk";
 		pinctrl-names = "default";
@@ -313,7 +315,7 @@
 		compatible = "snps,dw-apb-uart";
 		reg = <0x11020000 0x100>;
 		interrupts = <GIC_SPI 56 IRQ_TYPE_LEVEL_HIGH>;
-		clock-frequency = <24000000>;
+//		clock-frequency = <24000000>;
 		clocks = <&cru SCLK_UART1>, <&cru PCLK_UART1>;
 		clock-names = "baudclk", "apb_pclk";
 		pinctrl-names = "default";
@@ -327,7 +329,7 @@
 		compatible = "snps,dw-apb-uart";
 		reg = <0x11030000 0x100>;
 		interrupts = <GIC_SPI 57 IRQ_TYPE_LEVEL_HIGH>;
-		clock-frequency = <24000000>;
+//		clock-frequency = <24000000>;
 		clocks = <&cru SCLK_UART2>, <&cru PCLK_UART2>;
 		clock-names = "baudclk", "apb_pclk";
 		pinctrl-names = "default";
@@ -485,7 +487,7 @@
 		rockchip,grf = <&grf>;
 		#clock-cells = <1>;
 		#reset-cells = <1>;
-		assigned-clocks =
+/*		assigned-clocks =
 			<&cru PLL_GPLL>, <&cru ARMCLK>,
 			<&cru PLL_CPLL>, <&cru ACLK_PERI>,
 			<&cru HCLK_PERI>, <&cru PCLK_PERI>,
@@ -496,7 +498,7 @@
 			<500000000>, <150000000>,
 			<150000000>, <75000000>,
 			<150000000>, <150000000>,
-			<75000000>;
+			<75000000>; */
 	};
 
 	thermal-zones {
@@ -1093,8 +1095,8 @@
 
 		uart2 {
 			uart2_xfer: uart2-xfer {
-				rockchip,pins = <1 18 RK_FUNC_2 &pcfg_pull_up>,
-						<1 19 RK_FUNC_2 &pcfg_pull_none>;
+				rockchip,pins = <1 19 RK_FUNC_2 &pcfg_pull_up>,
+						<1 18 RK_FUNC_2 &pcfg_pull_none>;
 			};
 
 			uart21_xfer: uart21-xfer {

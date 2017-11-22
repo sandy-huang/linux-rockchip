@@ -44,21 +44,16 @@
 #include "rk3229.dtsi"
 
 / {
-	model = "Rockchip RK3229 Evaluation board";
-	compatible = "rockchip,rk3229-evb", "rockchip,rk3229";
+	model = "Nexbox A95X R1";
+	compatible = "rockchip,rk3229-a95x-r1", "rockchip,rk3229";
+
+	chosen {
+		stdout-path = "serial2:1500000n8";
+	};
 
 	memory@60000000 {
 		device_type = "memory";
 		reg = <0x60000000 0x40000000>;
-	};
-
-	dc_12v: dc-12v-regulator {
-		compatible = "regulator-fixed";
-		regulator-name = "dc_12v";
-		regulator-always-on;
-		regulator-boot-on;
-		regulator-min-microvolt = <12000000>;
-		regulator-max-microvolt = <12000000>;
 	};
 
 	ext_gmac: ext_gmac {
@@ -75,6 +70,18 @@
 		pinctrl-names = "default";
 		pinctrl-0 = <&host_vbus_drv>;
 		regulator-name = "vcc_host";
+		regulator-always-on;
+		regulator-boot-on;
+		vin-supply = <&vcc_sys>;
+	};
+
+	vcc_otg: vcc-otg-regulator {
+		compatible = "regulator-fixed";
+		enable-active-high;
+		gpio = <&gpio3 RK_PC6 GPIO_ACTIVE_HIGH>;
+		pinctrl-names = "default";
+		pinctrl-0 = <&otg_vbus_drv>;
+		regulator-name = "vcc_otg";
 		regulator-always-on;
 		regulator-boot-on;
 		vin-supply = <&vcc_sys>;
@@ -98,7 +105,6 @@
 		regulator-boot-on;
 		regulator-min-microvolt = <5000000>;
 		regulator-max-microvolt = <5000000>;
-		vin-supply = <&dc_12v>;
 	};
 
 	vccio_1v8: vccio-1v8-regulator {
@@ -128,9 +134,11 @@
 		regulator-max-microvolt = <1400000>;
 		regulator-always-on;
 		regulator-boot-on;
+
+		status = "disabled";
 	};
 
-	vdd_log: vdd-log-regulator {
+/*	vdd_log: vdd-log-regulator {
 		compatible = "pwm-regulator";
 		pwms = <&pwm2 0 25000 1>;
 		pwm-supply = <&vcc_sys>;
@@ -139,25 +147,10 @@
 		regulator-max-microvolt = <1300000>;
 		regulator-always-on;
 		regulator-boot-on;
-	};
-
-	gpio_keys {
-		compatible = "gpio-keys";
-		autorepeat;
-		pinctrl-names = "default";
-		pinctrl-0 = <&pwr_key>;
-
-		power_key: power-key {
-			label = "GPIO Key Power";
-			gpios = <&gpio3 23 GPIO_ACTIVE_LOW>;
-			linux,code = <KEY_POWER>;
-			debounce-interval = <100>;
-			wakeup-source;
-		};
-	};
+	}; */
 };
 
-/* &cpu0 {
+/*&cpu0 {
 	cpu-supply = <&vdd_arm>;
 };
 
@@ -171,7 +164,7 @@
 
 &cpu3 {
 	cpu-supply = <&vdd_arm>;
-}; */
+};*/
 
 &emmc {
 	cap-mmc-highspeed;
@@ -205,15 +198,13 @@
 };
 
 &pinctrl {
-	keys {
-		pwr_key: pwr-key {
-			rockchip,pins = <3 RK_PC7 RK_FUNC_GPIO &pcfg_pull_up>;
-		};
-	};
-
 	usb {
 		host_vbus_drv: host-vbus-drv {
 			rockchip,pins = <3 RK_PC4 RK_FUNC_GPIO &pcfg_pull_none>;
+		};
+
+		otg_vbus_drv: otg-vbus-drv {
+			rockchip,pins = <3 RK_PC6 RK_FUNC_GPIO &pcfg_pull_none>;
 		};
 	};
 };
@@ -252,12 +243,12 @@
 	status = "okay";
 
 	u2phy1_otg: otg-port {
-		phy-supply = <&vcc_host>;
+//		phy-supply = <&vcc_host>;
 		status = "okay";
 	};
 
 	u2phy1_host: host-port {
-		phy-supply = <&vcc_host>;
+//		phy-supply = <&vcc_host>;
 		status = "okay";
 	};
 };
@@ -287,5 +278,6 @@
 };
 
 &usb_otg {
+	dr_mode = "host";
 	status = "okay";
 };
