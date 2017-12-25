@@ -1,6 +1,7 @@
 #include <linux/module.h>
 #include <linux/of_platform.h>
 #include <linux/log2.h>
+#include <linux/of_reserved_mem.h>
 #include <drm/drm_prime.h>
 
 #include "lima.h"
@@ -297,10 +298,17 @@ static int lima_pdev_probe(struct platform_device *pdev)
 
 	platform_set_drvdata(pdev, ldev);
 
+	/* Get the optional cma memory resource */
+	err = of_reserved_mem_device_init(&pdev->dev);
+	if (err && err != -ENODEV)
+		return err;
+
 	/* Allocate and initialize the DRM device. */
 	ddev = drm_dev_alloc(&lima_drm_driver, &pdev->dev);
-	if (IS_ERR(ddev))
-		return PTR_ERR(ddev);
+	if (IS_ERR(ddev)) {
+		err = PTR_ERR(ddev);
+		goto err_alloc;
+	}
 
 	ddev->dev_private = ldev;
 	ldev->ddev = ddev;
@@ -325,6 +333,8 @@ err_out1:
 	lima_device_fini(ldev);
 err_out0:
 	drm_dev_unref(ddev);
+err_alloc:
+	of_reserved_mem_device_release(&pdev->dev);
 	return err;
 }
 
@@ -336,6 +346,7 @@ static int lima_pdev_remove(struct platform_device *pdev)
 	drm_dev_unregister(ddev);
 	lima_device_fini(ldev);
 	drm_dev_unref(ddev);
+	of_reserved_mem_device_release(&pdev->dev);
 	return 0;
 }
 
