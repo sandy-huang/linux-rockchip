@@ -1712,17 +1712,11 @@ static void set_mpc_output_csc(struct dc *dc,
 			tbl_entry.regval[i] = matrix[i];
 		tbl_entry.color_space = colorspace;
 
-		if (mpc->funcs->set_output_csc != NULL)
-			mpc->funcs->set_output_csc(mpc,
-					opp_id,
-					&tbl_entry,
-					ocsc_mode);
+			tbl_entry.color_space = color_space;
+			//tbl_entry.regval = matrix;
+			pipe_ctx->plane_res.dpp->funcs->opp_set_csc_adjustment(pipe_ctx->plane_res.dpp, &tbl_entry);
 	} else {
-		if (mpc->funcs->set_ocsc_default != NULL)
-			mpc->funcs->set_ocsc_default(mpc,
-					opp_id,
-					colorspace,
-					ocsc_mode);
+		pipe_ctx->plane_res.dpp->funcs->opp_set_csc_default(pipe_ctx->plane_res.dpp, colorspace);
 	}
 }
 

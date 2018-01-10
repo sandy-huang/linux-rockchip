@@ -221,6 +221,68 @@ void dpp1_cm_set_gamut_remap(
 	}
 }
 
+void dpp1_cm_set_output_csc_default(
+		struct dpp *dpp_base,
+		enum dc_color_space colorspace)
+{
+
+	struct dcn10_dpp *dpp = TO_DCN10_DPP(dpp_base);
+	uint32_t ocsc_mode = 0;
+
+	switch (colorspace) {
+		case COLOR_SPACE_SRGB:
+		case COLOR_SPACE_2020_RGB_FULLRANGE:
+			ocsc_mode = 0;
+			break;
+		case COLOR_SPACE_SRGB_LIMITED:
+		case COLOR_SPACE_2020_RGB_LIMITEDRANGE:
+			ocsc_mode = 1;
+			break;
+		case COLOR_SPACE_YCBCR601:
+		case COLOR_SPACE_YCBCR601_LIMITED:
+			ocsc_mode = 2;
+			break;
+		case COLOR_SPACE_YCBCR709:
+		case COLOR_SPACE_YCBCR709_LIMITED:
+		case COLOR_SPACE_2020_YCBCR:
+			ocsc_mode = 3;
+			break;
+		case COLOR_SPACE_UNKNOWN:
+		default:
+			break;
+	}
+
+	REG_SET(CM_OCSC_CONTROL, 0, CM_OCSC_MODE, ocsc_mode);
+
+}
+
+static void dpp1_cm_get_reg_field(
+		struct dcn10_dpp *dpp,
+		struct xfer_func_reg *reg)
+{
+	reg->shifts.exp_region0_lut_offset = dpp->tf_shift->CM_RGAM_RAMA_EXP_REGION0_LUT_OFFSET;
+	reg->masks.exp_region0_lut_offset = dpp->tf_mask->CM_RGAM_RAMA_EXP_REGION0_LUT_OFFSET;
+	reg->shifts.exp_region0_num_segments = dpp->tf_shift->CM_RGAM_RAMA_EXP_REGION0_NUM_SEGMENTS;
+	reg->masks.exp_region0_num_segments = dpp->tf_mask->CM_RGAM_RAMA_EXP_REGION0_NUM_SEGMENTS;
+	reg->shifts.exp_region1_lut_offset = dpp->tf_shift->CM_RGAM_RAMA_EXP_REGION1_LUT_OFFSET;
+	reg->masks.exp_region1_lut_offset = dpp->tf_mask->CM_RGAM_RAMA_EXP_REGION1_LUT_OFFSET;
+	reg->shifts.exp_region1_num_segments = dpp->tf_shift->CM_RGAM_RAMA_EXP_REGION1_NUM_SEGMENTS;
+	reg->masks.exp_region1_num_segments = dpp->tf_mask->CM_RGAM_RAMA_EXP_REGION1_NUM_SEGMENTS;
+
+	reg->shifts.field_region_end = dpp->tf_shift->CM_RGAM_RAMB_EXP_REGION_END_B;
+	reg->masks.field_region_end = dpp->tf_mask->CM_RGAM_RAMB_EXP_REGION_END_B;
+	reg->shifts.field_region_end_slope = dpp->tf_shift->CM_RGAM_RAMB_EXP_REGION_END_SLOPE_B;
+	reg->masks.field_region_end_slope = dpp->tf_mask->CM_RGAM_RAMB_EXP_REGION_END_SLOPE_B;
+	reg->shifts.field_region_end_base = dpp->tf_shift->CM_RGAM_RAMB_EXP_REGION_END_BASE_B;
+	reg->masks.field_region_end_base = dpp->tf_mask->CM_RGAM_RAMB_EXP_REGION_END_BASE_B;
+	reg->shifts.field_region_linear_slope = dpp->tf_shift->CM_RGAM_RAMB_EXP_REGION_LINEAR_SLOPE_B;
+	reg->masks.field_region_linear_slope = dpp->tf_mask->CM_RGAM_RAMB_EXP_REGION_LINEAR_SLOPE_B;
+	reg->shifts.exp_region_start = dpp->tf_shift->CM_RGAM_RAMB_EXP_REGION_START_B;
+	reg->masks.exp_region_start = dpp->tf_mask->CM_RGAM_RAMB_EXP_REGION_START_B;
+	reg->shifts.exp_resion_start_segment = dpp->tf_shift->CM_RGAM_RAMB_EXP_REGION_START_SEGMENT_B;
+	reg->masks.exp_resion_start_segment = dpp->tf_mask->CM_RGAM_RAMB_EXP_REGION_START_SEGMENT_B;
+}
+
 static void dpp1_cm_program_color_matrix(
 		struct dcn10_dpp *dpp,
 		const struct out_csc_color_matrix *tbl_entry)
