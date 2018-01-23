@@ -3291,12 +3291,13 @@ static void i9xx_disable_plane(struct intel_plane *plane,
 	spin_unlock_irqrestore(&dev_priv->uncore.lock, irqflags);
 }
 
-static bool i9xx_plane_get_hw_state(struct intel_plane *plane)
+static bool i9xx_plane_get_hw_state(struct intel_plane *primary)
 {
-	struct drm_i915_private *dev_priv = to_i915(plane->base.dev);
+
+	struct drm_i915_private *dev_priv = to_i915(primary->base.dev);
 	enum intel_display_power_domain power_domain;
-	enum i9xx_plane_id i9xx_plane = plane->i9xx_plane;
-	enum pipe pipe = plane->pipe;
+	enum plane plane = primary->plane;
+	enum pipe pipe = primary->pipe;
 	bool ret;
 
 	/*
@@ -3308,7 +3309,7 @@ static bool i9xx_plane_get_hw_state(struct intel_plane *plane)
 	if (!intel_display_power_get_if_enabled(dev_priv, power_domain))
 		return false;
 
-	ret = I915_READ(DSPCNTR(i9xx_plane)) & DISPLAY_PLANE_ENABLE;
+	ret = I915_READ(DSPCNTR(plane)) & DISPLAY_PLANE_ENABLE;
 
 	intel_display_power_put(dev_priv, power_domain);
 
@@ -4831,6 +4832,8 @@ void hsw_enable_ips(const struct intel_crtc_state *crtc_state)
 	 */
 	WARN_ON(!(crtc_state->active_planes & ~BIT(PLANE_CURSOR)));
 
+	assert_plane_enabled(to_intel_plane(crtc->base.primary));
+
 	if (IS_BROADWELL(dev_priv)) {
 		mutex_lock(&dev_priv->pcu_lock);
 		WARN_ON(sandybridge_pcode_write(dev_priv, DISPLAY_IPS_CONTROL,
@@ -4863,6 +4866,8 @@ void hsw_disable_ips(const struct intel_crtc_state *crtc_state)
 
 	if (!crtc_state->ips_enabled)
 		return;
+
+	assert_plane_enabled(to_intel_plane(crtc->base.primary));
 
 	if (IS_BROADWELL(dev_priv)) {
 		mutex_lock(&dev_priv->pcu_lock);
@@ -13292,16 +13297,16 @@ intel_primary_plane_create(struct drm_i915_private *dev_priv, enum pipe pipe)
 		num_formats = ARRAY_SIZE(i965_primary_formats);
 		modifiers = i9xx_format_modifiers;
 
-		primary->update_plane = i9xx_update_plane;
-		primary->disable_plane = i9xx_disable_plane;
+		primary->update_plane = i9xx_update_primary_plane;
+		primary->disable_plane = i9xx_disable_primary_plane;
 		primary->get_hw_state = i9xx_plane_get_hw_state;
 	} else {
 		intel_primary_formats = i8xx_primary_formats;
 		num_formats = ARRAY_SIZE(i8xx_primary_formats);
 		modifiers = i9xx_format_modifiers;
 
-		primary->update_plane = i9xx_update_plane;
-		primary->disable_plane = i9xx_disable_plane;
+		primary->update_plane = i9xx_update_primary_plane;
+		primary->disable_plane = i9xx_disable_primary_plane;
 		primary->get_hw_state = i9xx_plane_get_hw_state;
 	}
 
@@ -14786,11 +14791,11 @@ void i830_disable_pipe(struct drm_i915_private *dev_priv, enum pipe pipe)
 }
 
 static bool intel_plane_mapping_ok(struct intel_crtc *crtc,
-				   struct intel_plane *plane)
+				   struct intel_plane *primary)
 {
 	struct drm_i915_private *dev_priv = to_i915(crtc->base.dev);
-	enum i9xx_plane_id i9xx_plane = plane->i9xx_plane;
-	u32 val = I915_READ(DSPCNTR(i9xx_plane));
+	enum plane plane = primary->plane;
+	u32 val = I915_READ(DSPCNTR(plane));
 
 	return (val & DISPLAY_PLANE_ENABLE) == 0 ||
 		(val & DISPPLANE_SEL_PIPE_MASK) == DISPPLANE_SEL_PIPE(crtc->pipe);
