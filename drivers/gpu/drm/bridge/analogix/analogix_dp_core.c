@@ -727,7 +727,6 @@ static int analogix_dp_set_link_train(struct analogix_dp_device *dp,
 
 static int analogix_dp_config_video(struct analogix_dp_device *dp)
 {
-	int retval = 0;
 	int timeout_loop = 0;
 	int done_count = 0;
 
@@ -783,10 +782,7 @@ static int analogix_dp_config_video(struct analogix_dp_device *dp)
 		usleep_range(1000, 1001);
 	}
 
-	if (retval != 0)
-		dev_err(dp->dev, "Video stream is not detected!\n");
-
-	return retval;
+	return 0;
 }
 
 static void analogix_dp_enable_scramble(struct analogix_dp_device *dp,
@@ -946,7 +942,9 @@ static int analogix_dp_get_modes(struct drm_connector *connector)
 			return 0;
 		}
 
+		pm_runtime_get_sync(dp->dev);
 		edid = drm_get_edid(connector, &dp->aux.ddc);
+		pm_runtime_put(dp->dev);
 		if (edid) {
 			drm_mode_connector_update_edid_property(&dp->connector,
 								edid);

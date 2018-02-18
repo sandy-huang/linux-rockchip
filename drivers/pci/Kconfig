@@ -1,3 +1,4 @@
+# SPDX-License-Identifier: GPL-2.0
 #
 # PCI configuration
 #
@@ -80,15 +81,6 @@ config XEN_PCIDEV_FRONTEND
           The PCI device frontend driver allows the kernel to import arbitrary
           PCI devices from a PCI backend to support PCI driver domains.
 
-config HT_IRQ
-	bool "Interrupts on hypertransport devices"
-	default y
-	depends on PCI && X86_LOCAL_APIC
-	help
-	   This allows native hypertransport devices to use interrupts.
-
-	   If unsure say Y.
-
 config PCI_ATS
 	bool
 
@@ -134,6 +126,7 @@ config PCI_PASID
 
 config PCI_LABEL
 	def_bool y if (DMI || ACPI)
+	depends on PCI
 	select NLS
 
 config PCI_HYPERV
@@ -144,6 +137,7 @@ config PCI_HYPERV
           PCI devices from a PCI backend to support PCI driver domains.
 
 source "drivers/pci/hotplug/Kconfig"
+source "drivers/pci/cadence/Kconfig"
 source "drivers/pci/dwc/Kconfig"
 source "drivers/pci/host/Kconfig"
 source "drivers/pci/endpoint/Kconfig"

@@ -284,7 +284,7 @@ void nr_destroy_socket(struct sock *sk)
 
 	if (sk_has_allocations(sk)) {
 		/* Defer: outstanding buffers */
-		sk->sk_timer.function = (TIMER_FUNC_TYPE)nr_destroy_timer;
+		sk->sk_timer.function = nr_destroy_timer;
 		sk->sk_timer.expires  = jiffies + 2 * HZ;
 		add_timer(&sk->sk_timer);
 	} else
@@ -1344,7 +1344,6 @@ static int nr_info_open(struct inode *inode, struct file *file)
 }
 
 static const struct file_operations nr_info_fops = {
-	.owner = THIS_MODULE,
 	.open = nr_info_open,
 	.read = seq_read,
 	.llseek = seq_lseek,

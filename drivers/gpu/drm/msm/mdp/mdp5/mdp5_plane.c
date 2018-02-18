@@ -286,7 +286,7 @@ static int mdp5_plane_atomic_check_with_state(struct drm_crtc_state *crtc_state,
 	uint32_t max_width, max_height;
 	bool out_of_bounds = false;
 	uint32_t caps = 0;
-	struct drm_rect clip;
+	struct drm_rect clip = {};
 	int min_scale, max_scale;
 	int ret;
 
@@ -320,15 +320,16 @@ static int mdp5_plane_atomic_check_with_state(struct drm_crtc_state *crtc_state,
 		return -ERANGE;
 	}
 
-	clip.x1 = 0;
-	clip.y1 = 0;
-	clip.x2 = crtc_state->adjusted_mode.hdisplay;
-	clip.y2 = crtc_state->adjusted_mode.vdisplay;
 	min_scale = FRAC_16_16(1, 8);
 	max_scale = FRAC_16_16(8, 1);
 
-	ret = drm_plane_helper_check_state(state, &clip, min_scale,
-					   max_scale, true, true);
+	if (crtc_state->enable)
+		drm_mode_get_hv_timing(&crtc_state->mode,
+				       &clip.x2, &clip.y2);
+
+	ret = drm_atomic_helper_check_plane_state(state, crtc_state, &clip,
+						  min_scale, max_scale,
+						  true, true);
 	if (ret)
 		return ret;
 
@@ -470,7 +471,7 @@ static int mdp5_plane_atomic_async_check(struct drm_plane *plane,
 {
 	struct mdp5_plane_state *mdp5_state = to_mdp5_plane_state(state);
 	struct drm_crtc_state *crtc_state;
-	struct drm_rect clip;
+	struct drm_rect clip = {};
 	int min_scale, max_scale;
 	int ret;
 
@@ -498,15 +499,16 @@ static int mdp5_plane_atomic_async_check(struct drm_plane *plane,
 	    plane->state->fb != state->fb)
 		return -EINVAL;
 
-	clip.x1 = 0;
-	clip.y1 = 0;
-	clip.x2 = crtc_state->adjusted_mode.hdisplay;
-	clip.y2 = crtc_state->adjusted_mode.vdisplay;
 	min_scale = FRAC_16_16(1, 8);
 	max_scale = FRAC_16_16(8, 1);
 
-	ret = drm_plane_helper_check_state(state, &clip, min_scale,
-					   max_scale, true, true);
+	if (crtc_state->enable)
+		drm_mode_get_hv_timing(&crtc_state->mode,
+				       &clip.x2, &clip.y2);
+
+	ret = drm_atomic_helper_check_plane_state(state, crtc_state, &clip,
+						  min_scale, max_scale,
+						  true, true);
 	if (ret)
 		return ret;
 
@@ -964,8 +966,6 @@ static int mdp5_plane_mode_set(struct drm_plane *plane,
 	uint32_t src_x, src_y;
 	uint32_t src_w, src_h;
 	uint32_t src_img_w, src_img_h;
-	uint32_t src_x_r;
-	int crtc_x_r;
 	int ret;
 
 	nplanes = fb->format->num_planes;
@@ -1010,9 +1010,6 @@ static int mdp5_plane_mode_set(struct drm_plane *plane,
 		crtc_w /= 2;
 		src_w /= 2;
 		src_img_w /= 2;
-
-		crtc_x_r = crtc_x + crtc_w;
-		src_x_r = src_x + src_w;
 	}
 
 	ret = calc_scalex_steps(plane, pix_format, src_w, crtc_w, step.x);
@@ -1052,9 +1049,9 @@ static int mdp5_plane_mode_set(struct drm_plane *plane,
 	if (right_hwpipe)
 		mdp5_hwpipe_mode_set(mdp5_kms, right_hwpipe, fb, &step, &pe,
 				     config, hdecm, vdecm, hflip, vflip,
-				     crtc_x_r, crtc_y, crtc_w, crtc_h,
+				     crtc_x + crtc_w, crtc_y, crtc_w, crtc_h,
 				     src_img_w, src_img_h,
-				     src_x_r, src_y, src_w, src_h);
+				     src_x + src_w, src_y, src_w, src_h);
 
 	plane->fb = fb;
 
