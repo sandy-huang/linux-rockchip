@@ -519,7 +519,10 @@ static int vop_enable(struct drm_crtc *crtc)
 		goto err_disable_aclk;
 	}
 
-	memcpy(vop->regs, vop->regsbak, vop->len);
+	spin_lock(&vop->reg_lock);
+	for (i = 0; i < vop->len; i += 4)
+		writel_relaxed(vop->regsbak[i / 4], vop->regs + i);
+
 	/*
 	 * We need to make sure that all windows are disabled before we
 	 * enable the crtc. Otherwise we might try to scan from a destroyed
@@ -529,10 +532,9 @@ static int vop_enable(struct drm_crtc *crtc)
 		struct vop_win *vop_win = &vop->win[i];
 		const struct vop_win_data *win = vop_win->data;
 
-		spin_lock(&vop->reg_lock);
 		VOP_WIN_SET(vop, win, enable, 0);
-		spin_unlock(&vop->reg_lock);
 	}
+	spin_unlock(&vop->reg_lock);
 
 	vop_cfg_done(vop);
 
@@ -1145,15 +1147,14 @@ static void vop_handle_vblank(struct vop *vop)
 {
 	struct drm_device *drm = vop->drm_dev;
 	struct drm_crtc *crtc = &vop->crtc;
-	unsigned long flags;
 
-	spin_lock_irqsave(&drm->event_lock, flags);
+	spin_lock(&drm->event_lock);
 	if (vop->event) {
 		drm_crtc_send_vblank_event(crtc, vop->event);
 		drm_crtc_vblank_put(crtc);
 		vop->event = NULL;
 	}
-	spin_unlock_irqrestore(&drm->event_lock, flags);
+	spin_unlock(&drm->event_lock);
 
 	if (test_and_clear_bit(VOP_PENDING_FB_UNREF, &vop->pending))
 		drm_flip_work_commit(&vop->fb_unref_work, system_unbound_wq);
@@ -1164,21 +1165,20 @@ static irqreturn_t vop_isr(int irq, void *data)
 	struct vop *vop = data;
 	struct drm_crtc *crtc = &vop->crtc;
 	uint32_t active_irqs;
-	unsigned long flags;
 	int ret = IRQ_NONE;
 
 	/*
 	 * interrupt register has interrupt status, enable and clear bits, we
 	 * must hold irq_lock to avoid a race with enable/disable_vblank().
 	*/
-	spin_lock_irqsave(&vop->irq_lock, flags);
+	spin_lock(&vop->irq_lock);
 
 	active_irqs = VOP_INTR_GET_TYPE(vop, status, INTR_MASK);
 	/* Clear all active interrupt sources */
 	if (active_irqs)
 		VOP_INTR_SET_TYPE(vop, clear, active_irqs, 1);
 
-	spin_unlock_irqrestore(&vop->irq_lock, flags);
+	spin_unlock(&vop->irq_lock);
 
 	/* This is expected for vop iommu irqs, since the irq is shared */
 	if (!active_irqs)
@@ -1401,7 +1401,11 @@ static int vop_initial(struct vop *vop)
 	usleep_range(10, 20);
 	reset_control_deassert(ahb_rst);
 
-	memcpy(vop->regsbak, vop->regs, vop->len);
+	VOP_INTR_SET_TYPE(vop, clear, INTR_MASK, 1);
+	VOP_INTR_SET_TYPE(vop, enable, INTR_MASK, 0);
+
+	for (i = 0; i < vop->len; i += sizeof(u32))
+		vop->regsbak[i / 4] = readl_relaxed(vop->regs + i);
 
 	VOP_REG_SET(vop, misc, global_regdone_en, 1);
 	VOP_REG_SET(vop, common, dsp_blank, 0);
@@ -1564,17 +1568,9 @@ static int vop_bind(struct device *dev, struct device *master, void *data)
 	spin_lock_init(&vop->irq_lock);
 	mutex_init(&vop->vop_lock);
 
-	ret = devm_request_irq(dev, vop->irq, vop_isr,
-			       IRQF_SHARED, dev_name(dev), vop);
-	if (ret)
-		return ret;
-
-	/* IRQ is initially disabled; it gets enabled in power_on */
-	disable_irq(vop->irq);
-
 	ret = vop_create_crtc(vop);
 	if (ret)
-		goto err_enable_irq;
+		return ret;
 
 	pm_runtime_enable(&pdev->dev);
 
@@ -1585,13 +1581,19 @@ static int vop_bind(struct device *dev, struct device *master, void *data)
 		goto err_disable_pm_runtime;
 	}
 
+	ret = devm_request_irq(dev, vop->irq, vop_isr,
+			       IRQF_SHARED, dev_name(dev), vop);
+	if (ret)
+		goto err_disable_pm_runtime;
+
+	/* IRQ is initially disabled; it gets enabled in power_on */
+	disable_irq(vop->irq);
+
 	return 0;
 
 err_disable_pm_runtime:
 	pm_runtime_disable(&pdev->dev);
 	vop_destroy_crtc(vop);
-err_enable_irq:
-	enable_irq(vop->irq); /* To balance out the disable_irq above */
 	return ret;
 }
 
