@@ -54,7 +54,6 @@
 #include <linux/mman.h>
 #include <linux/version.h>
 #include <linux/security.h>
-#include <linux/pm_runtime.h>
 #include <mali_kbase_hw.h>
 #ifdef CONFIG_SYNC
 #include <mali_kbase_sync.h>
@@ -421,7 +420,6 @@ enum mali_error {
 enum {
 	inited_mem = (1u << 0),
 	inited_js = (1u << 1),
-	inited_pm_runtime_init = (1u << 2),
 #ifdef CONFIG_MALI_DEVFREQ
 	inited_devfreq = (1u << 3),
 #endif /* CONFIG_MALI_DEVFREQ */
@@ -3183,11 +3181,6 @@ static int kbase_platform_device_remove(struct platform_device *pdev)
 		kbdev->inited_subsys &= ~inited_mem;
 	}
 
-	if (kbdev->inited_subsys & inited_pm_runtime_init) {
-		kbdev->pm.callback_power_runtime_term(kbdev);
-		kbdev->inited_subsys &= ~inited_pm_runtime_init;
-	}
-
 	if (kbdev->inited_subsys & inited_device) {
 		kbase_device_term(kbdev);
 		kbdev->inited_subsys &= ~inited_device;
@@ -3283,17 +3276,6 @@ static int kbase_platform_device_probe(struct platform_device *pdev)
 		return err;
 	}
 	kbdev->inited_subsys |= inited_device;
-
-	if (kbdev->pm.callback_power_runtime_init) {
-		err = kbdev->pm.callback_power_runtime_init(kbdev);
-		if (err) {
-			dev_err(kbdev->dev,
-				"Runtime PM initialization failed\n");
-			kbase_platform_device_remove(pdev);
-			return err;
-		}
-		kbdev->inited_subsys |= inited_pm_runtime_init;
-	}
 
 	err = kbase_mem_init(kbdev);
 	if (err) {
@@ -3457,102 +3439,11 @@ static int kbase_device_resume(struct device *dev)
 	return 0;
 }
 
-/** Runtime suspend callback from the OS.
- *
- * This is called by Linux when the device should prepare for a condition in which it will
- * not be able to communicate with the CPU(s) and RAM due to power management.
- *
- * @param dev  The device to suspend
- *
- * @return A standard Linux error code
- */
-#ifdef KBASE_PM_RUNTIME
-static int kbase_device_runtime_suspend(struct device *dev)
-{
-	struct kbase_device *kbdev = to_kbase_device(dev);
-
-	if (!kbdev)
-		return -ENODEV;
-
-#ifdef CONFIG_PM_DEVFREQ
-	devfreq_suspend_device(kbdev->devfreq);
-#endif
-
-	if (kbdev->pm.backend.callback_power_runtime_off) {
-		kbdev->pm.backend.callback_power_runtime_off(kbdev);
-		dev_dbg(dev, "runtime suspend\n");
-	}
-	return 0;
-}
-#endif /* KBASE_PM_RUNTIME */
-
-/** Runtime resume callback from the OS.
- *
- * This is called by Linux when the device should go into a fully active state.
- *
- * @param dev  The device to suspend
- *
- * @return A standard Linux error code
- */
-
-#ifdef KBASE_PM_RUNTIME
-static int kbase_device_runtime_resume(struct device *dev)
-{
-	int ret = 0;
-	struct kbase_device *kbdev = to_kbase_device(dev);
-
-	if (!kbdev)
-		return -ENODEV;
-
-	if (kbdev->pm.backend.callback_power_runtime_on) {
-		ret = kbdev->pm.backend.callback_power_runtime_on(kbdev);
-		dev_dbg(dev, "runtime resume\n");
-	}
-
-#ifdef CONFIG_PM_DEVFREQ
-	devfreq_resume_device(kbdev->devfreq);
-#endif
-
-	return ret;
-}
-#endif /* KBASE_PM_RUNTIME */
-
-#ifdef KBASE_PM_RUNTIME
-/**
- * kbase_device_runtime_idle - Runtime idle callback from the OS.
- * @dev: The device to suspend
- *
- * This is called by Linux when the device appears to be inactive and it might
- * be placed into a low power state.
- *
- * Return: 0 if device can be suspended, non-zero to avoid runtime autosuspend,
- * otherwise a standard Linux error code
- */
-static int kbase_device_runtime_idle(struct device *dev)
-{
-	struct kbase_device *kbdev = to_kbase_device(dev);
-
-	if (!kbdev)
-		return -ENODEV;
-
-	/* Use platform specific implementation if it exists. */
-	if (kbdev->pm.backend.callback_power_runtime_idle)
-		return kbdev->pm.backend.callback_power_runtime_idle(kbdev);
-
-	return 0;
-}
-#endif /* KBASE_PM_RUNTIME */
-
 /** The power management operations for the platform driver.
  */
 static const struct dev_pm_ops kbase_pm_ops = {
 	.suspend = kbase_device_suspend,
 	.resume = kbase_device_resume,
-#ifdef KBASE_PM_RUNTIME
-	.runtime_suspend = kbase_device_runtime_suspend,
-	.runtime_resume = kbase_device_runtime_resume,
-	.runtime_idle = kbase_device_runtime_idle,
-#endif /* KBASE_PM_RUNTIME */
 };
 
 #ifdef CONFIG_OF

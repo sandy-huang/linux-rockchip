@@ -58,17 +58,6 @@
 #define GPU_SPEED_FUNC (NULL)
 
 /**
- * Power management configuration
- *
- * Attached value:
- *	pointer to @ref kbase_pm_callback_conf
- * Default value:
- *	See @ref kbase_pm_callback_conf
- */
-#define POWER_MANAGEMENT_CALLBACKS (&pm_callbacks)
-extern struct kbase_pm_callback_conf pm_callbacks;
-
-/**
  * Secure mode switch
  *
  * Attached value: pointer to @ref kbase_secure_ops

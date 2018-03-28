@@ -197,12 +197,6 @@ union kbase_pm_ca_policy_data {
  *                          be turned off. See &struct kbase_pm_callback_conf
  * @callback_power_resume: Callback when a resume occurs and the GPU needs to
  *                          be turned on. See &struct kbase_pm_callback_conf
- * @callback_power_runtime_on: Callback when the GPU needs to be turned on. See
- *                             &struct kbase_pm_callback_conf
- * @callback_power_runtime_off: Callback when the GPU may be turned off. See
- *                              &struct kbase_pm_callback_conf
- * @callback_power_runtime_idle: Optional callback when the GPU may be idle. See
- *                              &struct kbase_pm_callback_conf
  *
  * Note:
  * During an IRQ, @ca_current_policy or @pm_current_policy can be NULL when the
@@ -265,9 +259,6 @@ struct kbase_pm_backend_data {
 	void (*callback_power_off)(struct kbase_device *kbdev);
 	void (*callback_power_suspend)(struct kbase_device *kbdev);
 	void (*callback_power_resume)(struct kbase_device *kbdev);
-	int (*callback_power_runtime_on)(struct kbase_device *kbdev);
-	void (*callback_power_runtime_off)(struct kbase_device *kbdev);
-	int (*callback_power_runtime_idle)(struct kbase_device *kbdev);
 };
 
 /* List of policy IDs */

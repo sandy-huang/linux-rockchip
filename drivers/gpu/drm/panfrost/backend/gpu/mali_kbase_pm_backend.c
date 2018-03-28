@@ -21,40 +21,84 @@
 #include <mali_midg_regmap.h>
 #include <mali_kbase_config_defaults.h>
 #include <linux/pm_runtime.h>
+#include <linux/regulator/consumer.h>
 
 #include <mali_kbase_pm.h>
 #include <backend/gpu/mali_kbase_jm_internal.h>
 #include <backend/gpu/mali_kbase_js_internal.h>
 #include <backend/gpu/mali_kbase_pm_internal.h>
 
+static int pm_callback_power_on(struct kbase_device *kbdev)
+{
+	int ret = 1; /* Assume GPU has been powered off */
+	int err = 0;
+
+	err = clk_enable(kbdev->clock);
+	if (err) {
+		pr_err("failed to enable clk: %d", err);
+		return err;
+	}
+
+	/* we must enable vdd_gpu before pd_gpu_in_chip. */
+	if (kbdev->regulator) {
+		err = regulator_enable(kbdev->regulator);
+		if (err) {
+			pr_err("fail to enable regulator, err : %d.", err);
+			return err;
+		}
+	}
+
+	/* 若 mali_dev 的 runtime_pm 是 enabled 的, 则... */
+	if (pm_runtime_enabled(kbdev->dev)) {
+		pr_debug("to resume mali_dev syncly.");
+		/* 对 pd_in_chip 的 on 操作,
+		 * 将在 pm_domain 的 runtime_pm_callbacks 中完成.
+		 */
+		err = pm_runtime_get_sync(kbdev->dev);
+		if (err < 0) {
+			pr_err("failed to runtime resume device: %d.", err);
+			return err;
+		} else if (err == 1) { /* runtime_pm_status is still active */
+			pr_debug("chip has NOT been powered off, no need to re-init.");
+			ret = 0;
+		}
+	}
+
+	KBASE_TIMELINE_GPU_POWER(kbdev, 1);
+
+	return ret;
+}
+
+static void pm_callback_power_off(struct kbase_device *kbdev)
+{
+	clk_disable(kbdev->clock);
+
+	if (pm_runtime_enabled(kbdev->dev)) {
+		pr_debug("to put_sync_suspend mali_dev.");
+		pm_runtime_put_sync_suspend(kbdev->dev);
+	}
+
+	if (kbdev->regulator)
+		regulator_disable(kbdev->regulator);
+
+	KBASE_TIMELINE_GPU_POWER(kbdev, 0);
+}
+
 void kbase_pm_register_access_enable(struct kbase_device *kbdev)
 {
-	struct kbase_pm_callback_conf *callbacks;
-
-	callbacks = (struct kbase_pm_callback_conf *)POWER_MANAGEMENT_CALLBACKS;
-
-	if (callbacks)
-		callbacks->power_on_callback(kbdev);
-
+	pm_callback_power_on(kbdev);
 	kbdev->pm.backend.gpu_powered = true;
 }
 
 void kbase_pm_register_access_disable(struct kbase_device *kbdev)
 {
-	struct kbase_pm_callback_conf *callbacks;
-
-	callbacks = (struct kbase_pm_callback_conf *)POWER_MANAGEMENT_CALLBACKS;
-
-	if (callbacks)
-		callbacks->power_off_callback(kbdev);
-
+	pm_callback_power_off(kbdev);
 	kbdev->pm.backend.gpu_powered = false;
 }
 
 int kbase_hwaccess_pm_init(struct kbase_device *kbdev)
 {
 	int ret = 0;
-	struct kbase_pm_callback_conf *callbacks;
 
 	KBASE_DEBUG_ASSERT(kbdev != NULL);
 
@@ -65,37 +109,8 @@ int kbase_hwaccess_pm_init(struct kbase_device *kbdev)
 	kbdev->pm.backend.gpu_in_desired_state = true;
 	init_waitqueue_head(&kbdev->pm.backend.gpu_in_desired_state_wait);
 
-	callbacks = (struct kbase_pm_callback_conf *)POWER_MANAGEMENT_CALLBACKS;
-	if (callbacks) {
-		kbdev->pm.backend.callback_power_on =
-					callbacks->power_on_callback;
-		kbdev->pm.backend.callback_power_off =
-					callbacks->power_off_callback;
-		kbdev->pm.backend.callback_power_suspend =
-					callbacks->power_suspend_callback;
-		kbdev->pm.backend.callback_power_resume =
-					callbacks->power_resume_callback;
-		kbdev->pm.callback_power_runtime_init =
-					callbacks->power_runtime_init_callback;
-		kbdev->pm.callback_power_runtime_term =
-					callbacks->power_runtime_term_callback;
-		kbdev->pm.backend.callback_power_runtime_on =
-					callbacks->power_runtime_on_callback;
-		kbdev->pm.backend.callback_power_runtime_off =
-					callbacks->power_runtime_off_callback;
-		kbdev->pm.backend.callback_power_runtime_idle =
-					callbacks->power_runtime_idle_callback;
-	} else {
-		kbdev->pm.backend.callback_power_on = NULL;
-		kbdev->pm.backend.callback_power_off = NULL;
-		kbdev->pm.backend.callback_power_suspend = NULL;
-		kbdev->pm.backend.callback_power_resume = NULL;
-		kbdev->pm.callback_power_runtime_init = NULL;
-		kbdev->pm.callback_power_runtime_term = NULL;
-		kbdev->pm.backend.callback_power_runtime_on = NULL;
-		kbdev->pm.backend.callback_power_runtime_off = NULL;
-		kbdev->pm.backend.callback_power_runtime_idle = NULL;
-	}
+	kbdev->pm.backend.callback_power_on = pm_callback_power_on;
+	kbdev->pm.backend.callback_power_off = pm_callback_power_off;
 
 	/* Initialise the metrics subsystem */
 	ret = kbasep_pm_metrics_init(kbdev);
