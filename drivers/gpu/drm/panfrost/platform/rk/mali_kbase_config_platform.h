@@ -69,17 +69,6 @@
 extern struct kbase_pm_callback_conf pm_callbacks;
 
 /**
- * Platform specific configuration functions
- *
- * Attached value:
- *	pointer to @ref kbase_platform_funcs_conf
- * Default value:
- *	See @ref kbase_platform_funcs_conf
- */
-#define PLATFORM_FUNCS (&platform_funcs)
-extern struct kbase_platform_funcs_conf platform_funcs;
-
-/**
  * Secure mode switch
  *
  * Attached value: pointer to @ref kbase_secure_ops

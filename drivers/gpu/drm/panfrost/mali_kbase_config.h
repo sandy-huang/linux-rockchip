@@ -46,43 +46,6 @@
 /* Forward declaration of struct kbase_device */
 struct kbase_device;
 
-/**
- * kbase_platform_funcs_conf - Specifies platform init/term function pointers
- *
- * Specifies the functions pointers for platform specific initialization and
- * termination. By default no functions are required. No additional platform
- * specific control is necessary.
- */
-struct kbase_platform_funcs_conf {
-	/**
-	 * platform_init_func - platform specific init function pointer
-	 * @kbdev - kbase_device pointer
-	 *
-	 * Returns 0 on success, negative error code otherwise.
-	 *
-	 * Function pointer for platform specific initialization or NULL if no
-	 * initialization function is required. At the point this the GPU is
-	 * not active and its power and clocks are in unknown (platform specific
-	 * state) as kbase doesn't yet have control of power and clocks.
-	 *
-	 * The platform specific private pointer kbase_device::platform_context
-	 * can be accessed (and possibly initialized) in here.
-	 */
-	int (*platform_init_func)(struct kbase_device *kbdev);
-	/**
-	 * platform_term_func - platform specific termination function pointer
-	 * @kbdev - kbase_device pointer
-	 *
-	 * Function pointer for platform specific termination or NULL if no
-	 * termination function is required. At the point this the GPU will be
-	 * idle but still powered and clocked.
-	 *
-	 * The platform specific private pointer kbase_device::platform_context
-	 * can be accessed (and possibly terminated) in here.
-	 */
-	void (*platform_term_func)(struct kbase_device *kbdev);
-};
-
 /*
  * @brief Specifies the callbacks for power management
  *
@@ -94,7 +57,7 @@ struct kbase_pm_callback_conf {
 	 * The system integrator can decide whether to either do nothing, just switch off
 	 * the clocks to the GPU, or to completely power down the GPU.
 	 * The platform specific private pointer kbase_device::platform_context can be accessed and modified in here. It is the
-	 * platform \em callbacks responsibility to initialize and terminate this pointer if used (see @ref kbase_platform_funcs_conf).
+	 * platform \em callbacks responsibility to initialize and terminate this pointer if used.
 	 */
 	void (*power_off_callback)(struct kbase_device *kbdev);
 
@@ -104,7 +67,7 @@ struct kbase_pm_callback_conf {
 	 * succeed.  The return value specifies whether the GPU was powered down since the call to power_off_callback.
 	 * If the GPU state has been lost then this function must return 1, otherwise it should return 0.
 	 * The platform specific private pointer kbase_device::platform_context can be accessed and modified in here. It is the
-	 * platform \em callbacks responsibility to initialize and terminate this pointer if used (see @ref kbase_platform_funcs_conf).
+	 * platform \em callbacks responsibility to initialize and terminate this pointer if used.
 	 *
 	 * The return value of the first call to this function is ignored.
 	 *
@@ -123,7 +86,7 @@ struct kbase_pm_callback_conf {
 	 * The platform specific private pointer kbase_device::platform_context
 	 * can be accessed and modified in here. It is the platform \em
 	 * callbacks responsibility to initialize and terminate this pointer if
-	 * used (see @ref kbase_platform_funcs_conf).
+	 * used.
 	 */
 	void (*power_suspend_callback)(struct kbase_device *kbdev);
 
@@ -138,7 +101,7 @@ struct kbase_pm_callback_conf {
 	 * The platform specific private pointer kbase_device::platform_context
 	 * can be accessed and modified in here. It is the platform \em
 	 * callbacks responsibility to initialize and terminate this pointer if
-	 * used (see @ref kbase_platform_funcs_conf).
+	 * used.
 	 */
 	void (*power_resume_callback)(struct kbase_device *kbdev);
 
@@ -205,17 +168,6 @@ struct kbase_pm_callback_conf {
 };
 
 /**
- * kbase_cpuprops_get_default_clock_speed - default for CPU_SPEED_FUNC
- * @clock_speed - see  kbase_cpu_clk_speed_func for details on the parameters
- *
- * Returns 0 on success, negative error code otherwise.
- *
- * Default implementation of CPU_SPEED_FUNC. This function sets clock_speed
- * to 100, so will be an underestimate for any real system.
- */
-int kbase_cpuprops_get_default_clock_speed(u32 * const clock_speed);
-
-/**
  * kbase_cpu_clk_speed_func - Type of the function pointer for CPU_SPEED_FUNC
  * @param clock_speed - pointer to store the current CPU clock speed in MHz
  *
@@ -274,31 +226,6 @@ struct kbase_platform_config {
  * @return Pointer to the platform config
  */
 struct kbase_platform_config *kbase_get_platform_config(void);
-
-/**
- * kbasep_platform_device_init: - Platform specific call to initialize hardware
- * @kbdev: kbase device pointer
- *
- * Function calls a platform defined routine if specified in the configuration
- * attributes.  The routine can initialize any hardware and context state that
- * is required for the GPU block to function.
- *
- * Return: 0 if no errors have been found in the config.
- *         Negative error code otherwise.
- */
-int kbasep_platform_device_init(struct kbase_device *kbdev);
-
-/**
- * kbasep_platform_device_term - Platform specific call to terminate hardware
- * @kbdev: Kbase device pointer
- *
- * Function calls a platform defined routine if specified in the configuration
- * attributes. The routine can destroy any platform specific context state and
- * shut down any hardware functionality that are outside of the Power Management
- * callbacks.
- *
- */
-void kbasep_platform_device_term(struct kbase_device *kbdev);
 
 /**
  * kbase_platform_early_init - Early initialisation of the platform code

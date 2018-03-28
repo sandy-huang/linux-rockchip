@@ -13,6 +13,8 @@
  *
  */
 
+#include <linux/pm_runtime.h>
+
 /*
  * Register-based HW access backend APIs
  */
@@ -28,9 +30,7 @@ int kbase_backend_early_init(struct kbase_device *kbdev)
 {
 	int err;
 
-	err = kbasep_platform_device_init(kbdev);
-	if (err)
-		return err;
+	pm_runtime_enable(kbdev->dev);
 
 	/* Ensure we can access the GPU registers */
 	kbase_pm_register_access_enable(kbdev);
@@ -54,7 +54,7 @@ int kbase_backend_early_init(struct kbase_device *kbdev)
 fail_interrupts:
 	kbase_hwaccess_pm_term(kbdev);
 fail_pm:
-	kbasep_platform_device_term(kbdev);
+	pm_runtime_disable(kbdev->dev);
 
 	return err;
 }
@@ -63,7 +63,7 @@ void kbase_backend_early_term(struct kbase_device *kbdev)
 {
 	kbase_release_interrupts(kbdev);
 	kbase_hwaccess_pm_term(kbdev);
-	kbasep_platform_device_term(kbdev);
+	pm_runtime_disable(kbdev->dev);
 }
 
 int kbase_backend_late_init(struct kbase_device *kbdev)

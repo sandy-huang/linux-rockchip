@@ -18,24 +18,6 @@
 #include <linux/of.h>
 #include <linux/delay.h>
 
-static int kbase_platform_rk_init(struct kbase_device *kbdev)
-{
-	pm_runtime_enable(kbdev->dev);
-	return 0;
-}
-
-static void kbase_platform_rk_term(struct kbase_device *kbdev)
-{
-	pm_runtime_disable(kbdev->dev);
-}
-
-struct kbase_platform_funcs_conf platform_funcs = {
-	.platform_init_func = &kbase_platform_rk_init,
-	.platform_term_func = &kbase_platform_rk_term,
-};
-
-/*---------------------------------------------------------------------------*/
-
 static int rk_pm_callback_runtime_on(struct kbase_device *kbdev)
 {
 	return 0;

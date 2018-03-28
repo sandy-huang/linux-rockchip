@@ -53,7 +53,6 @@ SRC := \
 	mali_kbase_event.c \
 	mali_kbase_context.c \
 	mali_kbase_pm.c \
-	mali_kbase_config.c \
 	mali_kbase_instr.c \
 	mali_kbase_vinstr.c \
 	mali_kbase_softjobs.c \
