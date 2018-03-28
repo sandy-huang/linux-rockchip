@@ -41,71 +41,6 @@
  * @{
  */
 
-#include <linux/rbtree.h>
-
-/* Forward declaration of struct kbase_device */
-struct kbase_device;
-
-/*
- * @brief Specifies the callbacks for power management
- *
- * By default no callbacks will be made and the GPU must not be powered off.
- */
-struct kbase_pm_callback_conf {
-	/** Callback for when the GPU is idle and the power to it can be switched off.
-	 *
-	 * The system integrator can decide whether to either do nothing, just switch off
-	 * the clocks to the GPU, or to completely power down the GPU.
-	 * The platform specific private pointer kbase_device::platform_context can be accessed and modified in here. It is the
-	 * platform \em callbacks responsibility to initialize and terminate this pointer if used.
-	 */
-	void (*power_off_callback)(struct kbase_device *kbdev);
-
-	/** Callback for when the GPU is about to become active and power must be supplied.
-	 *
-	 * This function must not return until the GPU is powered and clocked sufficiently for register access to
-	 * succeed.  The return value specifies whether the GPU was powered down since the call to power_off_callback.
-	 * If the GPU state has been lost then this function must return 1, otherwise it should return 0.
-	 * The platform specific private pointer kbase_device::platform_context can be accessed and modified in here. It is the
-	 * platform \em callbacks responsibility to initialize and terminate this pointer if used.
-	 *
-	 * The return value of the first call to this function is ignored.
-	 *
-	 * @return 1 if the GPU state may have been lost, 0 otherwise.
-	 */
-	int (*power_on_callback)(struct kbase_device *kbdev);
-
-	/** Callback for when the system is requesting a suspend and GPU power
-	 * must be switched off.
-	 *
-	 * Note that if this callback is present, then this may be called
-	 * without a preceding call to power_off_callback. Therefore this
-	 * callback must be able to take any action that might otherwise happen
-	 * in power_off_callback.
-	 *
-	 * The platform specific private pointer kbase_device::platform_context
-	 * can be accessed and modified in here. It is the platform \em
-	 * callbacks responsibility to initialize and terminate this pointer if
-	 * used.
-	 */
-	void (*power_suspend_callback)(struct kbase_device *kbdev);
-
-	/** Callback for when the system is resuming from a suspend and GPU
-	 * power must be switched on.
-	 *
-	 * Note that if this callback is present, then this may be called
-	 * without a following call to power_on_callback. Therefore this
-	 * callback must be able to take any action that might otherwise happen
-	 * in power_on_callback.
-	 *
-	 * The platform specific private pointer kbase_device::platform_context
-	 * can be accessed and modified in here. It is the platform \em
-	 * callbacks responsibility to initialize and terminate this pointer if
-	 * used.
-	 */
-	void (*power_resume_callback)(struct kbase_device *kbdev);
-};
-
 /**
  * kbase_cpu_clk_speed_func - Type of the function pointer for CPU_SPEED_FUNC
  * @param clock_speed - pointer to store the current CPU clock speed in MHz
@@ -129,41 +64,5 @@ typedef int (*kbase_cpu_clk_speed_func) (u32 *clock_speed);
  *
  */
 typedef int (*kbase_gpu_clk_speed_func) (u32 *clock_speed);
-
-#ifdef CONFIG_OF
-struct kbase_platform_config {
-};
-#else
-
-/*
- * @brief Specifies start and end of I/O memory region.
- */
-struct kbase_io_memory_region {
-	u64 start;
-	u64 end;
-};
-
-/*
- * @brief Specifies I/O related resources like IRQs and memory region for I/O operations.
- */
-struct kbase_io_resources {
-	u32                      job_irq_number;
-	u32                      mmu_irq_number;
-	u32                      gpu_irq_number;
-	struct kbase_io_memory_region io_memory_region;
-};
-
-struct kbase_platform_config {
-	const struct kbase_io_resources *io_resources;
-};
-
-#endif // ifdef CONFIG_OF
-
-/**
- * @brief Gets the pointer to platform config.
- *
- * @return Pointer to the platform config
- */
-struct kbase_platform_config *kbase_get_platform_config(void);
 
 #endif

@@ -385,8 +385,7 @@ void kbase_pm_release_gpu_cycle_counter(struct kbase_device *kbdev);
  * stage, not kbase_reg_read()/write().
  *
  * This results in the power management callbacks provided in the driver
- * configuration to get called to turn on power and/or clocks to the GPU. See
- * kbase_pm_callback_conf.
+ * configuration to get called to turn on power and/or clocks to the GPU.
  *
  * This should only be used before power management is powered up with
  * kbase_pm_powerup()
@@ -402,8 +401,7 @@ void kbase_pm_register_access_enable(struct kbase_device *kbdev);
  * kbase_pm_register_access_enable().
  *
  * This results in the power management callbacks provided in the driver
- * configuration to get called to turn off power and/or clocks to the GPU. See
- * kbase_pm_callback_conf
+ * configuration to get called to turn off power and/or clocks to the GPU.
  *
  * This should only be used before power management is powered up with
  * kbase_pm_powerup()

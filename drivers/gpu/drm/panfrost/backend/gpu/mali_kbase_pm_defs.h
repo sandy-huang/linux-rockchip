@@ -189,14 +189,12 @@ union kbase_pm_ca_policy_data {
  *                          power_change_lock should be held when accessing,
  *                          unless there is no way the timer can be running (eg
  *                          hrtimer_cancel() was called immediately before)
- * @callback_power_on: Callback when the GPU needs to be turned on. See
- *                     &struct kbase_pm_callback_conf
- * @callback_power_off: Callback when the GPU may be turned off. See
- *                     &struct kbase_pm_callback_conf
+ * @callback_power_on: Callback when the GPU needs to be turned on
+ * @callback_power_off: Callback when the GPU may be turned off
  * @callback_power_suspend: Callback when a suspend occurs and the GPU needs to
- *                          be turned off. See &struct kbase_pm_callback_conf
+ *                          be turned off
  * @callback_power_resume: Callback when a resume occurs and the GPU needs to
- *                          be turned on. See &struct kbase_pm_callback_conf
+ *                          be turned on
  *
  * Note:
  * During an IRQ, @ca_current_policy or @pm_current_policy can be NULL when the
