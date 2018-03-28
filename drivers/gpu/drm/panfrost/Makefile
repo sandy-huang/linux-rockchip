@@ -19,25 +19,14 @@ MALI_RELEASE_NAME ?= "r12p0-04rel0"
 
 # Paths required for build
 KBASE_PATH = $(src)
-KBASE_PLATFORM_PATH = $(KBASE_PATH)/platform_dummy
 UMP_PATH = $(src)/../../../base
 
 # Set up our defines, which will be passed to gcc
 DEFINES = -DMALI_RELEASE_NAME=\"$(MALI_RELEASE_NAME)\"
 
-ifeq ($(KBUILD_EXTMOD),)
-# in-tree
-DEFINES +=-DMALI_KBASE_THIRDPARTY_PATH=../../$(src)/platform/$(CONFIG_MALI_PLATFORM_THIRDPARTY_NAME)
-else
-# out-of-tree
-DEFINES +=-DMALI_KBASE_THIRDPARTY_PATH=$(src)/platform/$(CONFIG_MALI_PLATFORM_THIRDPARTY_NAME)
-endif
-
-DEFINES += -I$(srctree)/drivers/staging/android
-
 # Use our defines when compiling
-ccflags-y += $(DEFINES) -I$(KBASE_PATH)   -I$(KBASE_PLATFORM_PATH) -I$(UMP_PATH) -I$(srctree)/include/linux
-subdir-ccflags-y += $(DEFINES) -I$(KBASE_PATH)   -I$(KBASE_PLATFORM_PATH) -I$(OSK_PATH) -I$(UMP_PATH) -I$(srctree)/include/linux
+ccflags-y += $(DEFINES) -I$(KBASE_PATH) -I$(UMP_PATH) -I$(srctree)/include/linux
+subdir-ccflags-y += $(DEFINES) -I$(KBASE_PATH) -I$(OSK_PATH) -I$(UMP_PATH) -I$(srctree)/include/linux
 
 SRC := \
 	mali_kbase_device.c \
@@ -77,18 +66,6 @@ SRC += mali_kbase_js_policy_cfs.c
 
 ccflags-y += -I$(KBASE_PATH)
 
-ifeq ($(CONFIG_MALI_PLATFORM_THIRDPARTY),y)
-# remove begin and end quotes from the Kconfig string type
-platform_name := $(shell echo $(CONFIG_MALI_PLATFORM_THIRDPARTY_NAME))
-MALI_PLATFORM_THIRDPARTY_DIR := platform/$(platform_name)
-ccflags-y += -I$(src)/$(MALI_PLATFORM_THIRDPARTY_DIR)
-ifeq ($(CONFIG_MALI_MIDGARD),m)
-include  $(src)/platform/$(platform_name)/Makefile
-else ifeq ($(CONFIG_MALI_MIDGARD),y)
-obj-$(CONFIG_MALI_MIDGARD) += platform/
-endif
-endif
-
 # Tell the Linux build system from which .o file to create the kernel module
 obj-$(CONFIG_MALI_MIDGARD) += mali_kbase.o
 
@@ -106,8 +83,3 @@ mali_kbase-y += $(BACKEND:.c=.o)
 
 ccflags-y += -I$(src)/$(MALI_BACKEND_PATH)/$(CONFIG_MALI_BACKEND_REAL)
 subdir-ccflags-y += -I$(src)/$(MALI_BACKEND_PATH)/$(CONFIG_MALI_BACKEND_REAL)
-
-# Default to devicetree platform if a thirdparty platform is not configured.
-ifeq ($(CONFIG_MALI_PLATFORM_THIRDPARTY),)
-CONFIG_MALI_PLATFORM_DEVICETREE := y
-endif

@@ -26,7 +26,7 @@ menuconfig MALI_MIDGARD
 
 config MALI_MIDGARD_DVFS
 	bool "Enable legacy DVFS"
-	depends on MALI_MIDGARD && !MALI_DEVFREQ && !MALI_PLATFORM_DEVICETREE
+	depends on MALI_MIDGARD && !MALI_DEVFREQ
 	default n
 	help
 	  Choose this option to enable legacy DVFS in the Mali Midgard DDK.
@@ -90,25 +90,6 @@ config MALI_DEBUG_SHADER_SPLIT_FS
 	  Select this option to provide a sysfs entry for runtime configuration of shader
 	  core affinity masks.
 
-choice
-	prompt "Platform configuration"
-	depends on MALI_MIDGARD && MALI_EXPERT
-	default MALI_PLATFORM_THIRDPARTY
-	help
-	  Select the SOC platform that contains a Mali Midgard GPU
-
-config MALI_PLATFORM_THIRDPARTY
-	bool "Third Party Platform"
-endchoice
-
-config MALI_PLATFORM_THIRDPARTY_NAME
-	depends on MALI_MIDGARD && MALI_PLATFORM_THIRDPARTY && MALI_EXPERT
-	string "Third party platform name"
-	help
-	  Enter the name of a third party platform that is supported. The third part configuration
-	  file must be in midgard/config/tpip/mali_kbase_config_xxx.c where xxx is the name
-	  specified here.
-
 config MALI_DEBUG
 	bool "Debug build"
 	depends on MALI_MIDGARD && MALI_EXPERT
@@ -132,5 +113,3 @@ config MALI_SYSTEM_TRACE
 	  kbase event.	This is typically used for debugging but has
 	  minimal overhead when not in use. Enable only if you know what
 	  you are doing.
-
-source "drivers/gpu/drm/panfrost/platform/Kconfig"

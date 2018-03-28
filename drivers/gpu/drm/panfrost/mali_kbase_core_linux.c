@@ -3263,8 +3263,8 @@ static int kbase_platform_device_probe(struct platform_device *pdev)
 
 	/* obtain min/max configured gpu frequencies */
 	core_props = &(kbdev->gpu_props.props.core_props);
-	core_props->gpu_freq_khz_min = GPU_FREQ_KHZ_MIN;
-	core_props->gpu_freq_khz_max = GPU_FREQ_KHZ_MAX;
+	core_props->gpu_freq_khz_min = 5000;
+	core_props->gpu_freq_khz_max = 5000;
 
 	kbdev->gpu_props.irq_throttle_time_us = DEFAULT_IRQ_THROTTLE_TIME_US;
 
