@@ -19,11 +19,6 @@
 
 #include <linux/interrupt.h>
 
-/* GPU IRQ Tags */
-#define	JOB_IRQ_TAG	0
-#define MMU_IRQ_TAG	1
-#define GPU_IRQ_TAG	2
-
 static irqreturn_t kbase_job_irq_handler(int irq, void *data)
 {
 	unsigned long flags;
@@ -117,57 +112,54 @@ static irqreturn_t kbase_gpu_irq_handler(int irq, void *data)
 	return IRQ_HANDLED;
 }
 
-static irq_handler_t kbase_handler_table[] = {
-	[JOB_IRQ_TAG] = kbase_job_irq_handler,
-	[MMU_IRQ_TAG] = kbase_mmu_irq_handler,
-	[GPU_IRQ_TAG] = kbase_gpu_irq_handler,
-};
-
 int kbase_install_interrupts(struct kbase_device *kbdev)
 {
-	u32 nr = ARRAY_SIZE(kbase_handler_table);
 	int err;
-	u32 i;
 
-	for (i = 0; i < nr; i++) {
-		err = request_irq(kbdev->irqs[i].irq, kbase_handler_table[i],
-				kbdev->irqs[i].flags | IRQF_SHARED,
-				dev_name(kbdev->dev),
-				kbdev);
-		if (err) {
-			dev_err(kbdev->dev, "Can't request interrupt %d (index %d)\n",
-							kbdev->irqs[i].irq, i);
-			goto release;
-		}
+	err = request_irq(kbdev->irq_job, kbase_job_irq_handler,
+				kbdev->irq_job_flags | IRQF_SHARED,
+				dev_name(kbdev->dev), kbdev);
+	if (err) {
+		dev_err(kbdev->dev, "Can't request job interrupt\n");
+		return err;
+	}
+
+	err = request_irq(kbdev->irq_gpu, kbase_gpu_irq_handler,
+				kbdev->irq_gpu_flags | IRQF_SHARED,
+				dev_name(kbdev->dev), kbdev);
+	if (err) {
+		dev_err(kbdev->dev, "Can't request gpu interrupt\n");
+		goto release_job;
+	}
+
+	err = request_irq(kbdev->irq_mmu, kbase_mmu_irq_handler,
+				kbdev->irq_mmu_flags | IRQF_SHARED,
+				dev_name(kbdev->dev), kbdev);
+	if (err) {
+		dev_err(kbdev->dev, "Can't request mmu interrupt\n");
+		goto release_gpu;
 	}
 
 	return 0;
 
- release:
-	while (i-- > 0)
-		free_irq(kbdev->irqs[i].irq, kbdev);
+release_gpu:
+	free_irq(kbdev->irq_gpu, kbdev);
+release_job:
+	free_irq(kbdev->irq_job, kbdev);
 
 	return err;
 }
 
 void kbase_release_interrupts(struct kbase_device *kbdev)
 {
-	u32 nr = ARRAY_SIZE(kbase_handler_table);
-	u32 i;
-
-	for (i = 0; i < nr; i++) {
-		if (kbdev->irqs[i].irq)
-			free_irq(kbdev->irqs[i].irq, kbdev);
-	}
+	free_irq(kbdev->irq_job, kbdev);
+	free_irq(kbdev->irq_gpu, kbdev);
+	free_irq(kbdev->irq_mmu, kbdev);
 }
 
 void kbase_synchronize_irqs(struct kbase_device *kbdev)
 {
-	u32 nr = ARRAY_SIZE(kbase_handler_table);
-	u32 i;
-
-	for (i = 0; i < nr; i++) {
-		if (kbdev->irqs[i].irq)
-			synchronize_irq(kbdev->irqs[i].irq);
-	}
+	synchronize_irq(kbdev->irq_job);
+	synchronize_irq(kbdev->irq_gpu);
+	synchronize_irq(kbdev->irq_mmu);
 }

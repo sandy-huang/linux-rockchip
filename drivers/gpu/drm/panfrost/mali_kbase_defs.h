@@ -733,10 +733,12 @@ struct kbase_device {
 	size_t reg_size;
 	void __iomem *reg;
 
-	struct {
-		int irq;
-		int flags;
-	} irqs[3];
+	int irq_job;
+	int irq_job_flags;
+	int irq_gpu;
+	int irq_gpu_flags;
+	int irq_mmu;
+	int irq_mmu_flags;
 
 	struct clk *clock;
 #ifdef CONFIG_REGULATOR

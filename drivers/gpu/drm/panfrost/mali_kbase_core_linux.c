@@ -727,40 +727,32 @@ static struct kbase_device *to_kbase_device(struct device *dev)
 static int assign_irqs(struct platform_device *pdev)
 {
 	struct kbase_device *kbdev = to_kbase_device(&pdev->dev);
+	struct resource *res;
 	int i;
 
 	if (!kbdev)
 		return -ENODEV;
 
-	/* 3 IRQ resources */
-	for (i = 0; i < 3; i++) {
-		struct resource *irq_res;
-		int irqtag;
+	res = platform_get_resource_byname(pdev, IORESOURCE_IRQ, "job");
+	if (!res)
+		return -ENXIO;
 
-		irq_res = platform_get_resource(pdev, IORESOURCE_IRQ, i);
-		if (!irq_res) {
-			dev_err(kbdev->dev, "No IRQ resource at index %d\n", i);
-			return -ENOENT;
-		}
+	kbdev->irq_job = res->start;
+	kbdev->irq_job_flags = res->flags & IRQF_TRIGGER_MASK;
 
-#ifdef CONFIG_OF
-		if (!strcmp(irq_res->name, "job")) {
-			irqtag = JOB_IRQ_TAG;
-		} else if (!strcmp(irq_res->name, "mmu")) {
-			irqtag = MMU_IRQ_TAG;
-		} else if (!strcmp(irq_res->name, "gpu")) {
-			irqtag = GPU_IRQ_TAG;
-		} else {
-			dev_err(&pdev->dev, "Invalid irq res name: '%s'\n",
-				irq_res->name);
-			return -EINVAL;
-		}
-#else
-		irqtag = i;
-#endif /* CONFIG_OF */
-		kbdev->irqs[irqtag].irq = irq_res->start;
-		kbdev->irqs[irqtag].flags = irq_res->flags & IRQF_TRIGGER_MASK;
-	}
+	res = platform_get_resource_byname(pdev, IORESOURCE_IRQ, "gpu");
+	if (!res)
+		return -ENXIO;
+
+	kbdev->irq_gpu = res->start;
+	kbdev->irq_gpu_flags = res->flags & IRQF_TRIGGER_MASK;
+
+	res = platform_get_resource_byname(pdev, IORESOURCE_IRQ, "mmu");
+	if (!res)
+		return -ENXIO;
+
+	kbdev->irq_mmu = res->start;
+	kbdev->irq_mmu_flags = res->flags & IRQF_TRIGGER_MASK;
 
 	return 0;
 }
