@@ -17,10 +17,6 @@
 
 /*---------------------------------------------------------------------------*/
 
-#define DEFAULT_UTILISATION_PERIOD_IN_MS (100)
-
-/*---------------------------------------------------------------------------*/
-
 /*
  * struct rk_context - work_context of platform_dependent_part_of_rk.
  */
@@ -34,8 +30,6 @@ struct rk_context {
 	struct workqueue_struct *power_off_wq;
 	struct delayed_work work;
 	unsigned int delay_ms;
-	/* debug only, the period in ms to count gpu_utilisation. */
-	unsigned int utilisation_period;
 };
 
 /*---------------------------------------------------------------------------*/

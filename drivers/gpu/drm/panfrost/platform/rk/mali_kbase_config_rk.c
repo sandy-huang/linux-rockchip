@@ -47,10 +47,6 @@ static int rk_pm_enable_clk(struct kbase_device *kbdev);
 
 static void rk_pm_disable_clk(struct kbase_device *kbdev);
 
-static int kbase_platform_rk_create_sysfs_files(struct device *dev);
-
-static void kbase_platform_rk_remove_sysfs_files(struct device *dev);
-
 /*---------------------------------------------------------------------------*/
 
 static void rk_pm_power_off_delay_work(struct work_struct *work)
@@ -100,13 +96,6 @@ static int kbase_platform_rk_init(struct kbase_device *kbdev)
 		return -ENOMEM;
 	}
 	INIT_DEFERRABLE_WORK(&platform->work, rk_pm_power_off_delay_work);
-	platform->utilisation_period = DEFAULT_UTILISATION_PERIOD_IN_MS;
-
-	ret = kbase_platform_rk_create_sysfs_files(kbdev->dev);
-	if (ret) {
-		pr_err("fail to create sysfs_files. ret = %d.", ret);
-		goto EXIT;
-	}
 
 	kbdev->platform_context = (void *)platform;
 	pm_runtime_enable(kbdev->dev);
@@ -129,7 +118,6 @@ static void kbase_platform_rk_term(struct kbase_device *kbdev)
 		platform->kbdev = NULL;
 		kfree(platform);
 	}
-	kbase_platform_rk_remove_sysfs_files(kbdev->dev);
 }
 
 struct kbase_platform_funcs_conf platform_funcs = {
@@ -301,99 +289,4 @@ static void rk_pm_disable_clk(struct kbase_device *kbdev)
 		pr_debug("to disable clk.");
 		clk_disable(kbdev->clock);
 	}
-}
-
-/*---------------------------------------------------------------------------*/
-
-static ssize_t utilisation_period_show(struct device *dev,
-				       struct device_attribute *attr,
-				       char *buf)
-{
-	struct kbase_device *kbdev = dev_get_drvdata(dev);
-	struct rk_context *platform = get_rk_context(kbdev);
-	ssize_t ret = 0;
-
-	ret += snprintf(buf, PAGE_SIZE, "%u\n", platform->utilisation_period);
-
-	return ret;
-}
-
-static ssize_t utilisation_period_store(struct device *dev,
-					struct device_attribute *attr,
-					const char *buf,
-					size_t count)
-{
-	struct kbase_device *kbdev = dev_get_drvdata(dev);
-	struct rk_context *platform = get_rk_context(kbdev);
-	int ret = 0;
-
-	ret = kstrtouint(buf, 0, &platform->utilisation_period);
-	if (ret) {
-		pr_err("invalid input period : %s.", buf);
-		return ret;
-	}
-	pr_debug("set utilisation_period to '%d'.", platform->utilisation_period);
-
-	return count;
-}
-
-static ssize_t utilisation_show(struct device *dev,
-				struct device_attribute *attr,
-				char *buf)
-{
-	struct kbase_device *kbdev = dev_get_drvdata(dev);
-	struct rk_context *platform = get_rk_context(kbdev);
-	ssize_t ret = 0;
-	unsigned long period_in_us = platform->utilisation_period * 1000;
-	unsigned long total_time;
-	unsigned long busy_time;
-	unsigned long utilisation;
-
-	kbase_pm_reset_dvfs_utilisation(kbdev);
-	usleep_range(period_in_us, period_in_us + 100);
-	kbase_pm_get_dvfs_utilisation(kbdev, &total_time, &busy_time);
-	/* 'devfreq_dev_profile' instance registered to devfreq
-	 * also uses kbase_pm_reset_dvfs_utilisation
-	 * and kbase_pm_get_dvfs_utilisation.
-	 * it's better to cat this file when DVFS is disabled.
-	 */
-	pr_debug("total_time : %lu, busy_time : %lu.", total_time, busy_time);
-
-	utilisation = busy_time * 100 / total_time;
-	ret += snprintf(buf, PAGE_SIZE, "%ld\n", utilisation);
-
-	return ret;
-}
-
-static DEVICE_ATTR_RW(utilisation_period);
-static DEVICE_ATTR_RO(utilisation);
-
-static int kbase_platform_rk_create_sysfs_files(struct device *dev)
-{
-	int ret = 0;
-
-	ret = device_create_file(dev, &dev_attr_utilisation_period);
-	if (ret) {
-		pr_err("fail to create sysfs file 'utilisation_period'.");
-		goto out;
-	}
-
-	ret = device_create_file(dev, &dev_attr_utilisation);
-	if (ret) {
-		pr_err("fail to create sysfs file 'utilisation'.");
-		goto remove_utilisation_period;
-	}
-
-	return 0;
-
-remove_utilisation_period:
-	device_remove_file(dev, &dev_attr_utilisation_period);
-out:
-	return ret;
-}
-
-static void kbase_platform_rk_remove_sysfs_files(struct device *dev)
-{
-	device_remove_file(dev, &dev_attr_utilisation_period);
-	device_remove_file(dev, &dev_attr_utilisation);
 }
