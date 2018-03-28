@@ -45,10 +45,6 @@
 
 #include "mali_kbase_dma_fence.h"
 
-#ifdef CONFIG_PM_DEVFREQ
-#include <linux/devfreq.h>
-#endif /* CONFIG_DEVFREQ */
-
 #include <linux/clk.h>
 #include <linux/regulator/consumer.h>
 
@@ -962,16 +958,6 @@ struct kbase_device {
 	/* List of kbase_contexts created */
 	struct list_head        kctx_list;
 	struct mutex            kctx_list_lock;
-
-#ifdef CONFIG_PM_DEVFREQ
-	struct devfreq_dev_profile devfreq_profile;
-	struct devfreq *devfreq;
-	unsigned long current_freq;
-	unsigned long current_voltage;
-#ifdef CONFIG_DEVFREQ_THERMAL
-	struct devfreq_cooling_device *devfreq_cooling;
-#endif
-#endif
 
 	struct kbase_ipa_context *ipa_ctx;
 

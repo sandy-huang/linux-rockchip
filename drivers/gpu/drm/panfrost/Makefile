@@ -96,12 +96,4 @@ BACKEND += \
 	backend/gpu/mali_kbase_pm_policy.c \
 	backend/gpu/mali_kbase_time.c
 
-ifeq ($(CONFIG_MALI_DEVFREQ),y)
-BACKEND += backend/gpu/mali_kbase_devfreq.c
-endif
-
-ifeq ($(CONFIG_DEVFREQ_THERMAL),y)
-	BACKEND += backend/gpu/mali_kbase_power_model_simple.c
-endif
-
 mali_kbase-y += $(BACKEND:.c=.o)

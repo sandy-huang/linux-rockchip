@@ -21,9 +21,6 @@
 #include <mali_kbase_instr.h>
 #include <backend/gpu/mali_kbase_js_affinity.h>
 #include <mali_kbase_mem_linux.h>
-#ifdef CONFIG_MALI_DEVFREQ
-#include <backend/gpu/mali_kbase_devfreq.h>
-#endif /* CONFIG_MALI_DEVFREQ */
 #include "mali_kbase_mem.h"
 #include <mali_kbase_hwaccess_backend.h>
 #include <mali_kbase_hwaccess_jm.h>
@@ -58,9 +55,6 @@
 #ifdef CONFIG_SYNC
 #include <mali_kbase_sync.h>
 #endif /* CONFIG_SYNC */
-#ifdef CONFIG_PM_DEVFREQ
-#include <linux/devfreq.h>
-#endif /* CONFIG_PM_DEVFREQ */
 #include <linux/clk.h>
 #include <linux/delay.h>
 
@@ -419,9 +413,6 @@ enum mali_error {
 enum {
 	inited_mem = (1u << 0),
 	inited_js = (1u << 1),
-#ifdef CONFIG_MALI_DEVFREQ
-	inited_devfreq = (1u << 3),
-#endif /* CONFIG_MALI_DEVFREQ */
 	inited_tlstream = (1u << 4),
 	inited_backend_early = (1u << 5),
 	inited_backend_late = (1u << 6),
@@ -3145,13 +3136,6 @@ static int kbase_platform_device_remove(struct platform_device *pdev)
 		kbdev->inited_subsys &= ~inited_vinstr;
 	}
 
-#ifdef CONFIG_MALI_DEVFREQ
-	if (kbdev->inited_subsys & inited_devfreq) {
-		kbase_devfreq_term(kbdev);
-		kbdev->inited_subsys &= ~inited_devfreq;
-	}
-#endif
-
 	if (kbdev->inited_subsys & inited_backend_late) {
 		kbase_backend_late_term(kbdev);
 		kbdev->inited_subsys &= ~inited_backend_late;
@@ -3316,16 +3300,6 @@ static int kbase_platform_device_probe(struct platform_device *pdev)
 	}
 	kbdev->inited_subsys |= inited_backend_late;
 
-#ifdef CONFIG_MALI_DEVFREQ
-	err = kbase_devfreq_init(kbdev);
-	if (err) {
-		dev_err(kbdev->dev, "Fevfreq initialization failed\n");
-		kbase_platform_device_remove(pdev);
-		return err;
-	}
-	kbdev->inited_subsys |= inited_devfreq;
-#endif /* CONFIG_MALI_DEVFREQ */
-
 	kbdev->vinstr_ctx = kbase_vinstr_init(kbdev);
 	if (!kbdev->vinstr_ctx) {
 		dev_err(kbdev->dev,
@@ -3407,10 +3381,6 @@ static int kbase_device_suspend(struct device *dev)
 	if (!kbdev)
 		return -ENODEV;
 
-#ifdef CONFIG_PM_DEVFREQ
-	devfreq_suspend_device(kbdev->devfreq);
-#endif
-
 	kbase_pm_suspend(kbdev);
 	return 0;
 }
@@ -3432,9 +3402,6 @@ static int kbase_device_resume(struct device *dev)
 
 	kbase_pm_resume(kbdev);
 
-#ifdef CONFIG_PM_DEVFREQ
-	devfreq_resume_device(kbdev->devfreq);
-#endif
 	return 0;
 }
 
