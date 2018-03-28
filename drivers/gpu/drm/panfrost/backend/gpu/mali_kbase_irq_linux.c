@@ -24,20 +24,10 @@
 #define MMU_IRQ_TAG	1
 #define GPU_IRQ_TAG	2
 
-static void *kbase_tag(void *ptr, u32 tag)
-{
-	return (void *)(((uintptr_t) ptr) | tag);
-}
-
-static void *kbase_untag(void *ptr)
-{
-	return (void *)(((uintptr_t) ptr) & ~3);
-}
-
 static irqreturn_t kbase_job_irq_handler(int irq, void *data)
 {
 	unsigned long flags;
-	struct kbase_device *kbdev = kbase_untag(data);
+	struct kbase_device *kbdev = data;
 	u32 val;
 
 	spin_lock_irqsave(&kbdev->pm.backend.gpu_powered_lock, flags);
@@ -66,7 +56,7 @@ static irqreturn_t kbase_job_irq_handler(int irq, void *data)
 static irqreturn_t kbase_mmu_irq_handler(int irq, void *data)
 {
 	unsigned long flags;
-	struct kbase_device *kbdev = kbase_untag(data);
+	struct kbase_device *kbdev = data;
 	u32 val;
 
 	spin_lock_irqsave(&kbdev->pm.backend.gpu_powered_lock, flags);
@@ -101,7 +91,7 @@ static irqreturn_t kbase_mmu_irq_handler(int irq, void *data)
 static irqreturn_t kbase_gpu_irq_handler(int irq, void *data)
 {
 	unsigned long flags;
-	struct kbase_device *kbdev = kbase_untag(data);
+	struct kbase_device *kbdev = data;
 	u32 val;
 
 	spin_lock_irqsave(&kbdev->pm.backend.gpu_powered_lock, flags);
@@ -143,13 +133,10 @@ int kbase_install_interrupts(struct kbase_device *kbdev)
 		err = request_irq(kbdev->irqs[i].irq, kbase_handler_table[i],
 				kbdev->irqs[i].flags | IRQF_SHARED,
 				dev_name(kbdev->dev),
-				kbase_tag(kbdev, i));
+				kbdev);
 		if (err) {
 			dev_err(kbdev->dev, "Can't request interrupt %d (index %d)\n",
 							kbdev->irqs[i].irq, i);
-#ifdef CONFIG_SPARSE_IRQ
-			dev_err(kbdev->dev, "You have CONFIG_SPARSE_IRQ support enabled - is the interrupt number correct for this configuration?\n");
-#endif
 			goto release;
 		}
 	}
@@ -158,7 +145,7 @@ int kbase_install_interrupts(struct kbase_device *kbdev)
 
  release:
 	while (i-- > 0)
-		free_irq(kbdev->irqs[i].irq, kbase_tag(kbdev, i));
+		free_irq(kbdev->irqs[i].irq, kbdev);
 
 	return err;
 }
@@ -170,7 +157,7 @@ void kbase_release_interrupts(struct kbase_device *kbdev)
 
 	for (i = 0; i < nr; i++) {
 		if (kbdev->irqs[i].irq)
-			free_irq(kbdev->irqs[i].irq, kbase_tag(kbdev, i));
+			free_irq(kbdev->irqs[i].irq, kbdev);
 	}
 }
 
@@ -184,4 +171,3 @@ void kbase_synchronize_irqs(struct kbase_device *kbdev)
 			synchronize_irq(kbdev->irqs[i].irq);
 	}
 }
-
