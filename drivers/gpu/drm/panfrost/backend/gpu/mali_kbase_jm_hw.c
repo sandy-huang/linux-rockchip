@@ -24,7 +24,6 @@
 #include <mali_kbase_config_defaults.h>
 #include <mali_kbase_hwaccess_jm.h>
 #include <backend/gpu/mali_kbase_device_internal.h>
-#include <backend/gpu/mali_kbase_irq_internal.h>
 #include <backend/gpu/mali_kbase_js_affinity.h>
 #include <backend/gpu/mali_kbase_jm_internal.h>
 
@@ -1026,7 +1025,9 @@ static void kbasep_reset_timeout_worker(struct work_struct *data)
 
 	/* Ensure that any IRQ handlers have finished
 	 * Must be done without any locks IRQ handlers will take */
-	kbase_synchronize_irqs(kbdev);
+	synchronize_irq(kbdev->irq_job);
+	synchronize_irq(kbdev->irq_gpu);
+	synchronize_irq(kbdev->irq_mmu);
 
 	/* Flush out any in-flight work items */
 	kbase_flush_mmu_wqs(kbdev);

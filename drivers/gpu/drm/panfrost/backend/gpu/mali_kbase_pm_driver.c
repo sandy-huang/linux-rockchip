@@ -28,7 +28,6 @@
 #include <mali_kbase_hwaccess_jm.h>
 #include <backend/gpu/mali_kbase_cache_policy_backend.h>
 #include <backend/gpu/mali_kbase_device_internal.h>
-#include <backend/gpu/mali_kbase_irq_internal.h>
 #include <backend/gpu/mali_kbase_pm_internal.h>
 
 #include <linux/of.h>
@@ -849,7 +848,9 @@ bool kbase_pm_clock_off(struct kbase_device *kbdev, bool is_suspend)
 	/* Disable interrupts. This also clears any outstanding interrupts */
 	kbase_pm_disable_interrupts(kbdev);
 	/* Ensure that any IRQ handlers have finished */
-	kbase_synchronize_irqs(kbdev);
+	synchronize_irq(kbdev->irq_job);
+	synchronize_irq(kbdev->irq_gpu);
+	synchronize_irq(kbdev->irq_mmu);
 
 	spin_lock_irqsave(&kbdev->pm.backend.gpu_powered_lock, flags);
 
