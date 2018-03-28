@@ -1905,35 +1905,9 @@ extern void kbase_jd_umm_unmap(struct kbase_context *kctx,
 }
 #endif				/* CONFIG_DMA_SHARED_BUFFER */
 
-#if (defined(CONFIG_KDS) && defined(CONFIG_UMP)) \
-		|| defined(CONFIG_DMA_SHARED_BUFFER_USES_KDS)
-static void add_kds_resource(struct kds_resource *kds_res,
-		struct kds_resource **kds_resources, u32 *kds_res_count,
-		unsigned long *kds_access_bitmap, bool exclusive)
-{
-	u32 i;
-
-	for (i = 0; i < *kds_res_count; i++) {
-		/* Duplicate resource, ignore */
-		if (kds_resources[i] == kds_res)
-			return;
-	}
-
-	kds_resources[*kds_res_count] = kds_res;
-	if (exclusive)
-		set_bit(*kds_res_count, kds_access_bitmap);
-	(*kds_res_count)++;
-}
-#endif
-
 struct kbase_mem_phy_alloc *kbase_map_external_resource(
 		struct kbase_context *kctx, struct kbase_va_region *reg,
-		struct mm_struct *locked_mm
-#ifdef CONFIG_KDS
-		, u32 *kds_res_count, struct kds_resource **kds_resources,
-		unsigned long *kds_access_bitmap, bool exclusive
-#endif
-		)
+		struct mm_struct *locked_mm)
 {
 	int err;
 
@@ -1954,34 +1928,10 @@ struct kbase_mem_phy_alloc *kbase_map_external_resource(
 	}
 	break;
 	case BASE_MEM_IMPORT_TYPE_UMP: {
-#if defined(CONFIG_KDS) && defined(CONFIG_UMP)
-		if (kds_res_count) {
-			struct kds_resource *kds_res;
-
-			kds_res = ump_dd_kds_resource_get(
-					reg->gpu_alloc->imported.ump_handle);
-			if (kds_res)
-				add_kds_resource(kds_res, kds_resources,
-						kds_res_count,
-						kds_access_bitmap, exclusive);
-		}
-#endif				/*defined(CONFIG_KDS) && defined(CONFIG_UMP) */
 		break;
 	}
 #ifdef CONFIG_DMA_SHARED_BUFFER
 	case BASE_MEM_IMPORT_TYPE_UMM: {
-#ifdef CONFIG_DMA_SHARED_BUFFER_USES_KDS
-		if (kds_res_count) {
-			struct kds_resource *kds_res;
-
-			kds_res = get_dma_buf_kds_resource(
-					reg->gpu_alloc->imported.umm.dma_buf);
-			if (kds_res)
-				add_kds_resource(kds_res, kds_resources,
-						kds_res_count,
-						kds_access_bitmap, exclusive);
-		}
-#endif
 		reg->gpu_alloc->imported.umm.current_mapping_usage_count++;
 		if (reg->gpu_alloc->imported.umm.current_mapping_usage_count == 1) {
 			err = kbase_jd_umm_map(kctx, reg);
@@ -2085,13 +2035,7 @@ struct kbase_ctx_ext_res_meta *kbase_sticky_resource_acquire(
 		 * Fill in the metadata object and acquire a reference
 		 * for the physical resource.
 		 */
-		meta->alloc = kbase_map_external_resource(kctx, reg, NULL
-#ifdef CONFIG_KDS
-				, NULL, NULL,
-				NULL, false
-#endif
-				);
-
+		meta->alloc = kbase_map_external_resource(kctx, reg, NULL);
 		if (!meta->alloc)
 			goto fail_map;
 

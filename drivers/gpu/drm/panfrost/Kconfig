@@ -26,12 +26,12 @@ menuconfig MALI_MIDGARD
 
 config MALI_DMA_FENCE
 	bool "DMA_BUF fence support for Mali (EXPERIMENTAL)"
-	depends on MALI_MIDGARD && !KDS
+	depends on MALI_MIDGARD
 	default n
 	help
 	  Support DMA_BUF fences for Mali.
 
-	  This option should only be enabled if KDS is not present and
+	  This option should only be enabled if
 	  the Linux Kernel has built in support for DMA_BUF fences.
 
 # MALI_EXPERT configuration options

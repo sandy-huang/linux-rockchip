@@ -240,14 +240,6 @@ struct kbase_uk_set_flags {
 
 #define KBASE_MAXIMUM_EXT_RESOURCES       255
 
-struct kbase_uk_ext_buff_kds_data {
-	union uk_header header;
-	union kbase_pointer external_resource;
-	union kbase_pointer file_descriptor;
-	u32 num_res;		/* limited to KBASE_MAXIMUM_EXT_RESOURCES */
-	u32 padding;
-};
-
 #ifdef BASE_LEGACY_UK8_SUPPORT
 struct kbase_uk_keep_gpu_powered {
 	union uk_header header;

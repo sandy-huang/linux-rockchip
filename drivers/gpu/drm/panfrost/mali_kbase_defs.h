@@ -35,10 +35,6 @@
 #include <linux/slab.h>
 #include <linux/file.h>
 
-#ifdef CONFIG_KDS
-#include <linux/kds.h>
-#endif				/* CONFIG_KDS */
-
 #ifdef CONFIG_SYNC
 #include "sync.h"
 #endif				/* CONFIG_SYNC */
@@ -283,11 +279,6 @@ struct kbase_jd_atom {
 	u64 affinity;
 	u64 jc;
 	enum kbase_atom_coreref_state coreref_state;
-#ifdef CONFIG_KDS
-	struct list_head node;
-	struct kds_resource_set *kds_rset;
-	bool kds_dep_satisfied;
-#endif				/* CONFIG_KDS */
 #ifdef CONFIG_SYNC
 	struct sync_fence *fence;
 	struct sync_fence_waiter sync_waiter;
@@ -454,9 +445,6 @@ struct kbase_jd_context {
 	u32 *tb;
 	size_t tb_wrap_offset;
 
-#ifdef CONFIG_KDS
-	struct kds_callback kds_cb;
-#endif				/* CONFIG_KDS */
 #ifdef CONFIG_GPU_TRACEPOINTS
 	atomic_t work_id;
 #endif
@@ -1066,9 +1054,6 @@ struct kbase_context {
 
 	struct list_head waiting_soft_jobs;
 	spinlock_t waiting_soft_jobs_lock;
-#ifdef CONFIG_KDS
-	struct list_head waiting_kds_resource;
-#endif
 #ifdef CONFIG_MALI_DMA_FENCE
 	struct {
 		struct list_head waiting_resource;

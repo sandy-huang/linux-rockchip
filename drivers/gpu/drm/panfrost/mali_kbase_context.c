@@ -90,9 +90,6 @@ kbase_create_context(struct kbase_device *kbdev, bool is_compat)
 
 	INIT_LIST_HEAD(&kctx->waiting_soft_jobs);
 	spin_lock_init(&kctx->waiting_soft_jobs_lock);
-#ifdef CONFIG_KDS
-	INIT_LIST_HEAD(&kctx->waiting_kds_resource);
-#endif
 	err = kbase_dma_fence_init(kctx);
 	if (err)
 		goto free_event;

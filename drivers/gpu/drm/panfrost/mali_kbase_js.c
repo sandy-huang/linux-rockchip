@@ -1415,8 +1415,8 @@ bool kbasep_js_add_job(struct kbase_context *kctx,
 	if (!js_kctx_info->ctx.is_scheduled) {
 		if (js_kctx_info->ctx.is_dying) {
 			/* A job got added while/after kbase_job_zap_context()
-			 * was called on a non-scheduled context (e.g. KDS
-			 * dependency resolved). Kill that job by killing the
+			 * was called on a non-scheduled context.
+			 * Kill that job by killing the
 			 * context. */
 			kbasep_js_runpool_requeue_or_kill_ctx(kbdev, kctx,
 					false);
