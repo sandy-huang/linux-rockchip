@@ -62,14 +62,6 @@ typedef struct base_mem_handle {
 
 #define BASE_MAX_COHERENT_GROUPS 16
 
-#ifdef CDBG_ASSERT
-#define LOCAL_ASSERT CDBG_ASSERT
-#elif defined(KBASE_DEBUG_ASSERT)
-#define LOCAL_ASSERT KBASE_DEBUG_ASSERT
-#else
-#error assert macro not defined!
-#endif
-
 #ifdef PAGE_MASK
 #define LOCAL_PAGE_LSB ~PAGE_MASK
 #else
@@ -807,15 +799,6 @@ struct base_jd_debug_copy_buffer {
 static inline void base_jd_atom_dep_set(struct base_dependency *dep,
 		base_atom_id id, base_jd_dep_type dep_type)
 {
-	LOCAL_ASSERT(dep != NULL);
-
-	/*
-	 * make sure we don't set not allowed combinations
-	 * of atom_id/dependency_type.
-	 */
-	LOCAL_ASSERT((id == 0 && dep_type == BASE_JD_DEP_TYPE_INVALID) ||
-			(id > 0 && dep_type != BASE_JD_DEP_TYPE_INVALID));
-
 	dep->atom_id = id;
 	dep->dependency_type = dep_type;
 }
@@ -830,8 +813,6 @@ static inline void base_jd_atom_dep_set(struct base_dependency *dep,
 static inline void base_jd_atom_dep_copy(struct base_dependency *dep,
 		const struct base_dependency *from)
 {
-	LOCAL_ASSERT(dep != NULL);
-
 	base_jd_atom_dep_set(dep, from->atom_id, from->dependency_type);
 }
 
@@ -855,10 +836,6 @@ static inline void base_jd_atom_dep_copy(struct base_dependency *dep,
  */
 static inline void base_jd_fence_trigger_setup_v2(struct base_jd_atom_v2 *atom, struct base_fence *fence)
 {
-	LOCAL_ASSERT(atom);
-	LOCAL_ASSERT(fence);
-	LOCAL_ASSERT(fence->basep.fd == INVALID_PLATFORM_FENCE);
-	LOCAL_ASSERT(fence->basep.stream_fd >= 0);
 	atom->jc = (uintptr_t) fence;
 	atom->core_req = BASE_JD_REQ_SOFT_FENCE_TRIGGER;
 }
@@ -884,9 +861,6 @@ static inline void base_jd_fence_trigger_setup_v2(struct base_jd_atom_v2 *atom, 
  */
 static inline void base_jd_fence_wait_setup_v2(struct base_jd_atom_v2 *atom, struct base_fence *fence)
 {
-	LOCAL_ASSERT(atom);
-	LOCAL_ASSERT(fence);
-	LOCAL_ASSERT(fence->basep.fd >= 0);
 	atom->jc = (uintptr_t) fence;
 	atom->core_req = BASE_JD_REQ_SOFT_FENCE_WAIT;
 }
@@ -904,13 +878,7 @@ static inline void base_jd_fence_wait_setup_v2(struct base_jd_atom_v2 *atom, str
  */
 static inline void base_external_resource_init(struct base_external_resource *res, struct base_import_handle handle, base_external_resource_access access)
 {
-	u64 address;
-
-	address = handle.basep.handle;
-
-	LOCAL_ASSERT(res != NULL);
-	LOCAL_ASSERT(0 == (address & LOCAL_PAGE_LSB));
-	LOCAL_ASSERT(access == BASE_EXT_RES_ACCESS_SHARED || access == BASE_EXT_RES_ACCESS_EXCLUSIVE);
+	u64 address = handle.basep.handle;
 
 	res->ext_resource = address | (access & LOCAL_PAGE_LSB);
 }

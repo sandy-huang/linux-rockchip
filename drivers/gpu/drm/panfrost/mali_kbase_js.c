@@ -199,18 +199,13 @@ bool kbasep_js_runpool_retain_ctx_nolock(struct kbase_device *kbdev,
 	bool result = false;
 	int as_nr;
 
-	KBASE_DEBUG_ASSERT(kbdev != NULL);
-	KBASE_DEBUG_ASSERT(kctx != NULL);
 	js_devdata = &kbdev->js_data;
 
 	as_nr = kctx->as_nr;
 	if (as_nr != KBASEP_AS_NR_INVALID) {
 		int new_refcnt;
 
-		KBASE_DEBUG_ASSERT(as_nr >= 0);
 		js_per_as_data = &js_devdata->runpool_irq.per_as_data[as_nr];
-
-		KBASE_DEBUG_ASSERT(js_per_as_data->kctx != NULL);
 
 		new_refcnt = ++(js_per_as_data->as_busy_refcount);
 
@@ -694,8 +689,6 @@ jsctx_ll_flush_to_rb(struct kbase_context *kctx, int prio, int js)
 
 		katom = list_entry(pos, struct kbase_jd_atom, queue);
 
-		KBASE_DEBUG_ASSERT(katom);
-
 		if (jsctx_rb_add_atom(kctx, katom))
 			break;
 
@@ -751,11 +744,7 @@ int kbasep_js_devdata_init(struct kbase_device * const kbdev)
 	int i;
 	u16 as_present;
 
-	KBASE_DEBUG_ASSERT(kbdev != NULL);
-
 	jsdd = &kbdev->js_data;
-
-	KBASE_DEBUG_ASSERT(jsdd->init_status == JS_DEVDATA_INIT_NONE);
 
 	/* These two must be recalculated if nr_hw_address_spaces changes
 	 * (e.g. for HW workarounds) */
@@ -914,19 +903,12 @@ void kbasep_js_devdata_term(struct kbase_device *kbdev)
 {
 	struct kbasep_js_device_data *js_devdata;
 
-	KBASE_DEBUG_ASSERT(kbdev != NULL);
-
 	js_devdata = &kbdev->js_data;
 
 	if ((js_devdata->init_status & JS_DEVDATA_INIT_CONSTANTS)) {
 		s8 zero_ctx_attr_ref_count[KBASEP_JS_CTX_ATTR_COUNT] = { 0, };
 		/* The caller must de-register all contexts before calling this
 		 */
-		KBASE_DEBUG_ASSERT(js_devdata->nr_all_contexts_running == 0);
-		KBASE_DEBUG_ASSERT(memcmp(
-				js_devdata->runpool_irq.ctx_attr_ref_count,
-				zero_ctx_attr_ref_count,
-				sizeof(zero_ctx_attr_ref_count)) == 0);
 		CSTD_UNUSED(zero_ctx_attr_ref_count);
 	}
 	if ((js_devdata->init_status & JS_DEVDATA_INIT_POLICY))
@@ -942,16 +924,12 @@ int kbasep_js_kctx_init(struct kbase_context * const kctx)
 	int err;
 	int i, j;
 
-	KBASE_DEBUG_ASSERT(kctx != NULL);
-
 	kbdev = kctx->kbdev;
-	KBASE_DEBUG_ASSERT(kbdev != NULL);
 
 	for (i = 0; i < BASE_JM_MAX_NR_SLOTS; ++i)
 		INIT_LIST_HEAD(&kctx->jctx.sched_info.ctx.ctx_list_entry[i]);
 
 	js_kctx_info = &kctx->jctx.sched_info;
-	KBASE_DEBUG_ASSERT(js_kctx_info->init_status == JS_KCTX_INIT_NONE);
 
 	js_kctx_info->ctx.nr_jobs = 0;
 	js_kctx_info->ctx.is_scheduled = false;
@@ -998,19 +976,10 @@ void kbasep_js_kctx_term(struct kbase_context *kctx)
 	int js;
 	bool update_ctx_count = false;
 
-	KBASE_DEBUG_ASSERT(kctx != NULL);
-
 	kbdev = kctx->kbdev;
-	KBASE_DEBUG_ASSERT(kbdev != NULL);
 
 	js_policy = &kbdev->js_data.policy;
 	js_kctx_info = &kctx->jctx.sched_info;
-
-	if ((js_kctx_info->init_status & JS_KCTX_INIT_CONSTANTS)) {
-		/* The caller must de-register all jobs before calling this */
-		KBASE_DEBUG_ASSERT(!js_kctx_info->ctx.is_scheduled);
-		KBASE_DEBUG_ASSERT(js_kctx_info->ctx.nr_jobs == 0);
-	}
 
 	mutex_lock(&kbdev->js_data.queue_mutex);
 	mutex_lock(&kctx->jctx.sched_info.ctx.jsctx_mutex);
@@ -1444,8 +1413,6 @@ bool kbasep_js_add_job(struct kbase_context *kctx,
 	bool enqueue_required = false;
 	bool timer_sync = false;
 
-	KBASE_DEBUG_ASSERT(kctx != NULL);
-	KBASE_DEBUG_ASSERT(atom != NULL);
 	lockdep_assert_held(&kctx->jctx.lock);
 
 	kbdev = kctx->kbdev;
@@ -1462,7 +1429,6 @@ bool kbasep_js_add_job(struct kbase_context *kctx,
 	mutex_lock(&js_devdata->runpool_mutex);
 
 	/* Refcount ctx.nr_jobs */
-	KBASE_DEBUG_ASSERT(js_kctx_info->ctx.nr_jobs < U32_MAX);
 	++(js_kctx_info->ctx.nr_jobs);
 
 	/* Setup any scheduling information */
@@ -1525,7 +1491,6 @@ bool kbasep_js_add_job(struct kbase_context *kctx,
 		} else if (js_kctx_info->ctx.nr_jobs == 1) {
 			/* Handle Refcount going from 0 to 1: schedule the
 			 * context on the Policy Queue */
-			KBASE_DEBUG_ASSERT(!js_kctx_info->ctx.is_scheduled);
 			dev_dbg(kbdev->dev, "JS: Enqueue Context %p", kctx);
 
 			/* Policy Queue was updated - caller must try to
@@ -1548,10 +1513,6 @@ void kbasep_js_remove_job(struct kbase_device *kbdev,
 	struct kbasep_js_device_data *js_devdata;
 	union kbasep_js_policy *js_policy;
 
-	KBASE_DEBUG_ASSERT(kbdev != NULL);
-	KBASE_DEBUG_ASSERT(kctx != NULL);
-	KBASE_DEBUG_ASSERT(atom != NULL);
-
 	js_devdata = &kbdev->js_data;
 	js_policy = &kbdev->js_data.policy;
 	js_kctx_info = &kctx->jctx.sched_info;
@@ -1560,7 +1521,6 @@ void kbasep_js_remove_job(struct kbase_device *kbdev,
 			kbasep_js_trace_get_refcnt(kbdev, kctx));
 
 	/* De-refcount ctx.nr_jobs */
-	KBASE_DEBUG_ASSERT(js_kctx_info->ctx.nr_jobs > 0);
 	--(js_kctx_info->ctx.nr_jobs);
 }
 
@@ -1571,10 +1531,6 @@ bool kbasep_js_remove_cancelled_job(struct kbase_device *kbdev,
 	struct kbasep_js_atom_retained_state katom_retained_state;
 	struct kbasep_js_device_data *js_devdata;
 	bool attr_state_changed;
-
-	KBASE_DEBUG_ASSERT(kbdev != NULL);
-	KBASE_DEBUG_ASSERT(kctx != NULL);
-	KBASE_DEBUG_ASSERT(katom != NULL);
 
 	js_devdata = &kbdev->js_data;
 
@@ -1604,7 +1560,6 @@ bool kbasep_js_runpool_retain_ctx(struct kbase_device *kbdev,
 	struct kbasep_js_device_data *js_devdata;
 	bool result;
 
-	KBASE_DEBUG_ASSERT(kbdev != NULL);
 	js_devdata = &kbdev->js_data;
 
 	/* KBASE_TRACE_ADD_REFCOUNT( kbdev, JS_RETAIN_CTX, kctx, NULL, 0,
@@ -1624,8 +1579,6 @@ struct kbase_context *kbasep_js_runpool_lookup_ctx(struct kbase_device *kbdev,
 	struct kbase_context *found_kctx = NULL;
 	struct kbasep_js_per_as_data *js_per_as_data;
 
-	KBASE_DEBUG_ASSERT(kbdev != NULL);
-	KBASE_DEBUG_ASSERT(0 <= as_nr && as_nr < BASE_MAX_NR_AS);
 	js_devdata = &kbdev->js_data;
 	js_per_as_data = &js_devdata->runpool_irq.per_as_data[as_nr];
 
@@ -1647,9 +1600,6 @@ struct kbase_context *kbasep_js_runpool_lookup_ctx_nolock(
 	struct kbasep_js_device_data *js_devdata;
 	struct kbase_context *found_kctx = NULL;
 	struct kbasep_js_per_as_data *js_per_as_data;
-
-	KBASE_DEBUG_ASSERT(kbdev != NULL);
-	KBASE_DEBUG_ASSERT(0 <= as_nr && as_nr < BASE_MAX_NR_AS);
 
 	lockdep_assert_held(&kbdev->js_data.runpool_irq.lock);
 
@@ -1694,9 +1644,6 @@ static kbasep_js_release_result kbasep_js_run_jobs_after_ctx_and_atom_release(
 	struct kbasep_js_device_data *js_devdata;
 	kbasep_js_release_result result = 0;
 
-	KBASE_DEBUG_ASSERT(kbdev != NULL);
-	KBASE_DEBUG_ASSERT(kctx != NULL);
-	KBASE_DEBUG_ASSERT(katom_retained_state != NULL);
 	js_devdata = &kbdev->js_data;
 
 	lockdep_assert_held(&kctx->jctx.sched_info.ctx.jsctx_mutex);
@@ -1759,14 +1706,9 @@ static kbasep_js_release_result kbasep_js_runpool_release_ctx_internal(
 	struct kbase_as *current_as;
 	int new_ref_count;
 
-	KBASE_DEBUG_ASSERT(kbdev != NULL);
-	KBASE_DEBUG_ASSERT(kctx != NULL);
 	js_kctx_info = &kctx->jctx.sched_info;
 	js_devdata = &kbdev->js_data;
 	js_policy = &kbdev->js_data.policy;
-
-	/* Ensure context really is scheduled in */
-	KBASE_DEBUG_ASSERT(js_kctx_info->ctx.is_scheduled);
 
 	/* kctx->as_nr and js_per_as_data are only read from here. The caller's
 	 * js_ctx_mutex provides a barrier that ensures they are up-to-date.
@@ -1775,9 +1717,7 @@ static kbasep_js_release_result kbasep_js_runpool_release_ctx_internal(
 	 * is non-zero (and we ASSERT on that last fact).
 	 */
 	kctx_as_nr = kctx->as_nr;
-	KBASE_DEBUG_ASSERT(kctx_as_nr != KBASEP_AS_NR_INVALID);
 	js_per_as_data = &js_devdata->runpool_irq.per_as_data[kctx_as_nr];
-	KBASE_DEBUG_ASSERT(js_per_as_data->as_busy_refcount > 0);
 
 	/*
 	 * Transaction begins on AS and runpool_irq
@@ -1788,8 +1728,6 @@ static kbasep_js_release_result kbasep_js_runpool_release_ctx_internal(
 	mutex_lock(&kbdev->pm.lock);
 	mutex_lock(&current_as->transaction_mutex);
 	spin_lock_irqsave(&js_devdata->runpool_irq.lock, flags);
-	KBASE_DEBUG_ASSERT(kctx_as_nr == kctx->as_nr);
-	KBASE_DEBUG_ASSERT(js_per_as_data->as_busy_refcount > 0);
 
 	/* Update refcount */
 	new_ref_count = --(js_per_as_data->as_busy_refcount);
@@ -1911,16 +1849,9 @@ void kbasep_js_runpool_requeue_or_kill_ctx(struct kbase_device *kbdev,
 	union kbasep_js_policy *js_policy;
 	struct kbasep_js_kctx_info *js_kctx_info;
 
-	KBASE_DEBUG_ASSERT(kbdev != NULL);
-	KBASE_DEBUG_ASSERT(kctx != NULL);
 	js_kctx_info = &kctx->jctx.sched_info;
 	js_policy = &kbdev->js_data.policy;
 	js_devdata = &kbdev->js_data;
-
-	/* This is called if and only if you've you've detached the context from
-	 * the Runpool or the Policy Queue, and not added it back to the Runpool
-	 */
-	KBASE_DEBUG_ASSERT(!js_kctx_info->ctx.is_scheduled);
 
 	if (js_kctx_info->ctx.is_dying) {
 		/* Dying: don't requeue, but kill all jobs on the context. This
@@ -1940,8 +1871,6 @@ void kbasep_js_runpool_release_ctx_and_katom_retained_state(
 	base_jd_event_code event_code;
 	kbasep_js_release_result release_result;
 
-	KBASE_DEBUG_ASSERT(kbdev != NULL);
-	KBASE_DEBUG_ASSERT(kctx != NULL);
 	js_kctx_info = &kctx->jctx.sched_info;
 	js_devdata = &kbdev->js_data;
 	event_code = katom_retained_state->event_code;
@@ -1991,8 +1920,6 @@ static void kbasep_js_runpool_release_ctx_no_schedule(
 	struct kbasep_js_atom_retained_state *katom_retained_state =
 		&katom_retained_state_struct;
 
-	KBASE_DEBUG_ASSERT(kbdev != NULL);
-	KBASE_DEBUG_ASSERT(kctx != NULL);
 	js_kctx_info = &kctx->jctx.sched_info;
 	js_devdata = &kbdev->js_data;
 	kbasep_js_atom_retained_state_init_invalid(katom_retained_state);
@@ -2190,7 +2117,6 @@ static bool kbasep_js_schedule_ctx(struct kbase_device *kbdev,
 		bool retained;
 
 		retained = kbasep_js_runpool_retain_ctx_nolock(kbdev, kctx);
-		KBASE_DEBUG_ASSERT(retained);
 
 		kbasep_js_clear_submit_allowed(js_devdata, kctx);
 		kctx_suspended = true;
@@ -2250,9 +2176,6 @@ void kbasep_js_schedule_privileged_ctx(struct kbase_device *kbdev,
 	struct kbasep_js_device_data *js_devdata;
 	bool is_scheduled;
 
-	KBASE_DEBUG_ASSERT(kbdev != NULL);
-	KBASE_DEBUG_ASSERT(kctx != NULL);
-
 	js_devdata = &kbdev->js_data;
 	js_kctx_info = &kctx->jctx.sched_info;
 
@@ -2298,7 +2221,6 @@ void kbasep_js_release_privileged_ctx(struct kbase_device *kbdev,
 	struct kbasep_js_kctx_info *js_kctx_info;
 	bool pending;
 
-	KBASE_DEBUG_ASSERT(kctx != NULL);
 	js_kctx_info = &kctx->jctx.sched_info;
 
 	/* We don't need to use the address space anymore */
@@ -2323,8 +2245,6 @@ void kbasep_js_suspend(struct kbase_device *kbdev)
 	u16 retained = 0u;
 	int nr_privileged_ctx = 0;
 
-	KBASE_DEBUG_ASSERT(kbdev);
-	KBASE_DEBUG_ASSERT(kbase_pm_is_suspending(kbdev));
 	js_devdata = &kbdev->js_data;
 
 	spin_lock_irqsave(&js_devdata->runpool_irq.lock, flags);
@@ -2344,12 +2264,6 @@ void kbasep_js_suspend(struct kbase_device *kbdev)
 		if (kctx) {
 			++(js_per_as_data->as_busy_refcount);
 			retained |= 1u;
-			/* We can only cope with up to 1 privileged context -
-			 * the instrumented context. It'll be suspended by
-			 * disabling instrumentation */
-			if (kctx->jctx.sched_info.ctx.flags &
-					KBASE_CTX_FLAG_PRIVILEGED)
-				KBASE_DEBUG_ASSERT(++nr_privileged_ctx == 1);
 		}
 	}
 	CSTD_UNUSED(nr_privileged_ctx);
@@ -2377,9 +2291,7 @@ void kbasep_js_resume(struct kbase_device *kbdev)
 	struct kbasep_js_device_data *js_devdata;
 	int js;
 
-	KBASE_DEBUG_ASSERT(kbdev);
 	js_devdata = &kbdev->js_data;
-	KBASE_DEBUG_ASSERT(!kbase_pm_is_suspending(kbdev));
 
 	mutex_lock(&js_devdata->queue_mutex);
 	for (js = 0; js < kbdev->gpu_props.num_job_slots; js++) {
@@ -2506,9 +2418,6 @@ static void kbase_js_evict_deps(struct kbase_context *kctx,
 
 	if (next_katom &&
 			(next_katom->atom_flags & KBASE_KATOM_FLAG_FAIL_PREV)) {
-		KBASE_DEBUG_ASSERT(next_katom->status !=
-				KBASE_JD_ATOM_STATE_HW_COMPLETED);
-
 		next_katom->will_fail_event_code = katom->event_code;
 
 	}
@@ -2531,8 +2440,6 @@ struct kbase_jd_atom *kbase_js_pull(struct kbase_context *kctx, int js)
 	struct kbase_jd_atom *katom;
 	struct kbasep_js_device_data *js_devdata;
 	int pulled;
-
-	KBASE_DEBUG_ASSERT(kctx);
 
 	js_devdata = &kctx->kbdev->js_data;
 	lockdep_assert_held(&js_devdata->runpool_irq.lock);
@@ -3103,10 +3010,6 @@ void kbase_js_zap_context(struct kbase_context *kctx)
 		 * disallowed from submitting jobs - ensures that someone
 		 * somewhere will be removing the context later on */
 		was_retained = kbasep_js_runpool_retain_ctx_nolock(kbdev, kctx);
-
-		/* Since it's scheduled and we have the jsctx_mutex, it must be
-		 * retained successfully */
-		KBASE_DEBUG_ASSERT(was_retained);
 
 		dev_dbg(kbdev->dev, "Zap: Ctx %p Kill Any Running jobs", kctx);
 

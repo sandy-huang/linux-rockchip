@@ -45,8 +45,6 @@ static void kbasep_instr_hwcnt_cacheclean(struct kbase_device *kbdev)
 						KBASE_INSTR_STATE_RESETTING);
 		spin_lock_irqsave(&kbdev->hwcnt.lock, flags);
 	}
-	KBASE_DEBUG_ASSERT(kbdev->hwcnt.backend.state ==
-					KBASE_INSTR_STATE_REQUEST_CLEAN);
 
 	/* Enable interrupt */
 	spin_lock_irqsave(&kbdev->pm.power_change_lock, pm_flags);
@@ -76,8 +74,6 @@ int kbase_instr_hwcnt_enable_internal(struct kbase_device *kbdev,
 	int ret;
 	u64 shader_cores_needed;
 	u32 prfcnt_config;
-
-	KBASE_DEBUG_ASSERT(kbdev->hwcnt.suspended_kctx == NULL);
 
 	shader_cores_needed = kbase_pm_get_present_cores(kbdev,
 							KBASE_PM_CORE_SHADER);
@@ -135,16 +131,12 @@ int kbase_instr_hwcnt_enable_internal(struct kbase_device *kbdev,
 	 * buffer is valid */
 	ret = queue_work(kbdev->hwcnt.backend.cache_clean_wq,
 					&kbdev->hwcnt.backend.cache_clean_work);
-	KBASE_DEBUG_ASSERT(ret);
 
 	spin_unlock_irqrestore(&kbdev->hwcnt.lock, flags);
 
 	/* Wait for cacheclean to complete */
 	wait_event(kbdev->hwcnt.backend.wait,
 					kbdev->hwcnt.backend.triggered != 0);
-
-	KBASE_DEBUG_ASSERT(kbdev->hwcnt.backend.state ==
-							KBASE_INSTR_STATE_IDLE);
 
 	kbase_pm_request_l2_caches(kbdev);
 
@@ -369,8 +361,6 @@ void kbasep_cache_clean_worker(struct work_struct *data)
 						KBASE_INSTR_STATE_CLEANING));
 		spin_lock_irqsave(&kbdev->hwcnt.lock, flags);
 	}
-	KBASE_DEBUG_ASSERT(kbdev->hwcnt.backend.state ==
-						KBASE_INSTR_STATE_CLEANED);
 
 	/* All finished and idle */
 	kbdev->hwcnt.backend.state = KBASE_INSTR_STATE_IDLE;
@@ -397,7 +387,6 @@ void kbase_instr_hwcnt_sample_done(struct kbase_device *kbdev)
 		kbdev->hwcnt.backend.state = KBASE_INSTR_STATE_REQUEST_CLEAN;
 		ret = queue_work(kbdev->hwcnt.backend.cache_clean_wq,
 					&kbdev->hwcnt.backend.cache_clean_work);
-		KBASE_DEBUG_ASSERT(ret);
 	}
 	/* NOTE: In the state KBASE_INSTR_STATE_RESETTING, We're in a reset,
 	 * and the instrumentation state hasn't been restored yet -
@@ -463,8 +452,6 @@ int kbase_instr_hwcnt_wait_for_dump(struct kbase_context *kctx)
 		kbdev->hwcnt.backend.state = KBASE_INSTR_STATE_IDLE;
 	} else {
 		/* Dump done */
-		KBASE_DEBUG_ASSERT(kbdev->hwcnt.backend.state ==
-							KBASE_INSTR_STATE_IDLE);
 		err = 0;
 	}
 

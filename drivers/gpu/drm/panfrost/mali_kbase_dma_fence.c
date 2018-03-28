@@ -212,8 +212,6 @@ kbase_dma_fence_cancel_atom(struct kbase_jd_atom *katom)
 	/* Cancel callbacks and clean up. */
 	kbase_dma_fence_free_callbacks(katom);
 
-	KBASE_DEBUG_ASSERT(atomic_read(&katom->dma_fence.dep_count) == 0);
-
 	/* Mark the atom as handled in case all fences signaled just before
 	 * canceling the callbacks and the worker was queued.
 	 */
@@ -489,8 +487,6 @@ void kbase_dma_fence_signal(struct kbase_jd_atom *katom)
 {
 	if (!katom->dma_fence.fence)
 		return;
-
-	KBASE_DEBUG_ASSERT(atomic_read(&katom->dma_fence.dep_count) == -1);
 
 	/* Signal the atom's fence. */
 	dma_fence_signal(katom->dma_fence.fence);

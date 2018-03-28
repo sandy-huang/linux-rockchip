@@ -45,8 +45,6 @@ int kbase_pm_context_active_handle_suspend(struct kbase_device *kbdev, enum kbas
 	int c;
 	int old_count;
 
-	KBASE_DEBUG_ASSERT(kbdev != NULL);
-
 	/* Trace timeline information about how long it took to handle the decision
 	 * to powerup. Sometimes the event might be missed due to reading the count
 	 * outside of mutex, but this is necessary to get the trace timing
@@ -73,7 +71,6 @@ int kbase_pm_context_active_handle_suspend(struct kbase_device *kbdev, enum kbas
 		case KBASE_PM_SUSPEND_HANDLER_NOT_POSSIBLE:
 			/* FALLTHROUGH */
 		default:
-			KBASE_DEBUG_ASSERT_MSG(false, "unreachable");
 			break;
 		}
 	}
@@ -102,8 +99,6 @@ void kbase_pm_context_idle(struct kbase_device *kbdev)
 	int c;
 	int old_count;
 
-	KBASE_DEBUG_ASSERT(kbdev != NULL);
-
 	/* Trace timeline information about how long it took to handle the decision
 	 * to powerdown. Sometimes the event might be missed due to reading the
 	 * count outside of mutex, but this is necessary to get the trace timing
@@ -118,8 +113,6 @@ void kbase_pm_context_idle(struct kbase_device *kbdev)
 	c = --kbdev->pm.active_count;
 	KBASE_TIMELINE_CONTEXT_ACTIVE(kbdev, c);
 	KBASE_TRACE_ADD_REFCOUNT(kbdev, PM_CONTEXT_IDLE, NULL, NULL, 0u, c);
-
-	KBASE_DEBUG_ASSERT(c >= 0);
 
 	/* Trace the event being handled */
 	if (old_count == 0)
@@ -141,10 +134,7 @@ void kbase_pm_context_idle(struct kbase_device *kbdev)
 
 void kbase_pm_suspend(struct kbase_device *kbdev)
 {
-	KBASE_DEBUG_ASSERT(kbdev);
-
 	mutex_lock(&kbdev->pm.lock);
-	KBASE_DEBUG_ASSERT(!kbase_pm_is_suspending(kbdev));
 	kbdev->pm.suspending = true;
 	mutex_unlock(&kbdev->pm.lock);
 

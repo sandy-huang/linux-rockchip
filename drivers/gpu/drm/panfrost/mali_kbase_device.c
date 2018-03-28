@@ -49,7 +49,6 @@ static const char *kbasep_trace_code_string[] = {
 
 static int kbasep_trace_init(struct kbase_device *kbdev);
 static void kbasep_trace_term(struct kbase_device *kbdev);
-static void kbasep_trace_hook_wrapper(void *param);
 
 struct kbase_device *kbase_device_alloc(void)
 {
@@ -221,8 +220,6 @@ int kbase_device_init(struct kbase_device * const kbdev)
 		atomic_set(&kbdev->timeline.pm_event_uid[i], 0);
 #endif /* CONFIG_MALI_TRACE_TIMELINE */
 
-	kbase_debug_assert_register_hook(&kbasep_trace_hook_wrapper, kbdev);
-
 	atomic_set(&kbdev->ctx_num, 0);
 
 	err = kbase_instr_backend_init(kbdev);
@@ -252,12 +249,6 @@ fail:
 
 void kbase_device_term(struct kbase_device *kbdev)
 {
-	KBASE_DEBUG_ASSERT(kbdev);
-
-#if KBASE_TRACE_ENABLE
-	kbase_debug_assert_register_hook(NULL, NULL);
-#endif
-
 	kbase_instr_backend_term(kbdev);
 
 	kbasep_trace_term(kbdev);
@@ -274,9 +265,6 @@ int kbase_device_trace_buffer_install(
 		struct kbase_context *kctx, u32 *tb, size_t size)
 {
 	unsigned long flags;
-
-	KBASE_DEBUG_ASSERT(kctx);
-	KBASE_DEBUG_ASSERT(tb);
 
 	/* Interface uses 16-bit value to track last accessed entry. Each entry
 	 * is composed of two 32-bit words.
@@ -306,7 +294,6 @@ void kbase_device_trace_buffer_uninstall(struct kbase_context *kctx)
 {
 	unsigned long flags;
 
-	KBASE_DEBUG_ASSERT(kctx);
 	spin_lock_irqsave(&kctx->jctx.tb_lock, flags);
 	kctx->jctx.tb = NULL;
 	kctx->jctx.tb_wrap_offset = 0;
@@ -325,7 +312,6 @@ void kbase_device_trace_register_access(struct kbase_context *kctx, enum kbase_r
 		u32 header_word;
 
 		header_word = tb[1];
-		KBASE_DEBUG_ASSERT(0 == (header_word & 0x1));
 
 		wrap_count = (header_word >> 1) & 0x7FFF;
 		write_offset = (header_word >> 16) & 0xFFFF;
@@ -493,13 +479,6 @@ void kbasep_trace_dump(struct kbase_device *kbdev)
 	KBASE_TRACE_CLEAR(kbdev);
 }
 
-static void kbasep_trace_hook_wrapper(void *param)
-{
-	struct kbase_device *kbdev = (struct kbase_device *)param;
-
-	kbasep_trace_dump(kbdev);
-}
-
 void kbasep_trace_debugfs_init(struct kbase_device *kbdev)
 {
 }
@@ -514,11 +493,6 @@ static int kbasep_trace_init(struct kbase_device *kbdev)
 static void kbasep_trace_term(struct kbase_device *kbdev)
 {
 	CSTD_UNUSED(kbdev);
-}
-
-static void kbasep_trace_hook_wrapper(void *param)
-{
-	CSTD_UNUSED(param);
 }
 
 void kbasep_trace_dump(struct kbase_device *kbdev)

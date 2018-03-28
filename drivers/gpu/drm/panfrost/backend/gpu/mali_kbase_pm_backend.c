@@ -100,8 +100,6 @@ int kbase_hwaccess_pm_init(struct kbase_device *kbdev)
 {
 	int ret = 0;
 
-	KBASE_DEBUG_ASSERT(kbdev != NULL);
-
 	mutex_init(&kbdev->pm.lock);
 
 	kbdev->pm.backend.gpu_powered = false;
@@ -213,13 +211,8 @@ int kbase_hwaccess_pm_powerup(struct kbase_device *kbdev,
 	unsigned long irq_flags;
 	int ret;
 
-	KBASE_DEBUG_ASSERT(kbdev != NULL);
-
 	mutex_lock(&js_devdata->runpool_mutex);
 	mutex_lock(&kbdev->pm.lock);
-
-	/* A suspend won't happen during startup/insmod */
-	KBASE_DEBUG_ASSERT(!kbase_pm_is_suspending(kbdev));
 
 	/* Power up the GPU, don't enable IRQs as we are not ready to receive
 	 * them. */
@@ -266,8 +259,6 @@ int kbase_hwaccess_pm_powerup(struct kbase_device *kbdev,
 
 void kbase_hwaccess_pm_halt(struct kbase_device *kbdev)
 {
-	KBASE_DEBUG_ASSERT(kbdev != NULL);
-
 	mutex_lock(&kbdev->pm.lock);
 	kbase_pm_cancel_deferred_poweroff(kbdev);
 	if (!kbase_pm_do_poweroff(kbdev, false)) {
@@ -284,10 +275,6 @@ void kbase_hwaccess_pm_halt(struct kbase_device *kbdev)
 
 void kbase_hwaccess_pm_term(struct kbase_device *kbdev)
 {
-	KBASE_DEBUG_ASSERT(kbdev != NULL);
-	KBASE_DEBUG_ASSERT(kbdev->pm.active_count == 0);
-	KBASE_DEBUG_ASSERT(kbdev->pm.backend.gpu_cycle_counter_requests == 0);
-
 	/* Free any resources the policy allocated */
 	kbase_pm_policy_term(kbdev);
 	kbase_pm_ca_term(kbdev);

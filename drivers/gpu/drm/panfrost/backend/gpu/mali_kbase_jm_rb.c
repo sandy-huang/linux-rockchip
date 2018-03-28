@@ -269,8 +269,6 @@ static bool kbasep_js_job_check_ref_cores(struct kbase_device *kbdev,
 		switch (katom->coreref_state) {
 			/* State when job is first attempted to be run */
 		case KBASE_ATOM_COREREF_STATE_NO_CORES_REQUESTED:
-			KBASE_DEBUG_ASSERT(katom->affinity == 0);
-
 			/* Compute affinity */
 			if (false == kbase_js_choose_affinity(
 					&recently_chosen_affinity, kbdev, katom,
@@ -298,9 +296,6 @@ static bool kbasep_js_job_check_ref_cores(struct kbase_device *kbdev,
 		case KBASE_ATOM_COREREF_STATE_WAITING_FOR_REQUESTED_CORES:
 			{
 				enum kbase_pm_cores_ready cores_ready;
-
-				KBASE_DEBUG_ASSERT(katom->affinity != 0 ||
-					(katom->core_req & BASE_JD_REQ_T));
 
 				cores_ready = kbase_pm_register_inuse_cores(
 						kbdev,
@@ -341,9 +336,6 @@ static bool kbasep_js_job_check_ref_cores(struct kbase_device *kbdev,
 			/* ***FALLTHROUGH: TRANSITION TO HIGHER STATE*** */
 
 		case KBASE_ATOM_COREREF_STATE_RECHECK_AFFINITY:
-			KBASE_DEBUG_ASSERT(katom->affinity != 0 ||
-					(katom->core_req & BASE_JD_REQ_T));
-
 			/* Optimize out choosing the affinity twice in the same
 			 * function call */
 			if (chosen_affinity == false) {
@@ -429,11 +421,6 @@ static bool kbasep_js_job_check_ref_cores(struct kbase_device *kbdev,
 
 			/* ***FALLTHROUGH: TRANSITION TO HIGHER STATE*** */
 		case KBASE_ATOM_COREREF_STATE_CHECK_AFFINITY_VIOLATIONS:
-			KBASE_DEBUG_ASSERT(katom->affinity != 0 ||
-					(katom->core_req & BASE_JD_REQ_T));
-			KBASE_DEBUG_ASSERT(katom->affinity ==
-						recently_chosen_affinity);
-
 			/* Note: this is where the caller must've taken the
 			 * runpool_irq.lock */
 
@@ -461,9 +448,6 @@ static bool kbasep_js_job_check_ref_cores(struct kbase_device *kbdev,
 			break;
 
 		default:
-			KBASE_DEBUG_ASSERT_MSG(false,
-					"Unhandled kbase_atom_coreref_state %d",
-							katom->coreref_state);
 			break;
 		}
 	} while (retry != false);
@@ -474,44 +458,21 @@ static bool kbasep_js_job_check_ref_cores(struct kbase_device *kbdev,
 static void kbasep_js_job_check_deref_cores(struct kbase_device *kbdev,
 						struct kbase_jd_atom *katom)
 {
-	KBASE_DEBUG_ASSERT(kbdev != NULL);
-	KBASE_DEBUG_ASSERT(katom != NULL);
-
 	switch (katom->coreref_state) {
 	case KBASE_ATOM_COREREF_STATE_READY:
-		/* State where atom was submitted to the HW - just proceed to
-		 * power-down */
-		KBASE_DEBUG_ASSERT(katom->affinity != 0 ||
-					(katom->core_req & BASE_JD_REQ_T));
-
 		/* *** FALLTHROUGH *** */
-
 	case KBASE_ATOM_COREREF_STATE_RECHECK_AFFINITY:
-		/* State where cores were registered */
-		KBASE_DEBUG_ASSERT(katom->affinity != 0 ||
-					(katom->core_req & BASE_JD_REQ_T));
 		kbase_pm_release_cores(kbdev, katom->core_req & BASE_JD_REQ_T,
 							katom->affinity);
-
 		break;
-
 	case KBASE_ATOM_COREREF_STATE_WAITING_FOR_REQUESTED_CORES:
-		/* State where cores were requested, but not registered */
-		KBASE_DEBUG_ASSERT(katom->affinity != 0 ||
-					(katom->core_req & BASE_JD_REQ_T));
 		kbase_pm_unrequest_cores(kbdev, katom->core_req & BASE_JD_REQ_T,
 							katom->affinity);
 		break;
-
 	case KBASE_ATOM_COREREF_STATE_NO_CORES_REQUESTED:
-		/* Initial state - nothing required */
-		KBASE_DEBUG_ASSERT(katom->affinity == 0);
 		break;
 
 	default:
-		KBASE_DEBUG_ASSERT_MSG(false,
-						"Unhandled coreref_state: %d",
-							katom->coreref_state);
 		break;
 	}
 
@@ -523,43 +484,20 @@ static void kbasep_js_job_check_deref_cores_nokatom(struct kbase_device *kbdev,
 		base_jd_core_req core_req, u64 affinity,
 		enum kbase_atom_coreref_state coreref_state)
 {
-	KBASE_DEBUG_ASSERT(kbdev != NULL);
-
 	switch (coreref_state) {
 	case KBASE_ATOM_COREREF_STATE_READY:
-		/* State where atom was submitted to the HW - just proceed to
-		 * power-down */
-		KBASE_DEBUG_ASSERT(affinity != 0 ||
-					(core_req & BASE_JD_REQ_T));
-
 		/* *** FALLTHROUGH *** */
-
 	case KBASE_ATOM_COREREF_STATE_RECHECK_AFFINITY:
-		/* State where cores were registered */
-		KBASE_DEBUG_ASSERT(affinity != 0 ||
-					(core_req & BASE_JD_REQ_T));
 		kbase_pm_release_cores(kbdev, core_req & BASE_JD_REQ_T,
 							affinity);
-
 		break;
-
 	case KBASE_ATOM_COREREF_STATE_WAITING_FOR_REQUESTED_CORES:
-		/* State where cores were requested, but not registered */
-		KBASE_DEBUG_ASSERT(affinity != 0 ||
-					(core_req & BASE_JD_REQ_T));
 		kbase_pm_unrequest_cores(kbdev, core_req & BASE_JD_REQ_T,
 							affinity);
 		break;
-
 	case KBASE_ATOM_COREREF_STATE_NO_CORES_REQUESTED:
-		/* Initial state - nothing required */
-		KBASE_DEBUG_ASSERT(affinity == 0);
 		break;
-
 	default:
-		KBASE_DEBUG_ASSERT_MSG(false,
-						"Unhandled coreref_state: %d",
-							coreref_state);
 		break;
 	}
 }
@@ -830,11 +768,6 @@ void kbase_gpu_slot_update(struct kbase_device *kbdev)
 					}
 				}
 
-				/* Secure mode sanity checks */
-				KBASE_DEBUG_ASSERT_MSG(
-					kbase_jd_katom_is_secure(katom[idx]) == kbase_gpu_in_secure_mode(kbdev),
-					"Secure mode of atom (%d) doesn't match secure mode of GPU (%d)",
-					kbase_jd_katom_is_secure(katom[idx]), kbase_gpu_in_secure_mode(kbdev));
 				katom[idx]->gpu_rb_state =
 					KBASE_ATOM_GPU_RB_READY;
 
@@ -1398,9 +1331,6 @@ void kbase_gpu_cacheclean(struct kbase_device *kbdev,
 							CLEAN_CACHES_COMPLETED);
 	kbase_reg_write(kbdev, GPU_CONTROL_REG(GPU_IRQ_CLEAR),
 						CLEAN_CACHES_COMPLETED, NULL);
-	KBASE_DEBUG_ASSERT_MSG(kbdev->hwcnt.backend.state !=
-						KBASE_INSTR_STATE_CLEANING,
-	    "Instrumentation code was cleaning caches, but Job Management code cleared their IRQ - Instrumentation code will now hang.");
 
 	mutex_unlock(&kbdev->cacheclean_lock);
 

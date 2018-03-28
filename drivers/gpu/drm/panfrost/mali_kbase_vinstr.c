@@ -435,8 +435,6 @@ static struct kbase_vinstr_client *kbasep_vinstr_attach_client(
 	struct task_struct         *thread = NULL;
 	struct kbase_vinstr_client *cli;
 
-	KBASE_DEBUG_ASSERT(vinstr_ctx);
-
 	if (buffer_count > MAX_BUFFER_COUNT
 	    || (buffer_count & (buffer_count - 1)))
 		return NULL;
@@ -554,9 +552,7 @@ void kbase_vinstr_detach_client(struct kbase_vinstr_client *cli)
 	u32 zerobitmap[4] = { 0 };
 	int cli_found = 0;
 
-	KBASE_DEBUG_ASSERT(cli);
 	vinstr_ctx = cli->vinstr_ctx;
-	KBASE_DEBUG_ASSERT(vinstr_ctx);
 
 	mutex_lock(&vinstr_ctx->lock);
 
@@ -579,7 +575,6 @@ void kbase_vinstr_detach_client(struct kbase_vinstr_client *cli)
 			}
 		}
 	}
-	KBASE_DEBUG_ASSERT(cli_found);
 
 	kfree(cli->dump_buffers_meta);
 	free_pages(
@@ -1031,8 +1026,6 @@ static enum hrtimer_restart kbasep_vinstr_wake_up_callback(
 			struct kbasep_vinstr_wake_up_timer,
 			hrtimer);
 
-	KBASE_DEBUG_ASSERT(timer);
-
 	atomic_set(&timer->vinstr_ctx->request_pending, 1);
 	wake_up_all(&timer->vinstr_ctx->waitq);
 
@@ -1050,8 +1043,6 @@ static int kbasep_vinstr_service_task(void *data)
 {
 	struct kbase_vinstr_context        *vinstr_ctx = data;
 	struct kbasep_vinstr_wake_up_timer timer;
-
-	KBASE_DEBUG_ASSERT(vinstr_ctx);
 
 	hrtimer_init(&timer.hrtimer, CLOCK_MONOTONIC, HRTIMER_MODE_REL);
 	timer.hrtimer.function = kbasep_vinstr_wake_up_callback;
@@ -1168,7 +1159,6 @@ static int kbasep_vinstr_service_task(void *data)
 static int kbasep_vinstr_hwcnt_reader_buffer_ready(
 		struct kbase_vinstr_client *cli)
 {
-	KBASE_DEBUG_ASSERT(cli);
 	return atomic_read(&cli->write_idx) != atomic_read(&cli->meta_idx);
 }
 
@@ -1188,9 +1178,6 @@ static long kbasep_vinstr_hwcnt_reader_ioctl_get_buffer(
 	unsigned int idx = meta_idx % cli->buffer_count;
 
 	struct kbase_hwcnt_reader_metadata *meta = &cli->dump_buffers_meta[idx];
-
-	/* Metadata sanity check. */
-	KBASE_DEBUG_ASSERT(idx == meta->buffer_idx);
 
 	if (sizeof(struct kbase_hwcnt_reader_metadata) != size)
 		return -EINVAL;
@@ -1258,8 +1245,6 @@ static long kbasep_vinstr_hwcnt_reader_ioctl_set_interval(
 		struct kbase_vinstr_client *cli, u32 interval)
 {
 	struct kbase_vinstr_context *vinstr_ctx = cli->vinstr_ctx;
-
-	KBASE_DEBUG_ASSERT(vinstr_ctx);
 
 	mutex_lock(&vinstr_ctx->lock);
 
@@ -1335,8 +1320,6 @@ static long kbasep_vinstr_hwcnt_reader_ioctl_enable_event(
 	struct kbase_vinstr_context *vinstr_ctx = cli->vinstr_ctx;
 	u32                         event_mask;
 
-	KBASE_DEBUG_ASSERT(vinstr_ctx);
-
 	event_mask = kbasep_vinstr_hwcnt_reader_event_mask(event_id);
 	if (!event_mask)
 		return -EINVAL;
@@ -1361,8 +1344,6 @@ static long kbasep_vinstr_hwcnt_reader_ioctl_disable_event(
 {
 	struct kbase_vinstr_context *vinstr_ctx = cli->vinstr_ctx;
 	u32                         event_mask;
-
-	KBASE_DEBUG_ASSERT(vinstr_ctx);
 
 	event_mask = kbasep_vinstr_hwcnt_reader_event_mask(event_id);
 	if (!event_mask)
@@ -1389,7 +1370,6 @@ static long kbasep_vinstr_hwcnt_reader_ioctl_get_hwver(
 
 	u32                         ver = 5;
 
-	KBASE_DEBUG_ASSERT(vinstr_ctx);
 	if (kbase_hw_has_feature(vinstr_ctx->kbdev, BASE_HW_FEATURE_V4))
 		ver = 4;
 
@@ -1410,10 +1390,7 @@ static long kbasep_vinstr_hwcnt_reader_ioctl(struct file *filp,
 	long                       rcode = 0;
 	struct kbase_vinstr_client *cli;
 
-	KBASE_DEBUG_ASSERT(filp);
-
 	cli = filp->private_data;
-	KBASE_DEBUG_ASSERT(cli);
 
 	if (unlikely(_IOC_TYPE(cmd) != KBASE_HWCNT_READER))
 		return -EINVAL;
@@ -1427,7 +1404,6 @@ static long kbasep_vinstr_hwcnt_reader_ioctl(struct file *filp,
 				cli, (u32 __user *)arg);
 		break;
 	case KBASE_HWCNT_READER_GET_BUFFER_SIZE:
-		KBASE_DEBUG_ASSERT(cli->vinstr_ctx);
 		rcode = put_user(
 				(u32)cli->vinstr_ctx->dump_size,
 				(u32 __user *)arg);
@@ -1478,11 +1454,7 @@ static unsigned int kbasep_vinstr_hwcnt_reader_poll(struct file *filp,
 {
 	struct kbase_vinstr_client *cli;
 
-	KBASE_DEBUG_ASSERT(filp);
-	KBASE_DEBUG_ASSERT(wait);
-
 	cli = filp->private_data;
-	KBASE_DEBUG_ASSERT(cli);
 
 	poll_wait(filp, &cli->waitq, wait);
 	if (kbasep_vinstr_hwcnt_reader_buffer_ready(cli))
@@ -1503,11 +1475,7 @@ static int kbasep_vinstr_hwcnt_reader_mmap(struct file *filp,
 	unsigned long size, addr, pfn, offset;
 	unsigned long vm_size = vma->vm_end - vma->vm_start;
 
-	KBASE_DEBUG_ASSERT(filp);
-	KBASE_DEBUG_ASSERT(vma);
-
 	cli = filp->private_data;
-	KBASE_DEBUG_ASSERT(cli);
 
 	size = cli->buffer_count * cli->dump_size;
 
@@ -1540,13 +1508,7 @@ static int kbasep_vinstr_hwcnt_reader_mmap(struct file *filp,
 static int kbasep_vinstr_hwcnt_reader_release(struct inode *inode,
 		struct file *filp)
 {
-	struct kbase_vinstr_client *cli;
-
-	KBASE_DEBUG_ASSERT(inode);
-	KBASE_DEBUG_ASSERT(filp);
-
-	cli = filp->private_data;
-	KBASE_DEBUG_ASSERT(cli);
+	struct kbase_vinstr_client *cli = filp->private_data;
 
 	kbase_vinstr_detach_client(cli);
 	return 0;
@@ -1597,7 +1559,6 @@ void kbase_vinstr_term(struct kbase_vinstr_context *vinstr_ctx)
 		kfree(cli);
 		vinstr_ctx->nclients--;
 	}
-	KBASE_DEBUG_ASSERT(!vinstr_ctx->nclients);
 	if (vinstr_ctx->kctx)
 		kbasep_vinstr_destroy_kctx(vinstr_ctx);
 	kfree(vinstr_ctx);
@@ -1608,10 +1569,6 @@ int kbase_vinstr_hwcnt_reader_setup(struct kbase_vinstr_context *vinstr_ctx,
 {
 	struct kbase_vinstr_client  *cli;
 	u32                         bitmap[4];
-
-	KBASE_DEBUG_ASSERT(vinstr_ctx);
-	KBASE_DEBUG_ASSERT(setup);
-	KBASE_DEBUG_ASSERT(setup->buffer_count);
 
 	bitmap[SHADER_HWCNT_BM] = setup->shader_bm;
 	bitmap[TILER_HWCNT_BM]  = setup->tiler_bm;
@@ -1636,10 +1593,6 @@ int kbase_vinstr_legacy_hwc_setup(
 		struct kbase_vinstr_client  **cli,
 		struct kbase_uk_hwcnt_setup *setup)
 {
-	KBASE_DEBUG_ASSERT(vinstr_ctx);
-	KBASE_DEBUG_ASSERT(setup);
-	KBASE_DEBUG_ASSERT(cli);
-
 	if (setup->dump_buffer) {
 		u32 bitmap[4];
 
@@ -1706,9 +1659,6 @@ int kbase_vinstr_hwc_dump(struct kbase_vinstr_client *cli,
 		return -EINVAL;
 
 	vinstr_ctx = cli->vinstr_ctx;
-	KBASE_DEBUG_ASSERT(vinstr_ctx);
-
-	KBASE_DEBUG_ASSERT(event_id < BASE_HWCNT_READER_EVENT_COUNT);
 	event_mask = 1 << event_id;
 
 	mutex_lock(&vinstr_ctx->lock);
@@ -1748,7 +1698,6 @@ int kbase_vinstr_hwc_clear(struct kbase_vinstr_client *cli)
 		return -EINVAL;
 
 	vinstr_ctx = cli->vinstr_ctx;
-	KBASE_DEBUG_ASSERT(vinstr_ctx);
 
 	mutex_lock(&vinstr_ctx->lock);
 
@@ -1777,8 +1726,6 @@ void kbase_vinstr_hwc_suspend(struct kbase_vinstr_context *vinstr_ctx)
 {
 	u64 unused;
 
-	KBASE_DEBUG_ASSERT(vinstr_ctx);
-
 	mutex_lock(&vinstr_ctx->lock);
 	if (!vinstr_ctx->nclients || vinstr_ctx->suspended) {
 		mutex_unlock(&vinstr_ctx->lock);
@@ -1794,8 +1741,6 @@ void kbase_vinstr_hwc_suspend(struct kbase_vinstr_context *vinstr_ctx)
 
 void kbase_vinstr_hwc_resume(struct kbase_vinstr_context *vinstr_ctx)
 {
-	KBASE_DEBUG_ASSERT(vinstr_ctx);
-
 	mutex_lock(&vinstr_ctx->lock);
 	if (!vinstr_ctx->nclients || !vinstr_ctx->suspended) {
 		mutex_unlock(&vinstr_ctx->lock);

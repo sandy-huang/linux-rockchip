@@ -51,17 +51,10 @@ void kbase_job_hw_submit(struct kbase_device *kbdev,
 	u32 cfg;
 	u64 jc_head = katom->jc;
 
-	KBASE_DEBUG_ASSERT(kbdev);
-	KBASE_DEBUG_ASSERT(katom);
-
 	kctx = katom->kctx;
 
-	/* Command register must be available */
-	KBASE_DEBUG_ASSERT(kbasep_jm_is_js_free(kbdev, js, kctx));
 	/* Affinity is not violating */
 	kbase_js_debug_log_current_affinities(kbdev);
-	KBASE_DEBUG_ASSERT(!kbase_js_affinity_would_violate(kbdev, js,
-							katom->affinity));
 
 	kbase_reg_write(kbdev, JOB_SLOT_REG(js, JS_HEAD_NEXT_LO),
 						jc_head & 0xFFFFFFFF, kctx);
@@ -178,8 +171,6 @@ static void kbasep_job_slot_update_head_start_timestamp(
 		/* The atom in the HEAD */
 		katom = kbase_gpu_inspect(kbdev, js, 0);
 
-		KBASE_DEBUG_ASSERT(katom != NULL);
-
 		/* Account for any IRQ Throttle time - makes an overestimate of
 		 * the time spent by the job */
 		new_timestamp = ktime_sub_ns(end_timestamp,
@@ -222,7 +213,6 @@ void kbase_job_done(struct kbase_device *kbdev, u32 done)
 	ktime_t end_timestamp = ktime_get();
 	struct kbasep_js_device_data *js_devdata;
 
-	KBASE_DEBUG_ASSERT(kbdev);
 	js_devdata = &kbdev->js_data;
 
 	KBASE_TRACE_ADD(kbdev, JM_IRQ, NULL, NULL, 0, done);
@@ -252,7 +242,6 @@ void kbase_job_done(struct kbase_device *kbdev, u32 done)
 		 * for lower numbered interrupts before the higher
 		 * numbered ones.*/
 		i = ffs(finished) - 1;
-		KBASE_DEBUG_ASSERT(i >= 0);
 
 		do {
 			int nr_done;
@@ -480,8 +469,6 @@ void kbasep_job_slot_soft_or_hard_stop_do_action(struct kbase_device *kbdev,
 	u64 job_in_head_before;
 	u32 status_reg_after;
 
-	KBASE_DEBUG_ASSERT(!(action & (~JS_COMMAND_MASK)));
-
 	/* Check the head pointer */
 	job_in_head_before = ((u64) kbase_reg_read(kbdev,
 					JOB_SLOT_REG(js, JS_HEAD_LO), NULL))
@@ -515,8 +502,6 @@ void kbasep_job_slot_soft_or_hard_stop_do_action(struct kbase_device *kbdev,
 				struct kbase_jd_atom *katom;
 
 				katom = kbase_gpu_inspect(kbdev, js, i);
-
-				KBASE_DEBUG_ASSERT(katom);
 
 				/* For HW_ISSUE_8316, only 'bad' jobs attacking
 				 * the system can cause this issue: normally,
@@ -683,9 +668,7 @@ void kbase_backend_jm_kill_jobs_from_kctx(struct kbase_context *kctx)
 	struct kbasep_js_device_data *js_devdata;
 	int i;
 
-	KBASE_DEBUG_ASSERT(kctx != NULL);
 	kbdev = kctx->kbdev;
-	KBASE_DEBUG_ASSERT(kbdev != NULL);
 	js_devdata = &kbdev->js_data;
 
 	/* Cancel any remaining running jobs for this kctx  */
@@ -715,9 +698,7 @@ void kbase_job_slot_ctx_priority_check_locked(struct kbase_context *kctx,
 	int priority = target_katom->sched_priority;
 	int i;
 
-	KBASE_DEBUG_ASSERT(kctx != NULL);
 	kbdev = kctx->kbdev;
-	KBASE_DEBUG_ASSERT(kbdev != NULL);
 	js_devdata = &kbdev->js_data;
 
 	lockdep_assert_held(&kbdev->js_data.runpool_irq.lock);
@@ -957,7 +938,6 @@ static bool kbasep_check_for_afbc_on_slot(struct kbase_device *kbdev,
 void kbase_job_slot_softstop_swflags(struct kbase_device *kbdev, int js,
 			struct kbase_jd_atom *target_katom, u32 sw_flags)
 {
-	KBASE_DEBUG_ASSERT(!(sw_flags & JS_COMMAND_MASK));
 	kbase_backend_soft_hard_stop_slot(kbdev, NULL, js, target_katom,
 			JS_COMMAND_SOFT_STOP | sw_flags);
 }
@@ -1088,40 +1068,6 @@ void kbase_job_check_leave_disjoint(struct kbase_device *kbdev,
 }
 
 #if KBASE_GPU_RESET_EN
-static void kbase_debug_dump_registers(struct kbase_device *kbdev)
-{
-	int i;
-
-	dev_err(kbdev->dev, "Register state:");
-	dev_err(kbdev->dev, "  GPU_IRQ_RAWSTAT=0x%08x GPU_STATUS=0x%08x",
-		kbase_reg_read(kbdev, GPU_CONTROL_REG(GPU_IRQ_RAWSTAT), NULL),
-		kbase_reg_read(kbdev, GPU_CONTROL_REG(GPU_STATUS), NULL));
-	dev_err(kbdev->dev, "  JOB_IRQ_RAWSTAT=0x%08x JOB_IRQ_JS_STATE=0x%08x JOB_IRQ_THROTTLE=0x%08x",
-		kbase_reg_read(kbdev, JOB_CONTROL_REG(JOB_IRQ_RAWSTAT), NULL),
-		kbase_reg_read(kbdev, JOB_CONTROL_REG(JOB_IRQ_JS_STATE), NULL),
-		kbase_reg_read(kbdev, JOB_CONTROL_REG(JOB_IRQ_THROTTLE), NULL));
-	for (i = 0; i < 3; i++) {
-		dev_err(kbdev->dev, "  JS%d_STATUS=0x%08x      JS%d_HEAD_LO=0x%08x",
-			i, kbase_reg_read(kbdev, JOB_SLOT_REG(i, JS_STATUS),
-					NULL),
-			i, kbase_reg_read(kbdev, JOB_SLOT_REG(i, JS_HEAD_LO),
-					NULL));
-	}
-	dev_err(kbdev->dev, "  MMU_IRQ_RAWSTAT=0x%08x GPU_FAULTSTATUS=0x%08x",
-		kbase_reg_read(kbdev, MMU_REG(MMU_IRQ_RAWSTAT), NULL),
-		kbase_reg_read(kbdev, GPU_CONTROL_REG(GPU_FAULTSTATUS), NULL));
-	dev_err(kbdev->dev, "  GPU_IRQ_MASK=0x%08x    JOB_IRQ_MASK=0x%08x     MMU_IRQ_MASK=0x%08x",
-		kbase_reg_read(kbdev, GPU_CONTROL_REG(GPU_IRQ_MASK), NULL),
-		kbase_reg_read(kbdev, JOB_CONTROL_REG(JOB_IRQ_MASK), NULL),
-		kbase_reg_read(kbdev, MMU_REG(MMU_IRQ_MASK), NULL));
-	dev_err(kbdev->dev, "  PWR_OVERRIDE0=0x%08x   PWR_OVERRIDE1=0x%08x",
-		kbase_reg_read(kbdev, GPU_CONTROL_REG(PWR_OVERRIDE0), NULL),
-		kbase_reg_read(kbdev, GPU_CONTROL_REG(PWR_OVERRIDE1), NULL));
-	dev_err(kbdev->dev, "  SHADER_CONFIG=0x%08x   L2_MMU_CONFIG=0x%08x",
-		kbase_reg_read(kbdev, GPU_CONTROL_REG(SHADER_CONFIG), NULL),
-		kbase_reg_read(kbdev, GPU_CONTROL_REG(L2_MMU_CONFIG), NULL));
-}
-
 static void kbasep_save_hwcnt_setup(struct kbase_device *kbdev,
 				struct kbase_context *kctx,
 				struct kbase_uk_hwcnt_setup *hwcnt_setup)
@@ -1154,12 +1100,9 @@ static void kbasep_reset_timeout_worker(struct work_struct *data)
 	bool try_schedule = false;
 	bool restore_hwc = false;
 
-	KBASE_DEBUG_ASSERT(data);
-
 	kbdev = container_of(data, struct kbase_device,
 						hwaccess.backend.reset_work);
 
-	KBASE_DEBUG_ASSERT(kbdev);
 	js_devdata = &kbdev->js_data;
 
 	KBASE_TRACE_ADD(kbdev, JM_BEGIN_RESET_WORKER, NULL, NULL, 0u, 0);
@@ -1179,8 +1122,6 @@ static void kbasep_reset_timeout_worker(struct work_struct *data)
 		wake_up(&kbdev->hwaccess.backend.reset_wait);
 		return;
 	}
-
-	KBASE_DEBUG_ASSERT(kbdev->irq_reset_flush == false);
 
 	spin_lock_irqsave(&kbdev->mmu_mask_change, mmu_flags);
 	/* We're about to flush out the IRQs and their bottom half's */
@@ -1205,8 +1146,6 @@ static void kbasep_reset_timeout_worker(struct work_struct *data)
 	kbdev->irq_reset_flush = false;
 
 	mutex_lock(&kbdev->pm.lock);
-	/* We hold the pm lock, so there ought to be a current policy */
-	KBASE_DEBUG_ASSERT(kbdev->pm.backend.pm_current_policy);
 
 	/* All slot have been soft-stopped and we've waited
 	 * SOFT_STOP_RESET_TIMEOUT for the slots to clear, at this point we
@@ -1236,10 +1175,6 @@ static void kbasep_reset_timeout_worker(struct work_struct *data)
 			restore_hwc = true;
 		}
 	}
-
-	/* Output the state of some interesting registers to help in the
-	 * debugging of GPU resets */
-	kbase_debug_dump_registers(kbdev);
 
 	bckp_state = kbdev->hwcnt.backend.state;
 	kbdev->hwcnt.backend.state = KBASE_INSTR_STATE_RESETTING;
@@ -1408,8 +1343,6 @@ static enum hrtimer_restart kbasep_reset_timer_callback(struct hrtimer *timer)
 	struct kbase_device *kbdev = container_of(timer, struct kbase_device,
 						hwaccess.backend.reset_timer);
 
-	KBASE_DEBUG_ASSERT(kbdev);
-
 	/* Reset still pending? */
 	if (atomic_cmpxchg(&kbdev->hwaccess.backend.reset_gpu,
 			KBASE_RESET_GPU_COMMITTED, KBASE_RESET_GPU_HAPPENING) ==
@@ -1429,8 +1362,6 @@ static void kbasep_try_reset_gpu_early_locked(struct kbase_device *kbdev)
 {
 	int i;
 	int pending_jobs = 0;
-
-	KBASE_DEBUG_ASSERT(kbdev);
 
 	/* Count the number of jobs */
 	for (i = 0; i < kbdev->gpu_props.num_job_slots; i++)
@@ -1489,8 +1420,6 @@ bool kbase_prepare_to_reset_gpu_locked(struct kbase_device *kbdev)
 {
 	int i;
 
-	KBASE_DEBUG_ASSERT(kbdev);
-
 	if (atomic_cmpxchg(&kbdev->hwaccess.backend.reset_gpu,
 						KBASE_RESET_GPU_NOT_PENDING,
 						KBASE_RESET_GPU_PREPARED) !=
@@ -1533,12 +1462,8 @@ bool kbase_prepare_to_reset_gpu(struct kbase_device *kbdev)
  */
 void kbase_reset_gpu(struct kbase_device *kbdev)
 {
-	KBASE_DEBUG_ASSERT(kbdev);
-
 	/* Note this is an assert/atomic_set because it is a software issue for
 	 * a race to be occuring here */
-	KBASE_DEBUG_ASSERT(atomic_read(&kbdev->hwaccess.backend.reset_gpu) ==
-						KBASE_RESET_GPU_PREPARED);
 	atomic_set(&kbdev->hwaccess.backend.reset_gpu,
 						KBASE_RESET_GPU_COMMITTED);
 
@@ -1555,12 +1480,8 @@ void kbase_reset_gpu(struct kbase_device *kbdev)
 
 void kbase_reset_gpu_locked(struct kbase_device *kbdev)
 {
-	KBASE_DEBUG_ASSERT(kbdev);
-
 	/* Note this is an assert/atomic_set because it is a software issue for
 	 * a race to be occuring here */
-	KBASE_DEBUG_ASSERT(atomic_read(&kbdev->hwaccess.backend.reset_gpu) ==
-						KBASE_RESET_GPU_PREPARED);
 	atomic_set(&kbdev->hwaccess.backend.reset_gpu,
 						KBASE_RESET_GPU_COMMITTED);
 

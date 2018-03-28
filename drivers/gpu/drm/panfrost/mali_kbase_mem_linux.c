@@ -83,11 +83,6 @@ struct kbase_va_region *kbase_mem_alloc(struct kbase_context *kctx, u64 va_pages
 	struct kbase_va_region *reg;
 	struct device *dev;
 
-	KBASE_DEBUG_ASSERT(kctx);
-	KBASE_DEBUG_ASSERT(flags);
-	KBASE_DEBUG_ASSERT(gpu_va);
-	KBASE_DEBUG_ASSERT(va_alignment);
-
 	dev = kctx->kbdev->dev;
 	*va_alignment = 0; /* no alignment by default */
 	*gpu_va = 0; /* return 0 on failure */
@@ -310,9 +305,6 @@ int kbase_mem_query(struct kbase_context *kctx, u64 gpu_addr, int query, u64 * c
 {
 	struct kbase_va_region *reg;
 	int ret = -EINVAL;
-
-	KBASE_DEBUG_ASSERT(kctx);
-	KBASE_DEBUG_ASSERT(out);
 
 	kbase_gpu_vm_lock(kctx);
 
@@ -761,8 +753,6 @@ int kbase_mem_flags_change(struct kbase_context *kctx, u64 gpu_addr, unsigned in
 	unsigned int prev_flags = 0;
 	bool prev_needed, new_needed;
 
-	KBASE_DEBUG_ASSERT(kctx);
-
 	if (!gpu_addr)
 		return -EINVAL;
 
@@ -1203,11 +1193,6 @@ u64 kbase_mem_alias(struct kbase_context *kctx, u64 *flags, u64 stride,
 	size_t i;
 	bool coherent;
 
-	KBASE_DEBUG_ASSERT(kctx);
-	KBASE_DEBUG_ASSERT(flags);
-	KBASE_DEBUG_ASSERT(ai);
-	KBASE_DEBUG_ASSERT(num_pages);
-
 	/* mask to only allowed flags */
 	*flags &= (BASE_MEM_PROT_GPU_RD | BASE_MEM_PROT_GPU_WR |
 		   BASE_MEM_COHERENT_SYSTEM | BASE_MEM_COHERENT_LOCAL |
@@ -1386,11 +1371,6 @@ int kbase_mem_import(struct kbase_context *kctx, enum base_mem_import_type type,
 		u64 *flags)
 {
 	struct kbase_va_region *reg;
-
-	KBASE_DEBUG_ASSERT(kctx);
-	KBASE_DEBUG_ASSERT(gpu_va);
-	KBASE_DEBUG_ASSERT(va_pages);
-	KBASE_DEBUG_ASSERT(flags);
 
 #ifdef CONFIG_64BIT
 	if (!kctx->is_compat)
@@ -1647,10 +1627,6 @@ int kbase_mem_commit(struct kbase_context *kctx, u64 gpu_addr, u64 new_pages, en
 	struct kbase_va_region *reg;
 	bool read_locked = false;
 
-	KBASE_DEBUG_ASSERT(kctx);
-	KBASE_DEBUG_ASSERT(failure_reason);
-	KBASE_DEBUG_ASSERT(gpu_addr != 0);
-
 	down_write(&current->mm->mmap_sem);
 	kbase_gpu_vm_lock(kctx);
 
@@ -1660,9 +1636,6 @@ int kbase_mem_commit(struct kbase_context *kctx, u64 gpu_addr, u64 new_pages, en
 		*failure_reason = BASE_BACKING_THRESHOLD_ERROR_INVALID_ARGUMENTS;
 		goto out_unlock;
 	}
-
-	KBASE_DEBUG_ASSERT(reg->cpu_alloc);
-	KBASE_DEBUG_ASSERT(reg->gpu_alloc);
 
 	if (reg->gpu_alloc->type != KBASE_MEM_TYPE_NATIVE) {
 		*failure_reason = BASE_BACKING_THRESHOLD_ERROR_NOT_GROWABLE;
@@ -1776,8 +1749,6 @@ static void kbase_cpu_vm_open(struct vm_area_struct *vma)
 {
 	struct kbase_cpu_mapping *map = vma->vm_private_data;
 
-	KBASE_DEBUG_ASSERT(map);
-	KBASE_DEBUG_ASSERT(map->count > 0);
 	/* non-atomic as we're under Linux' mm lock */
 	map->count++;
 }
@@ -1786,21 +1757,13 @@ static void kbase_cpu_vm_close(struct vm_area_struct *vma)
 {
 	struct kbase_cpu_mapping *map = vma->vm_private_data;
 
-	KBASE_DEBUG_ASSERT(map);
-	KBASE_DEBUG_ASSERT(map->count > 0);
-
 	/* non-atomic as we're under Linux' mm lock */
 	if (--map->count)
 		return;
 
-	KBASE_DEBUG_ASSERT(map->kctx);
-	KBASE_DEBUG_ASSERT(map->alloc);
-
 	kbase_gpu_vm_lock(map->kctx);
 
 	if (map->region) {
-		KBASE_DEBUG_ASSERT((map->region->flags & KBASE_REG_ZONE_MASK) ==
-				KBASE_REG_ZONE_SAME_VA);
 		/* Avoid freeing memory on the process death which results in
 		 * GPU Page Fault. Memory will be freed in kbase_destroy_context
 		 */
@@ -1822,11 +1785,6 @@ static int kbase_cpu_vm_fault(struct vm_fault *vmf)
 	struct kbase_cpu_mapping *map = vma->vm_private_data;
 	pgoff_t rel_pgoff;
 	size_t i;
-
-	KBASE_DEBUG_ASSERT(map);
-	KBASE_DEBUG_ASSERT(map->count > 0);
-	KBASE_DEBUG_ASSERT(map->kctx);
-	KBASE_DEBUG_ASSERT(map->alloc);
 
 	/* we don't use vmf->pgoff as it's affected by our mmap with
 	 * offset being a GPU VA or a cookie */
@@ -1944,12 +1902,11 @@ static int kbase_cpu_mmap(struct kbase_va_region *reg, struct vm_area_struct *vm
 	map->region = free_on_close ? reg : NULL;
 	map->kctx = reg->kctx;
 	map->vm_start = vma->vm_start + aligned_offset;
-	if (aligned_offset) {
-		KBASE_DEBUG_ASSERT(!start_off);
+	if (aligned_offset)
 		map->vm_end = map->vm_start + (reg->nr_pages << PAGE_SHIFT);
-	} else {
+	else
 		map->vm_end = vma->vm_end;
-	}
+
 	map->alloc = kbase_mem_phy_alloc_get(reg->cpu_alloc);
 	map->count = 1; /* start with one ref */
 
@@ -1976,7 +1933,6 @@ static int kbase_trace_buffer_mmap(struct kbase_context *kctx, struct vm_area_st
 	nr_pages = size >> PAGE_SHIFT;
 
 	if (!kctx->jctx.tb) {
-		KBASE_DEBUG_ASSERT(size != 0);
 		tb = vmalloc_user(size);
 
 		if (tb == NULL) {
@@ -2125,8 +2081,6 @@ static void kbase_dma_buf_vm_open(struct vm_area_struct *vma)
 {
 	struct kbase_cpu_mapping *map = vma->vm_private_data;
 
-	KBASE_DEBUG_ASSERT(map);
-	KBASE_DEBUG_ASSERT(map->count > 0);
 	/* Non-atomic as we're under Linux's mm lock. */
 	map->count++;
 }
@@ -2135,14 +2089,9 @@ static void kbase_dma_buf_vm_close(struct vm_area_struct *vma)
 {
 	struct kbase_cpu_mapping *map = vma->vm_private_data;
 
-	KBASE_DEBUG_ASSERT(map);
-	KBASE_DEBUG_ASSERT(map->count > 0);
-
 	/* Non-atomic as we're under Linux's mm lock. */
 	if (--map->count)
 		return;
-
-	KBASE_DEBUG_ASSERT(map->kctx);
 
 	kbase_gpu_vm_lock(map->kctx);
 	list_del(&map->mappings_list);
@@ -2673,10 +2622,6 @@ void *kbase_va_alloc(struct kbase_context *kctx, u32 size, struct kbase_hwc_dma_
 	u32 flags = BASE_MEM_PROT_CPU_RD | BASE_MEM_PROT_CPU_WR |
 		    BASE_MEM_PROT_GPU_RD | BASE_MEM_PROT_GPU_WR;
 
-	KBASE_DEBUG_ASSERT(kctx != NULL);
-	KBASE_DEBUG_ASSERT(size != 0);
-	KBASE_DEBUG_ASSERT(pages != 0);
-
 	if (size == 0)
 		goto err;
 
@@ -2737,15 +2682,10 @@ void kbase_va_free(struct kbase_context *kctx, struct kbase_hwc_dma_mapping *han
 	int err;
 	unsigned long attrs;
 
-	KBASE_DEBUG_ASSERT(kctx != NULL);
-	KBASE_DEBUG_ASSERT(handle->cpu_va != NULL);
-
 	kbase_gpu_vm_lock(kctx);
 	reg = kbase_region_tracker_find_region_base_address(kctx, (uintptr_t)handle->cpu_va);
-	KBASE_DEBUG_ASSERT(reg);
 	err = kbase_gpu_munmap(kctx, reg);
 	kbase_gpu_vm_unlock(kctx);
-	KBASE_DEBUG_ASSERT(!err);
 
 	kbase_mem_phy_alloc_put(reg->cpu_alloc);
 	kbase_mem_phy_alloc_put(reg->gpu_alloc);

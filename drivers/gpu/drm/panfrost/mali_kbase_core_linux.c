@@ -118,15 +118,12 @@ static int kbasep_kds_allocate_resource_list_data(struct kbase_context *kctx, st
 	int res_id;
 
 	/* assume we have to wait for all */
-
-	KBASE_DEBUG_ASSERT(num_elems != 0);
 	resources_list->kds_resources = kmalloc_array(num_elems,
 			sizeof(struct kds_resource *), GFP_KERNEL);
 
 	if (resources_list->kds_resources == NULL)
 		return -ENOMEM;
 
-	KBASE_DEBUG_ASSERT(num_elems != 0);
 	resources_list->kds_access_bitmap = kzalloc(
 			sizeof(unsigned long) *
 			((num_elems + BITS_PER_LONG - 1) / BITS_PER_LONG),
@@ -222,7 +219,6 @@ static int kbase_external_buffer_lock(struct kbase_context *kctx,
 
 	ext_resource_size = sizeof(struct base_external_resource) * args->num_res;
 
-	KBASE_DEBUG_ASSERT(ext_resource_size != 0);
 	ext_res_copy = kmalloc(ext_resource_size, GFP_KERNEL);
 
 	if (!ext_res_copy)
@@ -436,8 +432,6 @@ static int kbase_dispatch(struct kbase_context *kctx, void * const args, u32 arg
 	union uk_header *ukh = args;
 	u32 id;
 	int ret = 0;
-
-	KBASE_DEBUG_ASSERT(ukh != NULL);
 
 	kbdev = kctx->kbdev;
 	id = ukh->id;
@@ -1263,8 +1257,6 @@ static unsigned int kbase_poll(struct file *filp, poll_table *wait)
 
 void kbase_event_wakeup(struct kbase_context *kctx)
 {
-	KBASE_DEBUG_ASSERT(kctx);
-
 	wake_up_interruptible(&kctx->event_queue);
 }
 

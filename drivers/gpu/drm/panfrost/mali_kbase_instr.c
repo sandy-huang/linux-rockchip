@@ -24,27 +24,19 @@ void kbase_instr_hwcnt_suspend(struct kbase_device *kbdev)
 {
 	struct kbase_context *kctx;
 
-	KBASE_DEBUG_ASSERT(kbdev);
-	KBASE_DEBUG_ASSERT(!kbdev->hwcnt.suspended_kctx);
-
 	kctx = kbdev->hwcnt.kctx;
 	kbdev->hwcnt.suspended_kctx = kctx;
 
 	/* Relevant state was saved into hwcnt.suspended_state when enabling the
 	 * counters */
 
-	if (kctx) {
-		KBASE_DEBUG_ASSERT(kctx->jctx.sched_info.ctx.flags &
-						KBASE_CTX_FLAG_PRIVILEGED);
+	if (kctx)
 		kbase_instr_hwcnt_disable(kctx);
-	}
 }
 
 void kbase_instr_hwcnt_resume(struct kbase_device *kbdev)
 {
 	struct kbase_context *kctx;
-
-	KBASE_DEBUG_ASSERT(kbdev);
 
 	kctx = kbdev->hwcnt.suspended_kctx;
 	kbdev->hwcnt.suspended_kctx = NULL;

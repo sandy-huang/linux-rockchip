@@ -71,8 +71,6 @@ static int jd_run_atom(struct kbase_jd_atom *katom)
 {
 	struct kbase_context *kctx = katom->kctx;
 
-	KBASE_DEBUG_ASSERT(katom->status != KBASE_JD_ATOM_STATE_UNUSED);
-
 	if ((katom->core_req & BASEP_JD_REQ_ATOM_TYPE) == BASE_JD_REQ_DEP) {
 		/* Dependency only atom */
 		katom->status = KBASE_JD_ATOM_STATE_COMPLETED;
@@ -104,9 +102,7 @@ void kbase_jd_dep_clear_locked(struct kbase_jd_atom *katom)
 {
 	struct kbase_device *kbdev;
 
-	KBASE_DEBUG_ASSERT(katom);
 	kbdev = katom->kctx->kbdev;
-	KBASE_DEBUG_ASSERT(kbdev);
 
 	/* Check whether the atom's other dependencies were already met. If
 	 * katom is a GPU atom then the job scheduler may be able to represent
@@ -142,8 +138,6 @@ static void kbase_jd_kds_waiters_add(struct kbase_jd_atom *katom)
 {
 	struct kbase_context *kctx;
 
-	KBASE_DEBUG_ASSERT(katom);
-
 	kctx = katom->kctx;
 
 	list_add_tail(&katom->node, &kctx->waiting_kds_resource);
@@ -156,7 +150,6 @@ static void kbase_jd_kds_waiters_add(struct kbase_jd_atom *katom)
 
 static void kbase_jd_kds_waiters_remove(struct kbase_jd_atom *katom)
 {
-	KBASE_DEBUG_ASSERT(katom);
 	list_del(&katom->node);
 }
 
@@ -166,7 +159,6 @@ static void kds_dep_clear(void *callback_parameter, void *callback_extra_paramet
 	struct kbase_jd_context *ctx;
 
 	katom = (struct kbase_jd_atom *)callback_parameter;
-	KBASE_DEBUG_ASSERT(katom);
 
 	ctx = &katom->kctx->jctx;
 
@@ -183,8 +175,6 @@ static void kds_dep_clear(void *callback_parameter, void *callback_extra_paramet
 
 static void kbase_cancel_kds_wait_job(struct kbase_jd_atom *katom)
 {
-	KBASE_DEBUG_ASSERT(katom);
-
 	/* Prevent job_done_nolock from being called twice on an atom when
 	 *  there is a race between job completion and cancellation */
 
@@ -230,9 +220,6 @@ void kbase_jd_free_external_resources(struct kbase_jd_atom *katom)
 
 static void kbase_jd_post_external_resources(struct kbase_jd_atom *katom)
 {
-	KBASE_DEBUG_ASSERT(katom);
-	KBASE_DEBUG_ASSERT(katom->core_req & BASE_JD_REQ_EXTERNAL_RESOURCES);
-
 #ifdef CONFIG_KDS
 	/* Prevent the KDS resource from triggering the atom in case of zapping */
 	if (katom->kds_rset)
@@ -286,9 +273,6 @@ static int kbase_jd_pre_external_resources(struct kbase_jd_atom *katom, const st
 #endif
 	struct base_external_resource *input_extres;
 
-	KBASE_DEBUG_ASSERT(katom);
-	KBASE_DEBUG_ASSERT(katom->core_req & BASE_JD_REQ_EXTERNAL_RESOURCES);
-
 	/* no resources encoded, early out */
 	if (!katom->nr_extres)
 		return -EINVAL;
@@ -316,7 +300,6 @@ static int kbase_jd_pre_external_resources(struct kbase_jd_atom *katom, const st
 	}
 #ifdef CONFIG_KDS
 	/* assume we have to wait for all */
-	KBASE_DEBUG_ASSERT(katom->nr_extres != 0);
 	kds_resources = kmalloc_array(katom->nr_extres, sizeof(struct kds_resource *), GFP_KERNEL);
 
 	if (!kds_resources) {
@@ -324,7 +307,6 @@ static int kbase_jd_pre_external_resources(struct kbase_jd_atom *katom, const st
 		goto early_err_out;
 	}
 
-	KBASE_DEBUG_ASSERT(katom->nr_extres != 0);
 	kds_access_bitmap = kcalloc(BITS_TO_LONGS(katom->nr_extres),
 				    sizeof(unsigned long),
 				    GFP_KERNEL);
@@ -548,8 +530,6 @@ static inline void jd_resolve_dep(struct list_head *out_list,
 #endif
 
 			dep_atom->event_code = katom->event_code;
-			KBASE_DEBUG_ASSERT(dep_atom->status !=
-						KBASE_JD_ATOM_STATE_UNUSED);
 
 			if ((dep_atom->core_req & BASE_JD_REQ_SOFT_REPLAY)
 					!= BASE_JD_REQ_SOFT_REPLAY) {
@@ -622,8 +602,6 @@ bool jd_done_nolock(struct kbase_jd_atom *katom,
 	INIT_LIST_HEAD(&completed_jobs);
 	INIT_LIST_HEAD(&runnable_jobs);
 
-	KBASE_DEBUG_ASSERT(katom->status != KBASE_JD_ATOM_STATE_UNUSED);
-
 	/* This is needed in case an atom is failed due to being invalid, this
 	 * can happen *before* the jobs that the atom depends on have completed */
 	for (i = 0; i < 2; i++) {
@@ -656,8 +634,6 @@ bool jd_done_nolock(struct kbase_jd_atom *katom,
 		katom = list_entry(completed_jobs.prev, struct kbase_jd_atom, dep_item[0]);
 		list_del(completed_jobs.prev);
 
-		KBASE_DEBUG_ASSERT(katom->status == KBASE_JD_ATOM_STATE_COMPLETED);
-
 		for (i = 0; i < 2; i++)
 			jd_resolve_dep(&runnable_jobs, katom, i);
 
@@ -671,8 +647,6 @@ bool jd_done_nolock(struct kbase_jd_atom *katom,
 					struct kbase_jd_atom, dep_item[0]);
 
 			list_del(runnable_jobs.next);
-
-			KBASE_DEBUG_ASSERT(node->status != KBASE_JD_ATOM_STATE_UNUSED);
 
 			if (node->status != KBASE_JD_ATOM_STATE_COMPLETED &&
 					!kctx->jctx.sched_info.ctx.is_dying) {
@@ -1206,9 +1180,6 @@ void kbase_jd_done_worker(struct work_struct *data)
 	u64 affinity = katom->affinity;
 	enum kbase_atom_coreref_state coreref_state = katom->coreref_state;
 
-	/* Soft jobs should never reach this function */
-	KBASE_DEBUG_ASSERT((katom->core_req & BASE_JD_REQ_SOFT_JOB) == 0);
-
 	kctx = katom->kctx;
 	jctx = &kctx->jctx;
 	kbdev = kctx->kbdev;
@@ -1226,12 +1197,6 @@ void kbase_jd_done_worker(struct work_struct *data)
 	mutex_lock(&jctx->lock);
 	mutex_lock(&js_devdata->queue_mutex);
 	mutex_lock(&js_kctx_info->ctx.jsctx_mutex);
-
-	/* This worker only gets called on contexts that are scheduled *in*. This is
-	 * because it only happens in response to an IRQ from a job that was
-	 * running.
-	 */
-	KBASE_DEBUG_ASSERT(js_kctx_info->ctx.is_scheduled);
 
 	if (katom->event_code == BASE_JD_EVENT_STOPPED) {
 		/* Atom has been promoted to stopped */
@@ -1277,8 +1242,6 @@ void kbase_jd_done_worker(struct work_struct *data)
 		schedule = true;
 
 	context_idle = kbase_js_complete_atom_wq(kctx, katom);
-
-	KBASE_DEBUG_ASSERT(kbasep_js_has_atom_finished(&katom_retained_state));
 
 	kbasep_js_remove_job(kbdev, kctx, katom);
 	mutex_unlock(&js_kctx_info->ctx.jsctx_mutex);
@@ -1394,22 +1357,12 @@ static void jd_cancel_worker(struct work_struct *data)
 	bool attr_state_changed;
 	struct kbase_device *kbdev;
 
-	/* Soft jobs should never reach this function */
-	KBASE_DEBUG_ASSERT((katom->core_req & BASE_JD_REQ_SOFT_JOB) == 0);
-
 	kctx = katom->kctx;
 	kbdev = kctx->kbdev;
 	jctx = &kctx->jctx;
 	js_kctx_info = &kctx->jctx.sched_info;
 
 	KBASE_TRACE_ADD(kbdev, JD_CANCEL_WORKER, kctx, katom, katom->jc, 0);
-
-	/* This only gets called on contexts that are scheduled out. Hence, we must
-	 * make sure we don't de-ref the number of running jobs (there aren't
-	 * any), nor must we try to schedule out the context (it's already
-	 * scheduled out).
-	 */
-	KBASE_DEBUG_ASSERT(!js_kctx_info->ctx.is_scheduled);
 
 	/* Scheduler: Remove the job from the system */
 	mutex_lock(&js_kctx_info->ctx.jsctx_mutex);
@@ -1419,10 +1372,6 @@ static void jd_cancel_worker(struct work_struct *data)
 	mutex_lock(&jctx->lock);
 
 	need_to_try_schedule_context = jd_done_nolock(katom, NULL);
-	/* Because we're zapping, we're not adding any more jobs to this ctx, so no need to
-	 * schedule the context. There's also no need for the jsctx_mutex to have been taken
-	 * around this too. */
-	KBASE_DEBUG_ASSERT(!need_to_try_schedule_context);
 
 	/* katom may have been freed now, do not use! */
 	mutex_unlock(&jctx->lock);
@@ -1455,11 +1404,8 @@ void kbase_jd_done(struct kbase_jd_atom *katom, int slot_nr,
 	struct kbase_context *kctx;
 	struct kbase_device *kbdev;
 
-	KBASE_DEBUG_ASSERT(katom);
 	kctx = katom->kctx;
-	KBASE_DEBUG_ASSERT(kctx);
 	kbdev = kctx->kbdev;
-	KBASE_DEBUG_ASSERT(kbdev);
 
 	if (done_code & KBASE_JS_ATOM_DONE_EVICTED_FROM_NEXT)
 		katom->event_code = BASE_JD_EVENT_REMOVED_FROM_NEXT;
@@ -1482,17 +1428,11 @@ void kbase_jd_cancel(struct kbase_device *kbdev, struct kbase_jd_atom *katom)
 	struct kbase_context *kctx;
 	struct kbasep_js_kctx_info *js_kctx_info;
 
-	KBASE_DEBUG_ASSERT(kbdev != NULL);
-	KBASE_DEBUG_ASSERT(katom != NULL);
 	kctx = katom->kctx;
-	KBASE_DEBUG_ASSERT(kctx != NULL);
 
 	js_kctx_info = &kctx->jctx.sched_info;
 
 	KBASE_TRACE_ADD(kbdev, JD_CANCEL, kctx, katom, katom->jc, 0);
-
-	/* This should only be done from a context that is not scheduled */
-	KBASE_DEBUG_ASSERT(!js_kctx_info->ctx.is_scheduled);
 
 	WARN_ON(work_pending(&katom->work));
 
@@ -1507,8 +1447,6 @@ void kbase_jd_zap_context(struct kbase_context *kctx)
 	struct kbase_jd_atom *katom;
 	struct list_head *entry, *tmp;
 	struct kbase_device *kbdev;
-
-	KBASE_DEBUG_ASSERT(kctx);
 
 	kbdev = kctx->kbdev;
 
@@ -1571,8 +1509,6 @@ int kbase_jd_init(struct kbase_context *kctx)
 	int err;
 #endif				/* CONFIG_KDS */
 
-	KBASE_DEBUG_ASSERT(kctx);
-
 	kctx->jctx.job_done_wq = alloc_workqueue("mali_jd",
 			WQ_HIGHPRI | WQ_UNBOUND, 1);
 	if (kctx->jctx.job_done_wq == NULL) {
@@ -1627,8 +1563,6 @@ int kbase_jd_init(struct kbase_context *kctx)
 
 void kbase_jd_exit(struct kbase_context *kctx)
 {
-	KBASE_DEBUG_ASSERT(kctx);
-
 #ifdef CONFIG_KDS
 	kds_callback_term(&kctx->jctx.kds_cb);
 #endif				/* CONFIG_KDS */

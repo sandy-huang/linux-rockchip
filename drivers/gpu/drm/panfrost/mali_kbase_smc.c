@@ -42,11 +42,6 @@ static noinline u64 invoke_smc_fid(u64 function_id,
 
 u64 kbase_invoke_smc_fid(u32 fid, u64 arg0, u64 arg1, u64 arg2)
 {
-	/* Is fast call (bit 31 set) */
-	KBASE_DEBUG_ASSERT(fid & ~SMC_FAST_CALL);
-	/* bits 16-23 must be zero for fast calls */
-	KBASE_DEBUG_ASSERT((fid & (0xFF << 16)) == 0);
-
 	return invoke_smc_fid(fid, arg0, arg1, arg2);
 }
 
@@ -54,9 +49,6 @@ u64 kbase_invoke_smc(u32 oen, u16 function_number, bool smc64,
 		u64 arg0, u64 arg1, u64 arg2)
 {
 	u32 fid = 0;
-
-	/* Only the six bits allowed should be used. */
-	KBASE_DEBUG_ASSERT((oen & ~SMC_OEN_MASK) == 0);
 
 	fid |= SMC_FAST_CALL; /* Bit 31: Fast call */
 	if (smc64)

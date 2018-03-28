@@ -97,7 +97,6 @@ static int kbasep_replay_reset_sfbd(struct kbase_context *kctx,
 
 		for (i = 0; i < HIERARCHY_WEIGHTS; i++) {
 			if (old_hierarchy_mask & (1 << i)) {
-				KBASE_DEBUG_ASSERT(j < FBD_HIERARCHY_WEIGHTS);
 				weights[i] = fbd_tiler->weights[j++];
 			} else {
 				weights[i] = default_weight;
@@ -115,8 +114,6 @@ static int kbasep_replay_reset_sfbd(struct kbase_context *kctx,
 
 		for (i = 0; i < HIERARCHY_WEIGHTS; i++) {
 			if (hierarchy_mask & (1 << i)) {
-				KBASE_DEBUG_ASSERT(j < FBD_HIERARCHY_WEIGHTS);
-
 				dev_dbg(kctx->kbdev->dev, " Writing hierarchy level %02d (%08x) to %d\n",
 						i, weights[i], j);
 
@@ -172,7 +169,6 @@ static int kbasep_replay_reset_mfbd(struct kbase_context *kctx,
 
 		for (i = 0; i < HIERARCHY_WEIGHTS; i++) {
 			if (old_hierarchy_mask & (1 << i)) {
-				KBASE_DEBUG_ASSERT(j < FBD_HIERARCHY_WEIGHTS);
 				weights[i] = fbd_tiler->weights[j++];
 			} else {
 				weights[i] = default_weight;
@@ -190,8 +186,6 @@ static int kbasep_replay_reset_mfbd(struct kbase_context *kctx,
 
 		for (i = 0; i < HIERARCHY_WEIGHTS; i++) {
 			if (hierarchy_mask & (1 << i)) {
-				KBASE_DEBUG_ASSERT(j < FBD_HIERARCHY_WEIGHTS);
-
 				dev_dbg(kctx->kbdev->dev,
 				" Writing hierarchy level %02d (%08x) to %d\n",
 							     i, weights[i], j);

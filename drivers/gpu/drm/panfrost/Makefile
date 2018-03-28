@@ -47,7 +47,6 @@ SRC := \
 	mali_kbase_10969_workaround.c \
 	mali_kbase_hw.c \
 	mali_kbase_utility.c \
-	mali_kbase_debug.c \
 	mali_kbase_trace_timeline.c \
 	mali_kbase_mem_linux.c \
 	mali_kbase_core_linux.c \

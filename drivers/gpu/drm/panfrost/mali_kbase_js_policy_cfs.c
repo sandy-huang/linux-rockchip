@@ -167,7 +167,6 @@ int kbasep_js_policy_init(struct kbase_device *kbdev)
 	struct kbasep_js_device_data *js_devdata;
 	struct kbasep_js_policy_cfs *policy_info;
 
-	KBASE_DEBUG_ASSERT(kbdev != NULL);
 	js_devdata = &kbdev->js_data;
 	policy_info = &js_devdata->policy.cfs;
 
@@ -190,9 +189,6 @@ int kbasep_js_policy_init_ctx(struct kbase_device *kbdev, struct kbase_context *
 	struct kbasep_js_policy_cfs_ctx *ctx_info;
 	struct kbasep_js_policy_cfs *policy_info;
 	int policy;
-
-	KBASE_DEBUG_ASSERT(kbdev != NULL);
-	KBASE_DEBUG_ASSERT(kctx != NULL);
 
 	js_devdata = &kbdev->js_data;
 	policy_info = &kbdev->js_data.policy.cfs;
@@ -232,9 +228,6 @@ void kbasep_js_policy_term_ctx(union kbasep_js_policy *js_policy, struct kbase_c
 	struct kbasep_js_policy_cfs *policy_info;
 	struct kbase_device *kbdev;
 
-	KBASE_DEBUG_ASSERT(js_policy != NULL);
-	KBASE_DEBUG_ASSERT(kctx != NULL);
-
 	policy_info = &js_policy->cfs;
 	ctx_info = &kctx->jctx.sched_info.runpool.policy_ctx.cfs;
 
@@ -253,12 +246,9 @@ void kbasep_js_policy_log_job_result(union kbasep_js_policy *js_policy, struct k
 	struct kbasep_js_policy_cfs_ctx *ctx_info;
 	struct kbase_context *parent_ctx;
 
-	KBASE_DEBUG_ASSERT(js_policy != NULL);
-	KBASE_DEBUG_ASSERT(katom != NULL);
 	CSTD_UNUSED(js_policy);
 
 	parent_ctx = katom->kctx;
-	KBASE_DEBUG_ASSERT(parent_ctx != NULL);
 
 	ctx_info = &parent_ctx->jctx.sched_info.runpool.policy_ctx.cfs;
 
@@ -272,8 +262,6 @@ bool kbasep_js_policy_ctx_has_priority(union kbasep_js_policy *js_policy, struct
 	struct kbasep_js_policy_cfs_ctx *current_ctx_info;
 	struct kbasep_js_policy_cfs_ctx *new_ctx_info;
 
-	KBASE_DEBUG_ASSERT(current_ctx != NULL);
-	KBASE_DEBUG_ASSERT(new_ctx != NULL);
 	CSTD_UNUSED(js_policy);
 
 	current_ctx_info = &current_ctx->jctx.sched_info.runpool.policy_ctx.cfs;

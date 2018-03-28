@@ -160,7 +160,6 @@ struct kbase_mem_phy_alloc {
 
 static inline void kbase_mem_phy_alloc_gpu_mapped(struct kbase_mem_phy_alloc *alloc)
 {
-	KBASE_DEBUG_ASSERT(alloc);
 	/* we only track mappings of NATIVE buffers */
 	if (alloc->type == KBASE_MEM_TYPE_NATIVE)
 		atomic_inc(&alloc->gpu_mappings);
@@ -168,7 +167,6 @@ static inline void kbase_mem_phy_alloc_gpu_mapped(struct kbase_mem_phy_alloc *al
 
 static inline void kbase_mem_phy_alloc_gpu_unmapped(struct kbase_mem_phy_alloc *alloc)
 {
-	KBASE_DEBUG_ASSERT(alloc);
 	/* we only track mappings of NATIVE buffers */
 	if (alloc->type == KBASE_MEM_TYPE_NATIVE)
 		if (atomic_dec_return(&alloc->gpu_mappings) < 0) {
@@ -294,34 +292,19 @@ struct kbase_va_region {
 /* Common functions */
 static inline phys_addr_t *kbase_get_cpu_phy_pages(struct kbase_va_region *reg)
 {
-	KBASE_DEBUG_ASSERT(reg);
-	KBASE_DEBUG_ASSERT(reg->cpu_alloc);
-	KBASE_DEBUG_ASSERT(reg->gpu_alloc);
-	KBASE_DEBUG_ASSERT(reg->cpu_alloc->nents == reg->gpu_alloc->nents);
-
 	return reg->cpu_alloc->pages;
 }
 
 static inline phys_addr_t *kbase_get_gpu_phy_pages(struct kbase_va_region *reg)
 {
-	KBASE_DEBUG_ASSERT(reg);
-	KBASE_DEBUG_ASSERT(reg->cpu_alloc);
-	KBASE_DEBUG_ASSERT(reg->gpu_alloc);
-	KBASE_DEBUG_ASSERT(reg->cpu_alloc->nents == reg->gpu_alloc->nents);
-
 	return reg->gpu_alloc->pages;
 }
 
 static inline size_t kbase_reg_current_backed_size(struct kbase_va_region *reg)
 {
-	KBASE_DEBUG_ASSERT(reg);
 	/* if no alloc object the backed size naturally is 0 */
 	if (!reg->cpu_alloc)
 		return 0;
-
-	KBASE_DEBUG_ASSERT(reg->cpu_alloc);
-	KBASE_DEBUG_ASSERT(reg->gpu_alloc);
-	KBASE_DEBUG_ASSERT(reg->cpu_alloc->nents == reg->gpu_alloc->nents);
 
 	return reg->cpu_alloc->nents;
 }
@@ -380,11 +363,6 @@ static inline struct kbase_mem_phy_alloc *kbase_alloc_create(size_t nr_pages, en
 static inline int kbase_reg_prepare_native(struct kbase_va_region *reg,
 		struct kbase_context *kctx)
 {
-	KBASE_DEBUG_ASSERT(reg);
-	KBASE_DEBUG_ASSERT(!reg->cpu_alloc);
-	KBASE_DEBUG_ASSERT(!reg->gpu_alloc);
-	KBASE_DEBUG_ASSERT(reg->flags & KBASE_REG_FREE);
-
 	reg->cpu_alloc = kbase_alloc_create(reg->nr_pages,
 			KBASE_MEM_TYPE_NATIVE);
 	if (IS_ERR(reg->cpu_alloc))
@@ -787,7 +765,6 @@ static inline void kbase_set_dma_addr(struct page *p, dma_addr_t dma_addr)
 		 * private field stays the same. So we have to be clever and
 		 * use the fact that we only store DMA addresses of whole pages,
 		 * so the low bits should be zero */
-		KBASE_DEBUG_ASSERT(!(dma_addr & (PAGE_SIZE - 1)));
 		set_page_private(p, dma_addr >> PAGE_SHIFT);
 	} else {
 		set_page_private(p, dma_addr);

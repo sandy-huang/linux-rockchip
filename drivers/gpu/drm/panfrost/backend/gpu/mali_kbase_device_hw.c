@@ -25,9 +25,6 @@
 void kbase_reg_write(struct kbase_device *kbdev, u16 offset, u32 value,
 						struct kbase_context *kctx)
 {
-	KBASE_DEBUG_ASSERT(kbdev->pm.backend.gpu_powered);
-	KBASE_DEBUG_ASSERT(kctx == NULL || kctx->as_nr != KBASEP_AS_NR_INVALID);
-	KBASE_DEBUG_ASSERT(kbdev->dev != NULL);
 	dev_dbg(kbdev->dev, "w: reg %04x val %08x", offset, value);
 
 	writel(value, kbdev->reg + offset);
@@ -40,13 +37,7 @@ void kbase_reg_write(struct kbase_device *kbdev, u16 offset, u32 value,
 u32 kbase_reg_read(struct kbase_device *kbdev, u16 offset,
 						struct kbase_context *kctx)
 {
-	u32 val;
-
-	KBASE_DEBUG_ASSERT(kbdev->pm.backend.gpu_powered);
-	KBASE_DEBUG_ASSERT(kctx == NULL || kctx->as_nr != KBASEP_AS_NR_INVALID);
-	KBASE_DEBUG_ASSERT(kbdev->dev != NULL);
-
-	val = readl(kbdev->reg + offset);
+	u32 val = readl(kbdev->reg + offset);
 
 	dev_dbg(kbdev->dev, "r: reg %04x val %08x", offset, val);
 	if (kctx && kctx->jctx.tb)

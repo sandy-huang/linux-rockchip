@@ -104,8 +104,6 @@ bool kbase_js_choose_affinity(u64 * const affinity,
 		return false;
 	}
 
-	KBASE_DEBUG_ASSERT(js >= 0);
-
 	if ((core_req & (BASE_JD_REQ_FS | BASE_JD_REQ_CS | BASE_JD_REQ_T)) ==
 								BASE_JD_REQ_T) {
 		spin_unlock_irqrestore(&kbdev->pm.power_change_lock, flags);
@@ -134,8 +132,6 @@ bool kbase_js_choose_affinity(u64 * const affinity,
 				 * dual-core-group systems */
 				u32 core_group_idx = ((u32) js) - 1;
 
-				KBASE_DEBUG_ASSERT(core_group_idx <
-							num_core_groups);
 				*affinity =
 				kbdev->gpu_props.props.coherency_info.group[core_group_idx].core_mask
 						& core_availability_mask &
@@ -188,10 +184,7 @@ static inline bool kbase_js_affinity_is_violating(
 	u64 affinity_set_right;
 	u64 intersection;
 
-	KBASE_DEBUG_ASSERT(affinities != NULL);
-
 	affinity_set_left = affinities[1];
-
 	affinity_set_right = affinities[2];
 
 	/* A violation occurs when any bit in the left_set is also in the
@@ -207,8 +200,6 @@ bool kbase_js_affinity_would_violate(struct kbase_device *kbdev, int js,
 	struct kbasep_js_device_data *js_devdata;
 	u64 new_affinities[BASE_JM_MAX_NR_SLOTS];
 
-	KBASE_DEBUG_ASSERT(kbdev != NULL);
-	KBASE_DEBUG_ASSERT(js < BASE_JM_MAX_NR_SLOTS);
 	js_devdata = &kbdev->js_data;
 
 	memcpy(new_affinities, js_devdata->runpool_irq.slot_affinities,
@@ -225,12 +216,7 @@ void kbase_js_affinity_retain_slot_cores(struct kbase_device *kbdev, int js,
 	struct kbasep_js_device_data *js_devdata;
 	u64 cores;
 
-	KBASE_DEBUG_ASSERT(kbdev != NULL);
-	KBASE_DEBUG_ASSERT(js < BASE_JM_MAX_NR_SLOTS);
 	js_devdata = &kbdev->js_data;
-
-	KBASE_DEBUG_ASSERT(kbase_js_affinity_would_violate(kbdev, js, affinity)
-								== false);
 
 	cores = affinity;
 	while (cores) {
@@ -254,8 +240,6 @@ void kbase_js_affinity_release_slot_cores(struct kbase_device *kbdev, int js,
 	struct kbasep_js_device_data *js_devdata;
 	u64 cores;
 
-	KBASE_DEBUG_ASSERT(kbdev != NULL);
-	KBASE_DEBUG_ASSERT(js < BASE_JM_MAX_NR_SLOTS);
 	js_devdata = &kbdev->js_data;
 
 	cores = affinity;
@@ -263,9 +247,6 @@ void kbase_js_affinity_release_slot_cores(struct kbase_device *kbdev, int js,
 		int bitnum = fls64(cores) - 1;
 		u64 bit = 1ULL << bitnum;
 		s8 cnt;
-
-		KBASE_DEBUG_ASSERT(
-		js_devdata->runpool_irq.slot_affinity_refcount[js][bitnum] > 0);
 
 		cnt =
 		--(js_devdata->runpool_irq.slot_affinity_refcount[js][bitnum]);
@@ -283,7 +264,6 @@ void kbase_js_debug_log_current_affinities(struct kbase_device *kbdev)
 	struct kbasep_js_device_data *js_devdata;
 	int slot_nr;
 
-	KBASE_DEBUG_ASSERT(kbdev != NULL);
 	js_devdata = &kbdev->js_data;
 
 	for (slot_nr = 0; slot_nr < 3; ++slot_nr)

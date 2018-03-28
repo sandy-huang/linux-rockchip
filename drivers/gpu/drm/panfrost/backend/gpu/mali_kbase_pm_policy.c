@@ -111,10 +111,6 @@ static inline void kbase_timeline_pm_cores_func(struct kbase_device *kbdev,
 {
 	int trace_code;
 
-	KBASE_DEBUG_ASSERT(func_id >= 0 && func_id < KBASE_PM_FUNC_ID_COUNT);
-	KBASE_DEBUG_ASSERT(state != 0 && (state & KBASE_PM_CHANGE_STATE_MASK) ==
-									state);
-
 	trace_code = kbase_pm_change_state_trace_code[func_id][state];
 	KBASE_TIMELINE_PM_CHECKTRANS(kbdev, trace_code);
 }
@@ -185,10 +181,6 @@ kbasep_pm_do_gpu_poweroff_callback(struct hrtimer *timer)
 	if (kbdev->pm.backend.shader_poweroff_pending) {
 		kbdev->pm.backend.shader_poweroff_pending_time--;
 
-		KBASE_DEBUG_ASSERT(
-				kbdev->pm.backend.shader_poweroff_pending_time
-									>= 0);
-
 		if (!kbdev->pm.backend.shader_poweroff_pending_time)
 			kbasep_pm_do_poweroff_cores(kbdev);
 	}
@@ -229,8 +221,6 @@ static void kbasep_pm_do_gpu_poweroff_wq(struct work_struct *data)
 		mutex_unlock(&kbdev->pm.lock);
 		return;
 	}
-
-	KBASE_DEBUG_ASSERT(kbdev->pm.backend.gpu_poweroff_pending == 0);
 
 	spin_lock_irqsave(&kbdev->pm.power_change_lock, flags);
 
@@ -321,9 +311,6 @@ void kbase_pm_update_active(struct kbase_device *kbdev)
 
 	lockdep_assert_held(&pm->lock);
 
-	/* pm_current_policy will never be NULL while pm.lock is held */
-	KBASE_DEBUG_ASSERT(backend->pm_current_policy);
-
 	spin_lock_irqsave(&pm->power_change_lock, flags);
 
 	active = backend->pm_current_policy->get_core_active(kbdev);
@@ -357,10 +344,6 @@ void kbase_pm_update_active(struct kbase_device *kbdev)
 		/* Power on the GPU and any cores requested by the policy */
 		kbase_pm_do_poweron(kbdev, false);
 	} else {
-		/* It is an error for the power policy to power off the GPU
-		 * when there are contexts active */
-		KBASE_DEBUG_ASSERT(pm->active_count == 0);
-
 		if (backend->shader_poweroff_pending) {
 			backend->shader_poweroff_pending = 0;
 			backend->shader_poweroff_pending_time = 0;
@@ -525,8 +508,6 @@ int kbase_pm_list_policies(const struct kbase_pm_policy * const **list)
 
 const struct kbase_pm_policy *kbase_pm_get_policy(struct kbase_device *kbdev)
 {
-	KBASE_DEBUG_ASSERT(kbdev != NULL);
-
 	return kbdev->pm.backend.pm_current_policy;
 }
 
@@ -536,9 +517,6 @@ void kbase_pm_set_policy(struct kbase_device *kbdev,
 	struct kbasep_js_device_data *js_devdata = &kbdev->js_data;
 	const struct kbase_pm_policy *old_policy;
 	unsigned long flags;
-
-	KBASE_DEBUG_ASSERT(kbdev != NULL);
-	KBASE_DEBUG_ASSERT(new_policy != NULL);
 
 	KBASE_TRACE_ADD(kbdev, PM_SET_POLICY, NULL, NULL, 0u, new_policy->id);
 
@@ -606,8 +584,6 @@ void kbase_pm_request_cores(struct kbase_device *kbdev,
 
 	kbase_pm_change_state change_gpu_state = 0u;
 
-	KBASE_DEBUG_ASSERT(kbdev != NULL);
-
 	spin_lock_irqsave(&kbdev->pm.power_change_lock, flags);
 
 	cores = shader_cores;
@@ -635,8 +611,6 @@ void kbase_pm_request_cores(struct kbase_device *kbdev,
 
 		if (cnt == 1)
 			change_gpu_state |= KBASE_PM_CHANGE_STATE_TILER;
-
-		KBASE_DEBUG_ASSERT(kbdev->tiler_needed_cnt != 0);
 	}
 
 	if (change_gpu_state) {
@@ -662,16 +636,12 @@ void kbase_pm_unrequest_cores(struct kbase_device *kbdev,
 
 	kbase_pm_change_state change_gpu_state = 0u;
 
-	KBASE_DEBUG_ASSERT(kbdev != NULL);
-
 	spin_lock_irqsave(&kbdev->pm.power_change_lock, flags);
 
 	while (shader_cores) {
 		int bitnum = fls64(shader_cores) - 1;
 		u64 bit = 1ULL << bitnum;
 		int cnt;
-
-		KBASE_DEBUG_ASSERT(kbdev->shader_needed_cnt[bitnum] > 0);
 
 		cnt = --kbdev->shader_needed_cnt[bitnum];
 
@@ -686,8 +656,6 @@ void kbase_pm_unrequest_cores(struct kbase_device *kbdev,
 
 	if (tiler_required) {
 		int cnt;
-
-		KBASE_DEBUG_ASSERT(kbdev->tiler_needed_cnt > 0);
 
 		cnt = --kbdev->tiler_needed_cnt;
 
@@ -752,8 +720,6 @@ kbase_pm_register_inuse_cores(struct kbase_device *kbdev,
 		u64 bit = 1ULL << bitnum;
 		int cnt;
 
-		KBASE_DEBUG_ASSERT(kbdev->shader_needed_cnt[bitnum] > 0);
-
 		cnt = --kbdev->shader_needed_cnt[bitnum];
 
 		if (cnt == 0)
@@ -769,13 +735,9 @@ kbase_pm_register_inuse_cores(struct kbase_device *kbdev,
 	}
 
 	if (tiler_required) {
-		KBASE_DEBUG_ASSERT(kbdev->tiler_needed_cnt > 0);
-
 		--kbdev->tiler_needed_cnt;
 
 		kbdev->tiler_inuse_cnt++;
-
-		KBASE_DEBUG_ASSERT(kbdev->tiler_inuse_cnt != 0);
 	}
 
 	if (prev_shader_needed != kbdev->shader_needed_bitmap)
@@ -797,16 +759,12 @@ void kbase_pm_release_cores(struct kbase_device *kbdev,
 	unsigned long flags;
 	kbase_pm_change_state change_gpu_state = 0u;
 
-	KBASE_DEBUG_ASSERT(kbdev != NULL);
-
 	spin_lock_irqsave(&kbdev->pm.power_change_lock, flags);
 
 	while (shader_cores) {
 		int bitnum = fls64(shader_cores) - 1;
 		u64 bit = 1ULL << bitnum;
 		int cnt;
-
-		KBASE_DEBUG_ASSERT(kbdev->shader_inuse_cnt[bitnum] > 0);
 
 		cnt = --kbdev->shader_inuse_cnt[bitnum];
 
@@ -820,8 +778,6 @@ void kbase_pm_release_cores(struct kbase_device *kbdev,
 
 	if (tiler_required) {
 		int cnt;
-
-		KBASE_DEBUG_ASSERT(kbdev->tiler_inuse_cnt > 0);
 
 		cnt = --kbdev->tiler_inuse_cnt;
 
@@ -866,8 +822,6 @@ void kbase_pm_request_l2_caches(struct kbase_device *kbdev)
 
 	prior_l2_users_count = kbdev->l2_users_count++;
 
-	KBASE_DEBUG_ASSERT(kbdev->l2_users_count != 0);
-
 	/* if the GPU is reset while the l2 is on, l2 will be off but
 	 * prior_l2_users_count will be > 0. l2_available_bitmap will have been
 	 * set to 0 though by kbase_pm_init_hw */
@@ -898,8 +852,6 @@ void kbase_pm_release_l2_caches(struct kbase_device *kbdev)
 	unsigned long flags;
 
 	spin_lock_irqsave(&kbdev->pm.power_change_lock, flags);
-
-	KBASE_DEBUG_ASSERT(kbdev->l2_users_count > 0);
 
 	--kbdev->l2_users_count;
 

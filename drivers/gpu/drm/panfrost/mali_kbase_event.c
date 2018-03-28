@@ -14,7 +14,6 @@
  */
 
 #include <mali_kbase.h>
-#include <mali_kbase_debug.h>
 #include <mali_kbase_tlstream.h>
 
 static struct base_jd_udata kbase_event_process(struct kbase_context *kctx, struct kbase_jd_atom *katom)
@@ -22,10 +21,6 @@ static struct base_jd_udata kbase_event_process(struct kbase_context *kctx, stru
 	struct base_jd_udata data;
 
 	lockdep_assert_held(&kctx->jctx.lock);
-
-	KBASE_DEBUG_ASSERT(kctx != NULL);
-	KBASE_DEBUG_ASSERT(katom != NULL);
-	KBASE_DEBUG_ASSERT(katom->status == KBASE_JD_ATOM_STATE_COMPLETED);
 
 	data = katom->udata;
 
@@ -43,8 +38,6 @@ static struct base_jd_udata kbase_event_process(struct kbase_context *kctx, stru
 
 int kbase_event_pending(struct kbase_context *ctx)
 {
-	KBASE_DEBUG_ASSERT(ctx);
-
 	return (atomic_read(&ctx->event_count) != 0) ||
 			(atomic_read(&ctx->event_closed) != 0);
 }
@@ -52,8 +45,6 @@ int kbase_event_pending(struct kbase_context *ctx)
 int kbase_event_dequeue(struct kbase_context *ctx, struct base_jd_event_v2 *uevent)
 {
 	struct kbase_jd_atom *atom;
-
-	KBASE_DEBUG_ASSERT(ctx);
 
 	mutex_lock(&ctx->event_mutex);
 
@@ -203,8 +194,6 @@ void kbase_event_close(struct kbase_context *kctx)
 
 int kbase_event_init(struct kbase_context *kctx)
 {
-	KBASE_DEBUG_ASSERT(kctx);
-
 	INIT_LIST_HEAD(&kctx->event_list);
 	INIT_LIST_HEAD(&kctx->event_coalesce_list);
 	mutex_init(&kctx->event_mutex);
@@ -222,9 +211,6 @@ int kbase_event_init(struct kbase_context *kctx)
 void kbase_event_cleanup(struct kbase_context *kctx)
 {
 	int event_count;
-
-	KBASE_DEBUG_ASSERT(kctx);
-	KBASE_DEBUG_ASSERT(kctx->event_workq);
 
 	flush_workqueue(kctx->event_workq);
 	destroy_workqueue(kctx->event_workq);

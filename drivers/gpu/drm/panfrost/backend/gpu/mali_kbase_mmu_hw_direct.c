@@ -27,9 +27,6 @@ static inline u64 lock_region(struct kbase_device *kbdev, u64 pfn,
 {
 	u64 region;
 
-	/* can't lock a zero sized range */
-	KBASE_DEBUG_ASSERT(num_pages);
-
 	region = pfn << PAGE_SHIFT;
 	/*
 	 * fls returns (given the ASSERT above):
@@ -50,8 +47,6 @@ static inline u64 lock_region(struct kbase_device *kbdev, u64 pfn,
 			/* not pow2, so must go up to the next pow2 */
 			region_width += 1;
 		}
-		KBASE_DEBUG_ASSERT(region_width <= KBASE_LOCK_REGION_MAX_SIZE);
-		KBASE_DEBUG_ASSERT(region_width >= KBASE_LOCK_REGION_MIN_SIZE);
 		region |= region_width;
 	}
 
@@ -109,8 +104,6 @@ void kbase_mmu_interrupt(struct kbase_device *kbdev, u32 irq_stat)
 	u32 bf_bits = (irq_stat >> busfault_shift) & as_bit_mask;
 	/* page faults (note: Ignore ASes with both pf and bf) */
 	u32 pf_bits = ((irq_stat >> pf_shift) & as_bit_mask) & ~bf_bits;
-
-	KBASE_DEBUG_ASSERT(kbdev != NULL);
 
 	/* remember current mask */
 	spin_lock_irqsave(&kbdev->mmu_mask_change, flags);

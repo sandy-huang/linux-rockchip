@@ -34,8 +34,6 @@ static const struct kbase_pm_ca_policy *const policy_list[] = {
 
 int kbase_pm_ca_init(struct kbase_device *kbdev)
 {
-	KBASE_DEBUG_ASSERT(kbdev != NULL);
-
 	kbdev->pm.backend.ca_current_policy = policy_list[0];
 
 	kbdev->pm.backend.ca_current_policy->init(kbdev);
@@ -61,8 +59,6 @@ int kbase_pm_ca_list_policies(const struct kbase_pm_ca_policy * const **list)
 const struct kbase_pm_ca_policy
 *kbase_pm_ca_get_policy(struct kbase_device *kbdev)
 {
-	KBASE_DEBUG_ASSERT(kbdev != NULL);
-
 	return kbdev->pm.backend.ca_current_policy;
 }
 
@@ -71,9 +67,6 @@ void kbase_pm_ca_set_policy(struct kbase_device *kbdev,
 {
 	const struct kbase_pm_ca_policy *old_policy;
 	unsigned long flags;
-
-	KBASE_DEBUG_ASSERT(kbdev != NULL);
-	KBASE_DEBUG_ASSERT(new_policy != NULL);
 
 	KBASE_TRACE_ADD(kbdev, PM_CA_SET_POLICY, NULL, NULL, 0u,
 								new_policy->id);

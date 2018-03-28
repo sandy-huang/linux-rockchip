@@ -40,19 +40,13 @@ static bool kbasep_js_ctx_attr_runpool_retain_attr(struct kbase_device *kbdev, s
 	struct kbasep_js_kctx_info *js_kctx_info;
 	bool runpool_state_changed = false;
 
-	KBASE_DEBUG_ASSERT(kbdev != NULL);
-	KBASE_DEBUG_ASSERT(kctx != NULL);
-	KBASE_DEBUG_ASSERT(attribute < KBASEP_JS_CTX_ATTR_COUNT);
 	js_devdata = &kbdev->js_data;
 	js_kctx_info = &kctx->jctx.sched_info;
 
 	lockdep_assert_held(&js_kctx_info->ctx.jsctx_mutex);
 	lockdep_assert_held(&kbdev->js_data.runpool_irq.lock);
 
-	KBASE_DEBUG_ASSERT(js_kctx_info->ctx.is_scheduled != false);
-
 	if (kbasep_js_ctx_attr_is_attr_on_ctx(kctx, attribute) != false) {
-		KBASE_DEBUG_ASSERT(js_devdata->runpool_irq.ctx_attr_ref_count[attribute] < S8_MAX);
 		++(js_devdata->runpool_irq.ctx_attr_ref_count[attribute]);
 
 		if (js_devdata->runpool_irq.ctx_attr_ref_count[attribute] == 1) {
@@ -86,18 +80,13 @@ static bool kbasep_js_ctx_attr_runpool_release_attr(struct kbase_device *kbdev, 
 	struct kbasep_js_kctx_info *js_kctx_info;
 	bool runpool_state_changed = false;
 
-	KBASE_DEBUG_ASSERT(kbdev != NULL);
-	KBASE_DEBUG_ASSERT(kctx != NULL);
-	KBASE_DEBUG_ASSERT(attribute < KBASEP_JS_CTX_ATTR_COUNT);
 	js_devdata = &kbdev->js_data;
 	js_kctx_info = &kctx->jctx.sched_info;
 
 	lockdep_assert_held(&js_kctx_info->ctx.jsctx_mutex);
 	lockdep_assert_held(&kbdev->js_data.runpool_irq.lock);
-	KBASE_DEBUG_ASSERT(js_kctx_info->ctx.is_scheduled != false);
 
 	if (kbasep_js_ctx_attr_is_attr_on_ctx(kctx, attribute) != false) {
-		KBASE_DEBUG_ASSERT(js_devdata->runpool_irq.ctx_attr_ref_count[attribute] > 0);
 		--(js_devdata->runpool_irq.ctx_attr_ref_count[attribute]);
 
 		if (js_devdata->runpool_irq.ctx_attr_ref_count[attribute] == 0) {
@@ -127,14 +116,10 @@ static bool kbasep_js_ctx_attr_ctx_retain_attr(struct kbase_device *kbdev, struc
 	struct kbasep_js_kctx_info *js_kctx_info;
 	bool runpool_state_changed = false;
 
-	KBASE_DEBUG_ASSERT(kbdev != NULL);
-	KBASE_DEBUG_ASSERT(kctx != NULL);
-	KBASE_DEBUG_ASSERT(attribute < KBASEP_JS_CTX_ATTR_COUNT);
 	js_kctx_info = &kctx->jctx.sched_info;
 
 	lockdep_assert_held(&kbdev->js_data.runpool_irq.lock);
 	lockdep_assert_held(&js_kctx_info->ctx.jsctx_mutex);
-	KBASE_DEBUG_ASSERT(js_kctx_info->ctx.ctx_attr_ref_count[attribute] < U32_MAX);
 
 	++(js_kctx_info->ctx.ctx_attr_ref_count[attribute]);
 
@@ -164,13 +149,9 @@ static bool kbasep_js_ctx_attr_ctx_release_attr(struct kbase_device *kbdev, stru
 	struct kbasep_js_kctx_info *js_kctx_info;
 	bool runpool_state_changed = false;
 
-	KBASE_DEBUG_ASSERT(kbdev != NULL);
-	KBASE_DEBUG_ASSERT(kctx != NULL);
-	KBASE_DEBUG_ASSERT(attribute < KBASEP_JS_CTX_ATTR_COUNT);
 	js_kctx_info = &kctx->jctx.sched_info;
 
 	lockdep_assert_held(&js_kctx_info->ctx.jsctx_mutex);
-	KBASE_DEBUG_ASSERT(js_kctx_info->ctx.ctx_attr_ref_count[attribute] > 0);
 
 	if (js_kctx_info->ctx.is_scheduled != false && js_kctx_info->ctx.ctx_attr_ref_count[attribute] == 1) {
 		lockdep_assert_held(&kbdev->js_data.runpool_irq.lock);
@@ -194,8 +175,6 @@ void kbasep_js_ctx_attr_set_initial_attrs(struct kbase_device *kbdev, struct kba
 	struct kbasep_js_kctx_info *js_kctx_info;
 	bool runpool_state_changed = false;
 
-	KBASE_DEBUG_ASSERT(kbdev != NULL);
-	KBASE_DEBUG_ASSERT(kctx != NULL);
 	js_kctx_info = &kctx->jctx.sched_info;
 
 	if ((js_kctx_info->ctx.flags & KBASE_CTX_FLAG_SUBMIT_DISABLED) != false) {
@@ -210,7 +189,6 @@ void kbasep_js_ctx_attr_set_initial_attrs(struct kbase_device *kbdev, struct kba
 	/* The context should not have been scheduled yet, so ASSERT if this caused
 	 * runpool state changes (note that other threads *can't* affect the value
 	 * of runpool_state_changed, due to how it's calculated) */
-	KBASE_DEBUG_ASSERT(runpool_state_changed == false);
 	CSTD_UNUSED(runpool_state_changed);
 }
 
@@ -254,7 +232,6 @@ void kbasep_js_ctx_attr_ctx_retain_atom(struct kbase_device *kbdev, struct kbase
 	bool runpool_state_changed = false;
 	base_jd_core_req core_req;
 
-	KBASE_DEBUG_ASSERT(katom);
 	core_req = katom->core_req;
 
 	if (core_req & BASE_JD_REQ_ONLY_COMPUTE)
@@ -278,7 +255,6 @@ bool kbasep_js_ctx_attr_ctx_release_atom(struct kbase_device *kbdev, struct kbas
 	bool runpool_state_changed = false;
 	base_jd_core_req core_req;
 
-	KBASE_DEBUG_ASSERT(katom_retained_state);
 	core_req = katom_retained_state->core_req;
 
 	/* No-op for invalid atoms */

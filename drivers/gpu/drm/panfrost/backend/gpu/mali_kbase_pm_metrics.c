@@ -40,8 +40,6 @@
 
 int kbasep_pm_metrics_init(struct kbase_device *kbdev)
 {
-	KBASE_DEBUG_ASSERT(kbdev != NULL);
-
 	kbdev->pm.backend.metrics.kbdev = kbdev;
 
 	kbdev->pm.backend.metrics.time_period_start = ktime_get();

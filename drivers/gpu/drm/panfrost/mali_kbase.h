@@ -18,8 +18,6 @@
 
 #include <mali_malisw.h>
 
-#include <mali_kbase_debug.h>
-
 #include <asm/page.h>
 
 #include <linux/atomic.h>
@@ -207,7 +205,6 @@ void kbasep_as_do_poke(struct work_struct *work);
 /** Returns the name associated with a Mali exception code
  *
  * This function is called from the interrupt handler when a GPU fault occurs.
- * It reports the details of the fault using KBASE_DEBUG_PRINT_WARN.
  *
  * @param[in] kbdev     The kbase device that the GPU fault occurred from.
  * @param[in] exception_code  exception code
@@ -237,15 +234,7 @@ static inline bool kbase_pm_is_suspending(struct kbase_device *kbdev)
  */
 static inline int kbase_jd_atom_id(struct kbase_context *kctx, struct kbase_jd_atom *katom)
 {
-	int result;
-
-	KBASE_DEBUG_ASSERT(kctx);
-	KBASE_DEBUG_ASSERT(katom);
-	KBASE_DEBUG_ASSERT(katom->kctx == kctx);
-
-	result = katom - &kctx->jctx.atoms[0];
-	KBASE_DEBUG_ASSERT(result >= 0 && result <= BASE_JD_ATOM_COUNT);
-	return result;
+	return katom - &kctx->jctx.atoms[0];
 }
 
 /**

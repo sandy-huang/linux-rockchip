@@ -86,8 +86,6 @@ static enum hrtimer_restart timer_callback(struct hrtimer *timer)
 	int s;
 	bool reset_needed = false;
 
-	KBASE_DEBUG_ASSERT(timer != NULL);
-
 	backend = container_of(timer, struct kbase_backend_data,
 							scheduling_timer);
 	kbdev = container_of(backend, struct kbase_device, hwaccess.backend);
@@ -100,7 +98,6 @@ static enum hrtimer_restart timer_callback(struct hrtimer *timer)
 
 		if (kbase_backend_nr_atoms_on_slot(kbdev, s) > 0) {
 			atom = kbase_gpu_inspect(kbdev, s, 0);
-			KBASE_DEBUG_ASSERT(atom != NULL);
 		}
 
 		if (atom != NULL) {

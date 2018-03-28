@@ -21,7 +21,6 @@
 #define _KBASE_JM_HWACCESS_H_
 
 #include <mali_kbase_hw.h>
-#include <mali_kbase_debug.h>
 #include <linux/atomic.h>
 
 #include <backend/gpu/mali_kbase_jm_rb.h>

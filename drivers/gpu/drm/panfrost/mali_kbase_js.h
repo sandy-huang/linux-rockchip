@@ -24,7 +24,6 @@
 #include "mali_kbase_js_defs.h"
 #include "mali_kbase_js_policy.h"
 #include "mali_kbase_defs.h"
-#include "mali_kbase_debug.h"
 
 #include "mali_kbase_js_ctx_attr.h"
 
@@ -620,14 +619,7 @@ bool kbase_js_is_atom_valid(struct kbase_device *kbdev,
  */
 static inline bool kbasep_js_is_submit_allowed(struct kbasep_js_device_data *js_devdata, struct kbase_context *kctx)
 {
-	u16 test_bit;
-
-	/* Ensure context really is scheduled in */
-	KBASE_DEBUG_ASSERT(kctx->as_nr != KBASEP_AS_NR_INVALID);
-	KBASE_DEBUG_ASSERT(kctx->jctx.sched_info.ctx.is_scheduled);
-
-	test_bit = (u16) (1u << kctx->as_nr);
-
+	u16 test_bit = (u16) (1u << kctx->as_nr);
 	return (bool) (js_devdata->runpool_irq.submit_allowed & test_bit);
 }
 
@@ -641,13 +633,7 @@ static inline bool kbasep_js_is_submit_allowed(struct kbasep_js_device_data *js_
  */
 static inline void kbasep_js_set_submit_allowed(struct kbasep_js_device_data *js_devdata, struct kbase_context *kctx)
 {
-	u16 set_bit;
-
-	/* Ensure context really is scheduled in */
-	KBASE_DEBUG_ASSERT(kctx->as_nr != KBASEP_AS_NR_INVALID);
-	KBASE_DEBUG_ASSERT(kctx->jctx.sched_info.ctx.is_scheduled);
-
-	set_bit = (u16) (1u << kctx->as_nr);
+	u16 set_bit = (u16) (1u << kctx->as_nr);
 
 	dev_dbg(kctx->kbdev->dev, "JS: Setting Submit Allowed on %p (as=%d)", kctx, kctx->as_nr);
 
@@ -664,15 +650,8 @@ static inline void kbasep_js_set_submit_allowed(struct kbasep_js_device_data *js
  */
 static inline void kbasep_js_clear_submit_allowed(struct kbasep_js_device_data *js_devdata, struct kbase_context *kctx)
 {
-	u16 clear_bit;
-	u16 clear_mask;
-
-	/* Ensure context really is scheduled in */
-	KBASE_DEBUG_ASSERT(kctx->as_nr != KBASEP_AS_NR_INVALID);
-	KBASE_DEBUG_ASSERT(kctx->jctx.sched_info.ctx.is_scheduled);
-
-	clear_bit = (u16) (1u << kctx->as_nr);
-	clear_mask = ~clear_bit;
+	u16 clear_bit = (u16) (1u << kctx->as_nr);
+	u16 clear_mask = ~clear_bit;
 
 	dev_dbg(kctx->kbdev->dev, "JS: Clearing Submit Allowed on %p (as=%d)", kctx, kctx->as_nr);
 
@@ -702,11 +681,6 @@ static inline void kbasep_js_clear_job_retry_submit(struct kbase_jd_atom *atom)
  */
 static inline void kbasep_js_set_job_retry_submit_slot(struct kbase_jd_atom *atom, int js)
 {
-	KBASE_DEBUG_ASSERT(0 <= js && js <= BASE_JM_MAX_NR_SLOTS);
-	KBASE_DEBUG_ASSERT((atom->retry_submit_on_slot ==
-					KBASEP_JS_RETRY_SUBMIT_SLOT_INVALID)
-				|| (atom->retry_submit_on_slot == js));
-
 	atom->retry_submit_on_slot = js;
 }
 
@@ -774,38 +748,6 @@ static inline bool kbasep_js_get_atom_retry_submit_slot(const struct kbasep_js_a
 	return (bool) (js >= 0);
 }
 
-#if KBASE_DEBUG_DISABLE_ASSERTS == 0
-/**
- * Debug Check the refcount of a context. Only use within ASSERTs
- *
- * Obtains kbasep_js_device_data::runpool_irq::lock
- *
- * @return negative value if the context is not scheduled in
- * @return current refcount of the context if it is scheduled in. The refcount
- * is not guarenteed to be kept constant.
- */
-static inline int kbasep_js_debug_check_ctx_refcount(struct kbase_device *kbdev, struct kbase_context *kctx)
-{
-	unsigned long flags;
-	struct kbasep_js_device_data *js_devdata;
-	int result = -1;
-	int as_nr;
-
-	KBASE_DEBUG_ASSERT(kbdev != NULL);
-	KBASE_DEBUG_ASSERT(kctx != NULL);
-	js_devdata = &kbdev->js_data;
-
-	spin_lock_irqsave(&js_devdata->runpool_irq.lock, flags);
-	as_nr = kctx->as_nr;
-	if (as_nr != KBASEP_AS_NR_INVALID)
-		result = js_devdata->runpool_irq.per_as_data[as_nr].as_busy_refcount;
-
-	spin_unlock_irqrestore(&js_devdata->runpool_irq.lock, flags);
-
-	return result;
-}
-#endif // KBASE_DEBUG_DISABLE_ASSERTS == 0
-
 /**
  * @brief Variant of kbasep_js_runpool_lookup_ctx() that can be used when the
  * context is guarenteed to be already previously retained.
@@ -829,15 +771,12 @@ static inline struct kbase_context *kbasep_js_runpool_lookup_ctx_noretain(struct
 	struct kbase_context *found_kctx;
 	struct kbasep_js_per_as_data *js_per_as_data;
 
-	KBASE_DEBUG_ASSERT(kbdev != NULL);
-	KBASE_DEBUG_ASSERT(0 <= as_nr && as_nr < BASE_MAX_NR_AS);
 	js_devdata = &kbdev->js_data;
 	js_per_as_data = &js_devdata->runpool_irq.per_as_data[as_nr];
 
 	spin_lock_irqsave(&js_devdata->runpool_irq.lock, flags);
 
 	found_kctx = js_per_as_data->kctx;
-	KBASE_DEBUG_ASSERT(found_kctx == NULL || js_per_as_data->as_busy_refcount > 0);
 
 	spin_unlock_irqrestore(&js_devdata->runpool_irq.lock, flags);
 
@@ -856,7 +795,6 @@ static inline u32 kbasep_js_convert_us_to_gpu_ticks_min_freq(struct kbase_device
 {
 	u32 gpu_freq = kbdev->gpu_props.props.core_props.gpu_freq_khz_min;
 
-	KBASE_DEBUG_ASSERT(gpu_freq != 0);
 	return us * (gpu_freq / 1000);
 }
 
@@ -872,7 +810,6 @@ static inline u32 kbasep_js_convert_us_to_gpu_ticks_max_freq(struct kbase_device
 {
 	u32 gpu_freq = kbdev->gpu_props.props.core_props.gpu_freq_khz_max;
 
-	KBASE_DEBUG_ASSERT(gpu_freq != 0);
 	return us * (u32) (gpu_freq / 1000);
 }
 
@@ -889,7 +826,6 @@ static inline u32 kbasep_js_convert_gpu_ticks_to_us_min_freq(struct kbase_device
 {
 	u32 gpu_freq = kbdev->gpu_props.props.core_props.gpu_freq_khz_min;
 
-	KBASE_DEBUG_ASSERT(gpu_freq != 0);
 	return ticks / gpu_freq * 1000;
 }
 
@@ -905,7 +841,6 @@ static inline u32 kbasep_js_convert_gpu_ticks_to_us_max_freq(struct kbase_device
 {
 	u32 gpu_freq = kbdev->gpu_props.props.core_props.gpu_freq_khz_max;
 
-	KBASE_DEBUG_ASSERT(gpu_freq != 0);
 	return ticks / gpu_freq * 1000;
 }
 
@@ -921,9 +856,6 @@ static inline void kbase_js_runpool_inc_context_count(
 	struct kbasep_js_device_data *js_devdata;
 	struct kbasep_js_kctx_info *js_kctx_info;
 
-	KBASE_DEBUG_ASSERT(kbdev != NULL);
-	KBASE_DEBUG_ASSERT(kctx != NULL);
-
 	js_devdata = &kbdev->js_data;
 	js_kctx_info = &kctx->jctx.sched_info;
 
@@ -931,13 +863,10 @@ static inline void kbase_js_runpool_inc_context_count(
 	lockdep_assert_held(&js_devdata->runpool_mutex);
 
 	/* Track total contexts */
-	KBASE_DEBUG_ASSERT(js_devdata->nr_all_contexts_running < S8_MAX);
 	++(js_devdata->nr_all_contexts_running);
 
 	if ((js_kctx_info->ctx.flags & KBASE_CTX_FLAG_SUBMIT_DISABLED) == 0) {
 		/* Track contexts that can submit jobs */
-		KBASE_DEBUG_ASSERT(js_devdata->nr_user_contexts_running <
-									S8_MAX);
 		++(js_devdata->nr_user_contexts_running);
 	}
 }
@@ -954,9 +883,6 @@ static inline void kbase_js_runpool_dec_context_count(
 	struct kbasep_js_device_data *js_devdata;
 	struct kbasep_js_kctx_info *js_kctx_info;
 
-	KBASE_DEBUG_ASSERT(kbdev != NULL);
-	KBASE_DEBUG_ASSERT(kctx != NULL);
-
 	js_devdata = &kbdev->js_data;
 	js_kctx_info = &kctx->jctx.sched_info;
 
@@ -965,12 +891,10 @@ static inline void kbase_js_runpool_dec_context_count(
 
 	/* Track total contexts */
 	--(js_devdata->nr_all_contexts_running);
-	KBASE_DEBUG_ASSERT(js_devdata->nr_all_contexts_running >= 0);
 
 	if ((js_kctx_info->ctx.flags & KBASE_CTX_FLAG_SUBMIT_DISABLED) == 0) {
 		/* Track contexts that can submit jobs */
 		--(js_devdata->nr_user_contexts_running);
-		KBASE_DEBUG_ASSERT(js_devdata->nr_user_contexts_running >= 0);
 	}
 }
 
@@ -1026,12 +950,7 @@ static inline int kbasep_js_atom_prio_to_sched_prio(base_jd_prio atom_prio)
 
 static inline base_jd_prio kbasep_js_sched_prio_to_atom_prio(int sched_prio)
 {
-	unsigned int prio_idx;
-
-	KBASE_DEBUG_ASSERT(0 <= sched_prio
-			&& sched_prio < KBASE_JS_ATOM_SCHED_PRIO_COUNT);
-
-	prio_idx = (unsigned int)sched_prio;
+	unsigned int prio_idx = (unsigned int)sched_prio;
 
 	return kbasep_js_relative_priority_to_atom[prio_idx];
 }

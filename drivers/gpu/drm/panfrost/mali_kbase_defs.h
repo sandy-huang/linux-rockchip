@@ -205,8 +205,6 @@ struct kbase_jd_atom_dependency {
  */
 static inline const struct kbase_jd_atom *const kbase_jd_katom_dep_atom(const struct kbase_jd_atom_dependency *dep)
 {
-	LOCAL_ASSERT(dep != NULL);
-
 	return (const struct kbase_jd_atom * const)(dep->atom);
 }
 
@@ -220,8 +218,6 @@ static inline const struct kbase_jd_atom *const kbase_jd_katom_dep_atom(const st
  */
 static inline const u8 kbase_jd_katom_dep_type(const struct kbase_jd_atom_dependency *dep)
 {
-	LOCAL_ASSERT(dep != NULL);
-
 	return dep->dep_type;
 }
 
@@ -238,10 +234,7 @@ static inline void kbase_jd_katom_dep_set(const struct kbase_jd_atom_dependency 
 {
 	struct kbase_jd_atom_dependency *dep;
 
-	LOCAL_ASSERT(const_dep != NULL);
-
 	dep = (struct kbase_jd_atom_dependency *)const_dep;
-
 	dep->atom = a;
 	dep->dep_type = type;
 }
@@ -256,10 +249,7 @@ static inline void kbase_jd_katom_dep_clear(const struct kbase_jd_atom_dependenc
 {
 	struct kbase_jd_atom_dependency *dep;
 
-	LOCAL_ASSERT(const_dep != NULL);
-
 	dep = (struct kbase_jd_atom_dependency *)const_dep;
-
 	dep->atom = NULL;
 	dep->dep_type = BASE_JD_DEP_TYPE_INVALID;
 }

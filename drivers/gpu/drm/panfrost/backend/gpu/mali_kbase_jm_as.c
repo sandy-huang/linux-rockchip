@@ -96,9 +96,6 @@ static void release_addr_space(struct kbase_device *kbdev, int kctx_as_nr,
 	js_devdata = &kbdev->js_data;
 	lockdep_assert_held(&js_devdata->runpool_mutex);
 
-	/* The address space must not already be free */
-	KBASE_DEBUG_ASSERT(!(js_devdata->as_free & as_bit));
-
 	js_devdata->as_free |= as_bit;
 
 	kbase_js_runpool_dec_context_count(kbdev, kctx);
