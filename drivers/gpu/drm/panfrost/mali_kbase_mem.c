@@ -20,9 +20,6 @@
 #ifdef CONFIG_DMA_SHARED_BUFFER
 #include <linux/dma-buf.h>
 #endif				/* CONFIG_DMA_SHARED_BUFFER */
-#ifdef CONFIG_UMP
-#include <linux/ump.h>
-#endif				/* CONFIG_UMP */
 #include <linux/kernel.h>
 #include <linux/bug.h>
 #include <linux/compat.h>
@@ -1319,11 +1316,6 @@ void kbase_mem_kref_free(struct kref *kref)
 	case KBASE_MEM_TYPE_RAW:
 		/* raw pages, external cleanup */
 		break;
- #ifdef CONFIG_UMP
-	case KBASE_MEM_TYPE_IMPORTED_UMP:
-		ump_dd_release(alloc->imported.ump_handle);
-		break;
-#endif
 #ifdef CONFIG_DMA_SHARED_BUFFER
 	case KBASE_MEM_TYPE_IMPORTED_UMM:
 		dma_buf_detach(alloc->imported.umm.dma_buf,
@@ -1927,9 +1919,6 @@ struct kbase_mem_phy_alloc *kbase_map_external_resource(
 		}
 	}
 	break;
-	case BASE_MEM_IMPORT_TYPE_UMP: {
-		break;
-	}
 #ifdef CONFIG_DMA_SHARED_BUFFER
 	case BASE_MEM_IMPORT_TYPE_UMM: {
 		reg->gpu_alloc->imported.umm.current_mapping_usage_count++;

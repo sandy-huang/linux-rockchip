@@ -680,13 +680,6 @@ static int kbase_debug_copy_prepare(struct kbase_jd_atom *katom)
 			ret = 0;
 			break;
 		}
-		case BASE_MEM_IMPORT_TYPE_UMP:
-		{
-			dev_warn(katom->kctx->kbdev->dev,
-					"UMP is not supported for debug_copy jobs\n");
-			ret = -EINVAL;
-			goto out_unlock;
-		}
 		default:
 			/* Nothing to be done. */
 			break;

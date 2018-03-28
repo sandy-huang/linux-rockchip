@@ -143,12 +143,6 @@ enum {
  */
 #define DEFAULT_AWID_LIMIT KBASE_AID_32
 
-/**
- * Default UMP device mapping. A UMP_DEVICE_<device>_SHIFT value which
- * defines which UMP device this GPU should be mapped to.
- */
-#define DEFAULT_UMP_GPU_DEVICE_SHIFT UMP_DEVICE_Z_SHIFT
-
 /*
  * Default period for DVFS sampling
  */

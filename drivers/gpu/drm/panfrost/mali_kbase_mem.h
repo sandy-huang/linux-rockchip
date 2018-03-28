@@ -26,9 +26,6 @@
 #endif
 
 #include <linux/kref.h>
-#ifdef CONFIG_UMP
-#include <linux/ump.h>
-#endif
 #include "mali_base_kernel.h"
 #include <mali_kbase_hw.h>
 #include "mali_kbase_pm.h"
@@ -66,9 +63,8 @@ struct kbase_cpu_mapping {
 };
 
 enum kbase_memory_type {
-	KBASE_MEM_TYPE_NATIVE,
-	KBASE_MEM_TYPE_IMPORTED_UMP,
-	KBASE_MEM_TYPE_IMPORTED_UMM,
+	KBASE_MEM_TYPE_NATIVE = 0,
+	KBASE_MEM_TYPE_IMPORTED_UMM = 2,
 	KBASE_MEM_TYPE_IMPORTED_USER_BUF,
 	KBASE_MEM_TYPE_ALIAS,
 	KBASE_MEM_TYPE_RAW
@@ -124,9 +120,6 @@ struct kbase_mem_phy_alloc {
 
 	/* member in union valid based on @a type */
 	union {
-#ifdef CONFIG_UMP
-		ump_dd_handle ump_handle;
-#endif
 #ifdef CONFIG_DMA_SHARED_BUFFER
 		struct {
 			struct dma_buf *dma_buf;
