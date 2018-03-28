@@ -19,14 +19,13 @@ MALI_RELEASE_NAME ?= "r12p0-04rel0"
 
 # Paths required for build
 KBASE_PATH = $(src)
-UMP_PATH = $(src)/../../../base
 
 # Set up our defines, which will be passed to gcc
 DEFINES = -DMALI_RELEASE_NAME=\"$(MALI_RELEASE_NAME)\"
 
 # Use our defines when compiling
-ccflags-y += $(DEFINES) -I$(KBASE_PATH) -I$(UMP_PATH) -I$(srctree)/include/linux
-subdir-ccflags-y += $(DEFINES) -I$(KBASE_PATH) -I$(OSK_PATH) -I$(UMP_PATH) -I$(srctree)/include/linux
+ccflags-y += $(DEFINES) -I$(KBASE_PATH) -I$(srctree)/include/linux -I$(KBASE_PATH)/backend/gpu
+#subdir-ccflags-y += $(DEFINES) -I$(KBASE_PATH) -I$(srctree)/include/linux
 
 SRC := \
 	mali_kbase_device.c \
@@ -64,7 +63,6 @@ SRC := \
 # Job Scheduler Policy: Completely Fair Scheduler
 SRC += mali_kbase_js_policy_cfs.c
 
-ccflags-y += -I$(KBASE_PATH)
 
 # Tell the Linux build system from which .o file to create the kernel module
 obj-$(CONFIG_MALI_MIDGARD) += mali_kbase.o
@@ -74,12 +72,36 @@ mali_kbase-y := $(SRC:.c=.o)
 
 mali_kbase-$(CONFIG_MALI_DMA_FENCE) += mali_kbase_dma_fence.o
 
-MALI_BACKEND_PATH ?= backend
-CONFIG_MALI_BACKEND ?= gpu
-CONFIG_MALI_BACKEND_REAL ?= $(CONFIG_MALI_BACKEND)
+BACKEND += \
+	backend/gpu/mali_kbase_cache_policy_backend.c \
+	backend/gpu/mali_kbase_device_hw.c \
+	backend/gpu/mali_kbase_gpu.c \
+	backend/gpu/mali_kbase_gpuprops_backend.c \
+	backend/gpu/mali_kbase_irq_linux.c \
+	backend/gpu/mali_kbase_instr_backend.c \
+	backend/gpu/mali_kbase_jm_as.c \
+	backend/gpu/mali_kbase_jm_hw.c \
+	backend/gpu/mali_kbase_jm_rb.c \
+	backend/gpu/mali_kbase_js_affinity.c \
+	backend/gpu/mali_kbase_js_backend.c \
+	backend/gpu/mali_kbase_mmu_hw_direct.c \
+	backend/gpu/mali_kbase_pm_backend.c \
+	backend/gpu/mali_kbase_pm_driver.c \
+	backend/gpu/mali_kbase_pm_metrics.c \
+	backend/gpu/mali_kbase_pm_ca.c \
+	backend/gpu/mali_kbase_pm_ca_fixed.c \
+	backend/gpu/mali_kbase_pm_always_on.c \
+	backend/gpu/mali_kbase_pm_coarse_demand.c \
+	backend/gpu/mali_kbase_pm_demand.c \
+	backend/gpu/mali_kbase_pm_policy.c \
+	backend/gpu/mali_kbase_time.c
 
-include  $(src)/$(MALI_BACKEND_PATH)/$(CONFIG_MALI_BACKEND_REAL)/Kbuild
+ifeq ($(CONFIG_MALI_DEVFREQ),y)
+BACKEND += backend/gpu/mali_kbase_devfreq.c
+endif
+
+ifeq ($(CONFIG_DEVFREQ_THERMAL),y)
+	BACKEND += backend/gpu/mali_kbase_power_model_simple.c
+endif
+
 mali_kbase-y += $(BACKEND:.c=.o)
-
-ccflags-y += -I$(src)/$(MALI_BACKEND_PATH)/$(CONFIG_MALI_BACKEND_REAL)
-subdir-ccflags-y += -I$(src)/$(MALI_BACKEND_PATH)/$(CONFIG_MALI_BACKEND_REAL)
