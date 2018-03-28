@@ -34,14 +34,6 @@ menuconfig MALI_EXPERT
 	  Enabling this option and modifying the default settings may produce a driver with performance or
 	  other limitations.
 
-config MALI_DEBUG_SHADER_SPLIT_FS
-	bool "Allow mapping of shader cores via sysfs"
-	depends on MALI_MIDGARD && MALI_EXPERT
-	default n
-	help
-	  Select this option to provide a sysfs entry for runtime configuration of shader
-	  core affinity masks.
-
 config MALI_TRACE_TIMELINE
 	bool "Timeline tracing"
 	depends on MALI_MIDGARD && MALI_EXPERT

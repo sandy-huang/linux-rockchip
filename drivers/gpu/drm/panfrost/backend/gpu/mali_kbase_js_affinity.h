@@ -20,13 +20,6 @@
 #ifndef _KBASE_JS_AFFINITY_H_
 #define _KBASE_JS_AFFINITY_H_
 
-#ifdef CONFIG_MALI_DEBUG_SHADER_SPLIT_FS
-/* Import the external affinity mask variables */
-extern u64 mali_js0_affinity_mask;
-extern u64 mali_js1_affinity_mask;
-extern u64 mali_js2_affinity_mask;
-#endif // ifdef CONFIG_MALI_DEBUG_SHADER_SPLIT_FS
-
 /**
  * kbase_js_can_run_job_on_slot_no_lock - Decide whether it is possible to
  * submit a job to a particular job slot in the current status
