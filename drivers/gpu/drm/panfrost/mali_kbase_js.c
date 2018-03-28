@@ -770,11 +770,6 @@ int kbasep_js_devdata_init(struct kbase_device * const kbdev)
 			kbdev->nr_user_address_spaces = 1;
 		}
 	}
-#ifdef CONFIG_MALI_DEBUG
-	/* Soft-stop will be disabled on a single context by default unless
-	 * softstop_always is set */
-	jsdd->softstop_always = false;
-#endif
 	jsdd->nr_all_contexts_running = 0;
 	jsdd->nr_user_contexts_running = 0;
 	jsdd->nr_contexts_pullable = 0;

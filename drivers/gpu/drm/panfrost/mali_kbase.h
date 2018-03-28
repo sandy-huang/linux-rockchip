@@ -353,7 +353,7 @@ void kbasep_trace_debugfs_init(struct kbase_device *kbdev);
 /** Add trace values about a job-slot
  *
  * @note Any functions called through this macro will still be evaluated in
- * Release builds (CONFIG_MALI_DEBUG not defined). Therefore, when KBASE_TRACE_ENABLE == 0 any
+ * Release builds. Therefore, when KBASE_TRACE_ENABLE == 0 any
  * functions called to get the parameters supplied to this macro must:
  * - be static or static inline
  * - must just return 0 and have no other statements present in the body.
@@ -365,7 +365,7 @@ void kbasep_trace_debugfs_init(struct kbase_device *kbdev);
 /** Add trace values about a job-slot, with info
  *
  * @note Any functions called through this macro will still be evaluated in
- * Release builds (CONFIG_MALI_DEBUG not defined). Therefore, when KBASE_TRACE_ENABLE == 0 any
+ * Release builds. Therefore, when KBASE_TRACE_ENABLE == 0 any
  * functions called to get the parameters supplied to this macro must:
  * - be static or static inline
  * - must just return 0 and have no other statements present in the body.
@@ -377,7 +377,7 @@ void kbasep_trace_debugfs_init(struct kbase_device *kbdev);
 /** Add trace values about a ctx refcount
  *
  * @note Any functions called through this macro will still be evaluated in
- * Release builds (CONFIG_MALI_DEBUG not defined). Therefore, when KBASE_TRACE_ENABLE == 0 any
+ * Release builds. Therefore, when KBASE_TRACE_ENABLE == 0 any
  * functions called to get the parameters supplied to this macro must:
  * - be static or static inline
  * - must just return 0 and have no other statements present in the body.
@@ -388,7 +388,7 @@ void kbasep_trace_debugfs_init(struct kbase_device *kbdev);
 /** Add trace values about a ctx refcount, and info
  *
  * @note Any functions called through this macro will still be evaluated in
- * Release builds (CONFIG_MALI_DEBUG not defined). Therefore, when KBASE_TRACE_ENABLE == 0 any
+ * Release builds. Therefore, when KBASE_TRACE_ENABLE == 0 any
  * functions called to get the parameters supplied to this macro must:
  * - be static or static inline
  * - must just return 0 and have no other statements present in the body.
@@ -400,7 +400,7 @@ void kbasep_trace_debugfs_init(struct kbase_device *kbdev);
 /** Add trace values (no slot or refcount)
  *
  * @note Any functions called through this macro will still be evaluated in
- * Release builds (CONFIG_MALI_DEBUG not defined). Therefore, when KBASE_TRACE_ENABLE == 0 any
+ * Release builds. Therefore, when KBASE_TRACE_ENABLE == 0 any
  * functions called to get the parameters supplied to this macro must:
  * - be static or static inline
  * - must just return 0 and have no other statements present in the body.
@@ -490,18 +490,5 @@ void kbasep_trace_clear(struct kbase_device *kbdev);
 #endif // KBASE_TRACE_ENABLE
 /** PRIVATE - do not use directly. Use KBASE_TRACE_DUMP() instead */
 void kbasep_trace_dump(struct kbase_device *kbdev);
-
-#ifdef CONFIG_MALI_DEBUG
-/**
- * kbase_set_driver_inactive - Force driver to go inactive
- * @kbdev:    Device pointer
- * @inactive: true if driver should go inactive, false otherwise
- *
- * Forcing the driver inactive will cause all future IOCTLs to wait until the
- * driver is made active again. This is intended solely for the use of tests
- * which require that no jobs are running while the test executes.
- */
-void kbase_set_driver_inactive(struct kbase_device *kbdev, bool inactive);
-#endif // ifdef CONFIG_MALI_DEBUG
 
 #endif // ifndef _KBASE_H_

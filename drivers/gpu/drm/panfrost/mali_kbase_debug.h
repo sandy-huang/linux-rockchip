@@ -26,11 +26,7 @@
 
 /** @brief Disable the asserts tests if set to 1. Default is to disable the asserts in release. */
 #ifndef KBASE_DEBUG_DISABLE_ASSERTS
-#ifdef CONFIG_MALI_DEBUG
-#define KBASE_DEBUG_DISABLE_ASSERTS 0
-#else
 #define KBASE_DEBUG_DISABLE_ASSERTS 1
-#endif
 #endif // ifndef KBASE_DEBUG_DISABLE_ASSERTS
 
 /** Function type that is called on an KBASE_DEBUG_ASSERT() or KBASE_DEBUG_ASSERT_MSG() */
@@ -67,22 +63,9 @@ struct kbasep_debug_assert_cb {
  * @note function parameter cannot be concatenated with other strings
  */
 /* Select the correct system output function*/
-#ifdef CONFIG_MALI_DEBUG
-#define KBASEP_DEBUG_ASSERT_OUT(trace, function, ...)\
-		do { \
-			pr_err("Mali<ASSERT>: %s function:%s ", trace, function);\
-			pr_err(__VA_ARGS__);\
-			pr_err("\n");\
-		} while (false)
-#else // ifdef CONFIG_MALI_DEBUG
 #define KBASEP_DEBUG_ASSERT_OUT(trace, function, ...) CSTD_NOP()
-#endif
 
-#ifdef CONFIG_MALI_DEBUG
-#define KBASE_CALL_ASSERT_HOOK() kbasep_debug_assert_call_hook()
-#else
 #define KBASE_CALL_ASSERT_HOOK() CSTD_NOP()
-#endif
 
 /**
  * @def KBASE_DEBUG_ASSERT(expr)
@@ -123,11 +106,7 @@ struct kbasep_debug_assert_cb {
  *
  * @param X Code to compile only in debug mode.
  */
-#ifdef CONFIG_MALI_DEBUG
-#define KBASE_DEBUG_CODE(X) X
-#else
 #define KBASE_DEBUG_CODE(X) CSTD_NOP()
-#endif
 
 /** @} */
 

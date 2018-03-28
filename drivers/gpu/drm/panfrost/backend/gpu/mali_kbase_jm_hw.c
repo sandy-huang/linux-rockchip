@@ -496,14 +496,8 @@ void kbasep_job_slot_soft_or_hard_stop_do_action(struct kbase_device *kbdev,
 		bool soft_stop_allowed = kbasep_soft_stop_allowed(kbdev,
 								target_katom);
 
-		if (!soft_stop_allowed) {
-#ifdef CONFIG_MALI_DEBUG
-			dev_dbg(kbdev->dev,
-					"Attempt made to soft-stop a job that cannot be soft-stopped. core_reqs = 0x%X",
-					(unsigned int)core_reqs);
-#endif
+		if (!soft_stop_allowed)
 			return;
-		}
 
 		/* We are about to issue a soft stop, so mark the atom as having
 		 * been soft stopped */

@@ -239,10 +239,6 @@ int kbase_device_init(struct kbase_device * const kbdev)
 	kbdev->mmu_mode = kbase_mmu_mode_get_lpae();
 #endif /* CONFIG_MALI_GPU_MMU_AARCH64 */
 
-#ifdef CONFIG_MALI_DEBUG
-	init_waitqueue_head(&kbdev->driver_inactive_wait);
-#endif /* CONFIG_MALI_DEBUG */
-
 	return 0;
 term_trace:
 	kbasep_trace_term(kbdev);

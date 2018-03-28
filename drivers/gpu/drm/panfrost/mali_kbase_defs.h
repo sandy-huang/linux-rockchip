@@ -58,11 +58,7 @@
 #endif
 
 #ifndef KBASE_TRACE_ENABLE
-#ifdef CONFIG_MALI_DEBUG
-#define KBASE_TRACE_ENABLE 1
-#else
 #define KBASE_TRACE_ENABLE 0
-#endif				/* CONFIG_MALI_DEBUG */
 #endif				/* KBASE_TRACE_ENABLE */
 
 /** Dump Job slot trace on error (only active if KBASE_TRACE_ENABLE != 0) */
@@ -1009,11 +1005,6 @@ struct kbase_device {
 	 * true if secure mode is supported
 	 */
 	bool secure_mode_support;
-
-#ifdef CONFIG_MALI_DEBUG
-	wait_queue_head_t driver_inactive_wait;
-	bool driver_inactive;
-#endif /* CONFIG_MALI_DEBUG */
 
 	/* Boolean indicating if an IRQ flush during reset is in progress. */
 	bool irq_reset_flush;

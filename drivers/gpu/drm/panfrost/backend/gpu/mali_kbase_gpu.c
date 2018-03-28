@@ -78,14 +78,6 @@ int kbase_backend_late_init(struct kbase_device *kbdev)
 	if (err)
 		goto fail_timer;
 
-#ifdef CONFIG_MALI_DEBUG
-	if (kbasep_common_test_interrupt_handlers(kbdev) != 0) {
-		dev_err(kbdev->dev, "Interrupt assigment check failed.\n");
-		err = -EINVAL;
-		goto fail_interrupt_test;
-	}
-#endif // ifdef CONFIG_MALI_DEBUG
-
 	err = kbase_job_slot_init(kbdev);
 	if (err)
 		goto fail_job_slot;
@@ -95,11 +87,6 @@ int kbase_backend_late_init(struct kbase_device *kbdev)
 	return 0;
 
 fail_job_slot:
-
-#ifdef CONFIG_MALI_DEBUG
-fail_interrupt_test:
-#endif
-
 	kbase_backend_timer_term(kbdev);
 fail_timer:
 	kbase_hwaccess_pm_halt(kbdev);

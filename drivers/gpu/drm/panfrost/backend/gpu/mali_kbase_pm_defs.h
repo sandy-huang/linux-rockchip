@@ -228,10 +228,6 @@ struct kbase_pm_backend_data {
 
 	bool cg1_disabled;
 
-#ifdef CONFIG_MALI_DEBUG
-	bool driver_ready_for_irqs;
-#endif
-
 	spinlock_t gpu_powered_lock;
 
 	struct kbasep_pm_metrics_data metrics;

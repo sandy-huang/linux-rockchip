@@ -73,13 +73,6 @@ config MALI_DEBUG_SHADER_SPLIT_FS
 	  Select this option to provide a sysfs entry for runtime configuration of shader
 	  core affinity masks.
 
-config MALI_DEBUG
-	bool "Debug build"
-	depends on MALI_MIDGARD && MALI_EXPERT
-	default n
-	help
-	  Select this option for increased checking and reporting of errors.
-
 config MALI_TRACE_TIMELINE
 	bool "Timeline tracing"
 	depends on MALI_MIDGARD && MALI_EXPERT

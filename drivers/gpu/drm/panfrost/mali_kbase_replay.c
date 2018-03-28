@@ -64,42 +64,6 @@ struct fragment_job {
 static void dump_job_head(struct kbase_context *kctx, char *head_str,
 		struct job_descriptor_header *job)
 {
-#ifdef CONFIG_MALI_DEBUG
-	dev_dbg(kctx->kbdev->dev, "%s\n", head_str);
-	dev_dbg(kctx->kbdev->dev,
-			"addr                  = %p\n"
-			"exception_status      = %x (Source ID: 0x%x Access: 0x%x Exception: 0x%x)\n"
-			"first_incomplete_task = %x\n"
-			"fault_pointer         = %llx\n"
-			"job_descriptor_size   = %x\n"
-			"job_type              = %x\n"
-			"job_barrier           = %x\n"
-			"_reserved_01          = %x\n"
-			"_reserved_02          = %x\n"
-			"_reserved_03          = %x\n"
-			"_reserved_04/05       = %x,%x\n"
-			"job_index             = %x\n"
-			"dependencies          = %x,%x\n",
-			job, job->exception_status,
-			JOB_SOURCE_ID(job->exception_status),
-			(job->exception_status >> 8) & 0x3,
-			job->exception_status  & 0xFF,
-			job->first_incomplete_task,
-			job->fault_pointer, job->job_descriptor_size,
-			job->job_type, job->job_barrier, job->_reserved_01,
-			job->_reserved_02, job->_reserved_03,
-			job->_reserved_04, job->_reserved_05,
-			job->job_index,
-			job->job_dependency_index_1,
-			job->job_dependency_index_2);
-
-	if (job->job_descriptor_size)
-		dev_dbg(kctx->kbdev->dev, "next               = %llx\n",
-				job->next_job._64);
-	else
-		dev_dbg(kctx->kbdev->dev, "next               = %x\n",
-				job->next_job._32);
-#endif // ifdef CONFIG_MALI_DEBUG
 }
 
 static int kbasep_replay_reset_sfbd(struct kbase_context *kctx,
@@ -125,13 +89,6 @@ static int kbasep_replay_reset_sfbd(struct kbase_context *kctx,
 		return -EINVAL;
 	}
 
-#ifdef CONFIG_MALI_DEBUG
-	dev_dbg(kctx->kbdev->dev,
-		"FBD tiler:\n"
-		"flags = %x\n"
-		"heap_free_address = %llx\n",
-		fbd_tiler->flags, fbd_tiler->heap_free_address);
-#endif // ifdef CONFIG_MALI_DEBUG
 	if (hierarchy_mask) {
 		u32 weights[HIERARCHY_WEIGHTS];
 		u16 old_hierarchy_mask = fbd_tiler->flags &
@@ -207,13 +164,6 @@ static int kbasep_replay_reset_mfbd(struct kbase_context *kctx,
 		return -EINVAL;
 	}
 
-#ifdef CONFIG_MALI_DEBUG
-	dev_dbg(kctx->kbdev->dev, "FBD tiler:\n"
-			"flags = %x\n"
-			"heap_free_address = %llx\n",
-			fbd_tiler->flags,
-			fbd_tiler->heap_free_address);
-#endif // ifdef CONFIG_MALI_DEBUG
 	if (hierarchy_mask) {
 		u32 weights[HIERARCHY_WEIGHTS];
 		u16 old_hierarchy_mask = (fbd_tiler->flags) &
@@ -708,33 +658,6 @@ static int kbasep_replay_create_atoms(struct kbase_context *kctx,
 	return 0;
 }
 
-#ifdef CONFIG_MALI_DEBUG
-static void payload_dump(struct kbase_context *kctx, base_jd_replay_payload *payload)
-{
-	u64 next;
-
-	dev_dbg(kctx->kbdev->dev, "Tiler jc list :\n");
-	next = payload->tiler_jc_list;
-
-	while (next) {
-		struct kbase_vmap_struct map;
-		base_jd_replay_jc *jc_struct;
-
-		jc_struct = kbase_vmap(kctx, next, sizeof(*jc_struct), &map);
-
-		if (!jc_struct)
-			return;
-
-		dev_dbg(kctx->kbdev->dev, "* jc_struct=%p jc=%llx next=%llx\n",
-				jc_struct, jc_struct->jc, jc_struct->next);
-
-		next = jc_struct->next;
-
-		kbase_vunmap(kctx, &map);
-	}
-}
-#endif // ifdef CONFIG_MALI_DEBUG
-
 /**
  * @brief Parse a base_jd_replay_payload provided by userspace
  *
@@ -767,28 +690,6 @@ static int kbasep_replay_parse_payload(struct kbase_context *kctx,
 		dev_err(kctx->kbdev->dev, "kbasep_replay_parse_payload: failed to map payload into kernel space\n");
 		return -EINVAL;
 	}
-
-#ifdef CONFIG_MALI_DEBUG
-	dev_dbg(kctx->kbdev->dev, "kbasep_replay_parse_payload: payload=%p\n", payload);
-	dev_dbg(kctx->kbdev->dev, "Payload structure:\n"
-				  "tiler_jc_list            = %llx\n"
-				  "fragment_jc              = %llx\n"
-				  "tiler_heap_free          = %llx\n"
-				  "fragment_hierarchy_mask  = %x\n"
-				  "tiler_hierarchy_mask     = %x\n"
-				  "hierarchy_default_weight = %x\n"
-				  "tiler_core_req           = %x\n"
-				  "fragment_core_req        = %x\n",
-							payload->tiler_jc_list,
-							  payload->fragment_jc,
-						      payload->tiler_heap_free,
-					      payload->fragment_hierarchy_mask,
-						 payload->tiler_hierarchy_mask,
-					     payload->hierarchy_default_weight,
-						       payload->tiler_core_req,
-						   payload->fragment_core_req);
-	payload_dump(kctx, payload);
-#endif // ifdef CONFIG_MALI_DEBUG
 
 	t_atom->core_req = payload->tiler_core_req | BASEP_JD_REQ_EVENT_NEVER;
 	f_atom->core_req = payload->fragment_core_req | BASEP_JD_REQ_EVENT_NEVER;
@@ -1011,16 +912,6 @@ static bool kbase_replay_fault_check(struct kbase_jd_atom *katom)
 		return false;
 	}
 
-#ifdef CONFIG_MALI_DEBUG
-	dev_dbg(dev, "kbase_replay_fault_check: payload=%p\n", payload);
-	dev_dbg(dev, "\nPayload structure:\n"
-		     "fragment_jc              = 0x%llx\n"
-		     "fragment_hierarchy_mask  = 0x%x\n"
-		     "fragment_core_req        = 0x%x\n",
-		     payload->fragment_jc,
-		     payload->fragment_hierarchy_mask,
-		     payload->fragment_core_req);
-#endif // ifdef CONFIG_MALI_DEBUG
 	/* Process fragment job chain */
 	job_header      = (u64) payload->fragment_jc;
 	job_loop_detect = job_header;

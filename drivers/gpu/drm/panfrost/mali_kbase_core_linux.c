@@ -430,21 +430,6 @@ enum {
 	inited_buslogger = (1u << 20)
 };
 
-#ifdef CONFIG_MALI_DEBUG
-#define INACTIVE_WAIT_MS (5000)
-
-void kbase_set_driver_inactive(struct kbase_device *kbdev, bool inactive)
-{
-	kbdev->driver_inactive = inactive;
-	wake_up(&kbdev->driver_inactive_wait);
-
-	/* Wait for any running IOCTLs to complete */
-	if (inactive)
-		msleep(INACTIVE_WAIT_MS);
-}
-
-#endif /* CONFIG_MALI_DEBUG */
-
 static int kbase_dispatch(struct kbase_context *kctx, void * const args, u32 args_size)
 {
 	struct kbase_device *kbdev;
@@ -457,11 +442,6 @@ static int kbase_dispatch(struct kbase_context *kctx, void * const args, u32 arg
 	kbdev = kctx->kbdev;
 	id = ukh->id;
 	ukh->ret = MALI_ERROR_NONE; /* Be optimistic */
-
-#ifdef CONFIG_MALI_DEBUG
-	wait_event(kbdev->driver_inactive_wait,
-			kbdev->driver_inactive == false);
-#endif /* CONFIG_MALI_DEBUG */
 
 	if (id == UKP_FUNC_ID_CHECK_VERSION) {
 		struct uku_version_check_args *version_check;
@@ -2302,163 +2282,6 @@ static ssize_t show_js_scheduling_period(struct device *dev,
 static DEVICE_ATTR(js_scheduling_period, 0644,
 		show_js_scheduling_period, set_js_scheduling_period);
 
-#ifdef CONFIG_MALI_DEBUG
-static ssize_t set_js_softstop_always(struct device *dev,
-		struct device_attribute *attr, const char *buf, size_t count)
-{
-	struct kbase_device *kbdev;
-	int ret;
-	int softstop_always;
-
-	kbdev = to_kbase_device(dev);
-	if (!kbdev)
-		return -ENODEV;
-
-	ret = kstrtoint(buf, 0, &softstop_always);
-	if (ret || ((softstop_always != 0) && (softstop_always != 1))) {
-		dev_err(kbdev->dev, "Couldn't process js_softstop_always write operation.\n"
-				"Use format <soft_stop_always>\n");
-		return -EINVAL;
-	}
-
-	kbdev->js_data.softstop_always = (bool) softstop_always;
-	dev_dbg(kbdev->dev, "Support for softstop on a single context: %s\n",
-			(kbdev->js_data.softstop_always) ?
-			"Enabled" : "Disabled");
-	return count;
-}
-
-static ssize_t show_js_softstop_always(struct device *dev,
-		struct device_attribute *attr, char * const buf)
-{
-	struct kbase_device *kbdev;
-	ssize_t ret;
-
-	kbdev = to_kbase_device(dev);
-	if (!kbdev)
-		return -ENODEV;
-
-	ret = scnprintf(buf, PAGE_SIZE, "%d\n", kbdev->js_data.softstop_always);
-
-	if (ret >= PAGE_SIZE) {
-		buf[PAGE_SIZE - 2] = '\n';
-		buf[PAGE_SIZE - 1] = '\0';
-		ret = PAGE_SIZE - 1;
-	}
-
-	return ret;
-}
-
-/*
- * By default, soft-stops are disabled when only a single context is present. The ability to
- * enable soft-stop when only a single context is present can be used for debug and unit-testing purposes.
- * (see CL t6xx_stress_1 unit-test as an example whereby this feature is used.)
- */
-static DEVICE_ATTR(js_softstop_always, 0644, show_js_softstop_always, set_js_softstop_always);
-#endif /* CONFIG_MALI_DEBUG */
-
-#ifdef CONFIG_MALI_DEBUG
-typedef void (kbasep_debug_command_func) (struct kbase_device *);
-
-enum kbasep_debug_command_code {
-	KBASEP_DEBUG_COMMAND_DUMPTRACE,
-
-	/* This must be the last enum */
-	KBASEP_DEBUG_COMMAND_COUNT
-};
-
-struct kbasep_debug_command {
-	char *str;
-	kbasep_debug_command_func *func;
-};
-
-/** Debug commands supported by the driver */
-static const struct kbasep_debug_command debug_commands[] = {
-	{
-	 .str = "dumptrace",
-	 .func = &kbasep_trace_dump,
-	}
-};
-
-/** Show callback for the @c debug_command sysfs file.
- *
- * This function is called to get the contents of the @c debug_command sysfs
- * file. This is a list of the available debug commands, separated by newlines.
- *
- * @param dev	The device this sysfs file is for
- * @param attr	The attributes of the sysfs file
- * @param buf	The output buffer for the sysfs file contents
- *
- * @return The number of bytes output to @c buf.
- */
-static ssize_t show_debug(struct device *dev, struct device_attribute *attr, char * const buf)
-{
-	struct kbase_device *kbdev;
-	int i;
-	ssize_t ret = 0;
-
-	kbdev = to_kbase_device(dev);
-
-	if (!kbdev)
-		return -ENODEV;
-
-	for (i = 0; i < KBASEP_DEBUG_COMMAND_COUNT && ret < PAGE_SIZE; i++)
-		ret += scnprintf(buf + ret, PAGE_SIZE - ret, "%s\n", debug_commands[i].str);
-
-	if (ret >= PAGE_SIZE) {
-		buf[PAGE_SIZE - 2] = '\n';
-		buf[PAGE_SIZE - 1] = '\0';
-		ret = PAGE_SIZE - 1;
-	}
-
-	return ret;
-}
-
-/** Store callback for the @c debug_command sysfs file.
- *
- * This function is called when the @c debug_command sysfs file is written to.
- * It matches the requested command against the available commands, and if
- * a matching command is found calls the associated function from
- * @ref debug_commands to issue the command.
- *
- * @param dev	The device with sysfs file is for
- * @param attr	The attributes of the sysfs file
- * @param buf	The value written to the sysfs file
- * @param count	The number of bytes written to the sysfs file
- *
- * @return @c count if the function succeeded. An error code on failure.
- */
-static ssize_t issue_debug(struct device *dev, struct device_attribute *attr, const char *buf, size_t count)
-{
-	struct kbase_device *kbdev;
-	int i;
-
-	kbdev = to_kbase_device(dev);
-
-	if (!kbdev)
-		return -ENODEV;
-
-	for (i = 0; i < KBASEP_DEBUG_COMMAND_COUNT; i++) {
-		if (sysfs_streq(debug_commands[i].str, buf)) {
-			debug_commands[i].func(kbdev);
-			return count;
-		}
-	}
-
-	/* Debug Command not found */
-	dev_err(dev, "debug_command: command not known\n");
-	return -EINVAL;
-}
-
-/** The sysfs file @c debug_command.
- *
- * This is used to issue general debug commands to the device driver.
- * Reading it will produce a list of debug commands, separated by newlines.
- * Writing to it with one of those commands will issue said command.
- */
-static DEVICE_ATTR(debug_command, 0644, show_debug, issue_debug);
-#endif /* CONFIG_MALI_DEBUG */
-
 /**
  * kbase_show_gpuinfo - Show callback for the gpuinfo sysfs entry.
  * @dev: The device this sysfs file is for.
@@ -3068,10 +2891,6 @@ static void kbase_device_coherency_init(struct kbase_device *kbdev, u32 gpu_id)
 }
 
 static struct attribute *kbase_attrs[] = {
-#ifdef CONFIG_MALI_DEBUG
-	&dev_attr_debug_command.attr,
-	&dev_attr_js_softstop_always.attr,
-#endif
 	&dev_attr_js_timeouts.attr,
 	&dev_attr_soft_event_timeout.attr,
 	&dev_attr_gpuinfo.attr,
