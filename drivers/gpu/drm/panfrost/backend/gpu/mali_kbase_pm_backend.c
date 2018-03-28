@@ -20,9 +20,7 @@
 #include <mali_kbase.h>
 #include <mali_midg_regmap.h>
 #include <mali_kbase_config_defaults.h>
-#ifdef CONFIG_MALI_PLATFORM_DEVICETREE
 #include <linux/pm_runtime.h>
-#endif
 
 #include <mali_kbase_pm.h>
 #include <backend/gpu/mali_kbase_jm_internal.h>

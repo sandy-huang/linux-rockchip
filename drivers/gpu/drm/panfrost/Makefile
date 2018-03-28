@@ -112,8 +112,3 @@ subdir-ccflags-y += -I$(src)/$(MALI_BACKEND_PATH)/$(CONFIG_MALI_BACKEND_REAL)
 ifeq ($(CONFIG_MALI_PLATFORM_THIRDPARTY),)
 CONFIG_MALI_PLATFORM_DEVICETREE := y
 endif
-
-mali_kbase-$(CONFIG_MALI_PLATFORM_DEVICETREE) += \
-	platform/devicetree/mali_kbase_runtime_pm.o \
-	platform/devicetree/mali_kbase_config_devicetree.o
-ccflags-$(CONFIG_MALI_PLATFORM_DEVICETREE) += -I$(src)/platform/devicetree

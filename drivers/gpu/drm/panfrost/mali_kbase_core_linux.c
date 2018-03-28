@@ -54,9 +54,7 @@
 #include <linux/mman.h>
 #include <linux/version.h>
 #include <linux/security.h>
-#ifdef CONFIG_MALI_PLATFORM_DEVICETREE
 #include <linux/pm_runtime.h>
-#endif /* CONFIG_MALI_PLATFORM_DEVICETREE */
 #include <mali_kbase_hw.h>
 #include <platform/mali_kbase_platform_common.h>
 #ifdef CONFIG_SYNC
