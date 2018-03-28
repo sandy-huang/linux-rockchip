@@ -50,8 +50,6 @@ SRC := \
 	mali_kbase_trace_timeline.c \
 	mali_kbase_mem_linux.c \
 	mali_kbase_core_linux.c \
-	mali_kbase_sync.c \
-	mali_kbase_sync_user.c \
 	mali_kbase_replay.c \
 	mali_kbase_mmu_mode_lpae.c \
 	mali_kbase_disjoint_events.c \

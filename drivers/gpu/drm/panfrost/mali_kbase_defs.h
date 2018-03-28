@@ -35,10 +35,6 @@
 #include <linux/slab.h>
 #include <linux/file.h>
 
-#ifdef CONFIG_SYNC
-#include "sync.h"
-#endif				/* CONFIG_SYNC */
-
 #include "mali_kbase_dma_fence.h"
 
 #include <linux/clk.h>
@@ -279,10 +275,6 @@ struct kbase_jd_atom {
 	u64 affinity;
 	u64 jc;
 	enum kbase_atom_coreref_state coreref_state;
-#ifdef CONFIG_SYNC
-	struct sync_fence *fence;
-	struct sync_fence_waiter sync_waiter;
-#endif				/* CONFIG_SYNC */
 #ifdef CONFIG_MALI_DMA_FENCE
 	struct {
 		/* This points to the dma-buf fence for this atom. If this is
