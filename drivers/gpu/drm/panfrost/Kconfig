@@ -24,16 +24,6 @@ menuconfig MALI_MIDGARD
 	  To compile this driver as a module, choose M here:
 	  this will generate a single module, called mali_kbase.
 
-config MALI_DMA_FENCE
-	bool "DMA_BUF fence support for Mali (EXPERIMENTAL)"
-	depends on MALI_MIDGARD
-	default n
-	help
-	  Support DMA_BUF fences for Mali.
-
-	  This option should only be enabled if
-	  the Linux Kernel has built in support for DMA_BUF fences.
-
 # MALI_EXPERT configuration options
 
 menuconfig MALI_EXPERT

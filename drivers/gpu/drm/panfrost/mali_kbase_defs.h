@@ -275,7 +275,6 @@ struct kbase_jd_atom {
 	u64 affinity;
 	u64 jc;
 	enum kbase_atom_coreref_state coreref_state;
-#ifdef CONFIG_MALI_DMA_FENCE
 	struct {
 		/* This points to the dma-buf fence for this atom. If this is
 		 * NULL then there is no fence for this atom and the other
@@ -327,7 +326,6 @@ struct kbase_jd_atom {
 		 */
 		atomic_t dep_count;
 	} dma_fence;
-#endif /* CONFIG_MALI_DMA_FENCE */
 
 	/* Note: refer to kbasep_js_atom_retained_state, which will take a copy of some of the following members */
 	enum base_jd_event_code event_code;
@@ -1046,12 +1044,10 @@ struct kbase_context {
 
 	struct list_head waiting_soft_jobs;
 	spinlock_t waiting_soft_jobs_lock;
-#ifdef CONFIG_MALI_DMA_FENCE
 	struct {
 		struct list_head waiting_resource;
 		struct workqueue_struct *wq;
 	} dma_fence;
-#endif /* CONFIG_MALI_DMA_FENCE */
 	/** This is effectively part of the Run Pool, because it only has a valid
 	 * setting (!=KBASEP_AS_NR_INVALID) whilst the context is scheduled in
 	 *

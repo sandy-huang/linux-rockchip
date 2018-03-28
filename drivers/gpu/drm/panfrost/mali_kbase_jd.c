@@ -97,7 +97,6 @@ static int jd_run_atom(struct kbase_jd_atom *katom)
 	return kbasep_js_add_job(kctx, katom);
 }
 
-#if defined(CONFIG_MALI_DMA_FENCE)
 void kbase_jd_dep_clear_locked(struct kbase_jd_atom *katom)
 {
 	struct kbase_device *kbdev;
@@ -126,11 +125,9 @@ void kbase_jd_dep_clear_locked(struct kbase_jd_atom *katom)
 			kbase_js_sched_all(kbdev);
 	}
 }
-#endif
 
 void kbase_jd_free_external_resources(struct kbase_jd_atom *katom)
 {
-#ifdef CONFIG_MALI_DMA_FENCE
 	/* Flush dma-fence workqueue to ensure that any callbacks that may have
 	 * been queued are done before continuing.
 	 * Any successfully completed atom would have had all it's callbacks
@@ -138,14 +135,11 @@ void kbase_jd_free_external_resources(struct kbase_jd_atom *katom)
 	 */
 	if (katom->event_code != BASE_JD_EVENT_DONE)
 		flush_workqueue(katom->kctx->dma_fence.wq);
-#endif /* CONFIG_MALI_DMA_FENCE */
 }
 
 static void kbase_jd_post_external_resources(struct kbase_jd_atom *katom)
 {
-#ifdef CONFIG_MALI_DMA_FENCE
 	kbase_dma_fence_signal(katom);
-#endif /* CONFIG_MALI_DMA_FENCE */
 
 	kbase_gpu_vm_lock(katom->kctx);
 	/* only roll back if extres is non-NULL */
@@ -178,11 +172,9 @@ static int kbase_jd_pre_external_resources(struct kbase_jd_atom *katom, const st
 {
 	int err_ret_val = -EINVAL;
 	u32 res_no;
-#ifdef CONFIG_MALI_DMA_FENCE
 	struct kbase_dma_fence_resv_info info = {
 		.dma_fence_resv_count = 0,
 	};
-#endif
 	struct base_external_resource *input_extres;
 
 	/* no resources encoded, early out */
@@ -211,7 +203,6 @@ static int kbase_jd_pre_external_resources(struct kbase_jd_atom *katom, const st
 		goto early_err_out;
 	}
 
-#ifdef CONFIG_MALI_DMA_FENCE
 	info.resv_objs = kmalloc_array(katom->nr_extres,
 				       sizeof(struct reservation_object *),
 				       GFP_KERNEL);
@@ -227,7 +218,6 @@ static int kbase_jd_pre_external_resources(struct kbase_jd_atom *katom, const st
 		err_ret_val = -ENOMEM;
 		goto early_err_out;
 	}
-#endif /* CONFIG_MALI_DMA_FENCE */
 
 	/* Take the processes mmap lock */
 	down_read(&current->mm->mmap_sem);
@@ -263,7 +253,6 @@ static int kbase_jd_pre_external_resources(struct kbase_jd_atom *katom, const st
 			goto failed_loop;
 		}
 
-#ifdef CONFIG_MALI_DMA_FENCE
 		if (reg->gpu_alloc->type == KBASE_MEM_TYPE_IMPORTED_UMM) {
 			struct reservation_object *resv;
 
@@ -272,7 +261,6 @@ static int kbase_jd_pre_external_resources(struct kbase_jd_atom *katom, const st
 				kbase_dma_fence_add_reservation(resv, &info,
 								exclusive);
 		}
-#endif /* CONFIG_MALI_DMA_FENCE */
 
 		/* finish with updating out array with the data we found */
 		/* NOTE: It is important that this is the last thing we do (or
@@ -290,7 +278,6 @@ static int kbase_jd_pre_external_resources(struct kbase_jd_atom *katom, const st
 	/* Release the processes mmap lock */
 	up_read(&current->mm->mmap_sem);
 
-#ifdef CONFIG_MALI_DMA_FENCE
 	if (info.dma_fence_resv_count) {
 		int ret;
 
@@ -301,25 +288,19 @@ static int kbase_jd_pre_external_resources(struct kbase_jd_atom *katom, const st
 
 	kfree(info.resv_objs);
 	kfree(info.dma_fence_excl_bitmap);
-#endif /* CONFIG_MALI_DMA_FENCE */
 
 	/* all done OK */
 	return 0;
 
 /* error handling section */
 
-#ifdef CONFIG_MALI_DMA_FENCE
 failed_dma_fence_setup:
-#endif /* CONFIG_MALI_DMA_FENCE */
-#if defined(CONFIG_MALI_DMA_FENCE)
 	/* Lock the processes mmap lock */
 	down_read(&current->mm->mmap_sem);
 
 	/* lock before we unmap */
 	kbase_gpu_vm_lock(katom->kctx);
-#endif
-
- failed_loop:
+failed_loop:
 	/* undo the loop work */
 	while (res_no-- > 0) {
 		struct kbase_mem_phy_alloc *alloc = katom->extres[res_no].alloc;
@@ -334,10 +315,8 @@ failed_dma_fence_setup:
  early_err_out:
 	kfree(katom->extres);
 	katom->extres = NULL;
-#ifdef CONFIG_MALI_DMA_FENCE
 	kfree(info.resv_objs);
 	kfree(info.dma_fence_excl_bitmap);
-#endif
 	return err_ret_val;
 }
 
@@ -362,9 +341,7 @@ static inline void jd_resolve_dep(struct list_head *out_list,
 		if (katom->event_code != BASE_JD_EVENT_DONE &&
 			(dep_type != BASE_JD_DEP_TYPE_ORDER)) {
 
-#ifdef CONFIG_MALI_DMA_FENCE
 			kbase_dma_fence_cancel_callbacks(dep_atom);
-#endif
 
 			dep_atom->event_code = katom->event_code;
 
@@ -379,7 +356,6 @@ static inline void jd_resolve_dep(struct list_head *out_list,
 		}
 		if (!kbase_jd_katom_dep_atom(&dep_atom->dep[other_d])) {
 			bool dep_satisfied = true;
-#ifdef CONFIG_MALI_DMA_FENCE
 			int dep_count;
 
 			dep_count = atomic_read(&dep_atom->dma_fence.dep_count);
@@ -405,7 +381,6 @@ static inline void jd_resolve_dep(struct list_head *out_list,
 			} else {
 				dep_satisfied = false;
 			}
-#endif /* CONFIG_MALI_DMA_FENCE */
 
 			if (dep_satisfied)
 				list_add_tail(&dep_atom->dep_item[0], out_list);
@@ -621,9 +596,7 @@ bool jd_submit_atom(struct kbase_context *kctx,
 	katom->x_pre_dep = NULL;
 	katom->x_post_dep = NULL;
 	katom->will_fail_event_code = 0;
-#ifdef CONFIG_MALI_DMA_FENCE
 	atomic_set(&katom->dma_fence.dep_count, -1);
-#endif
 
 	/* Don't do anything if there is a mess up with dependencies.
 	   This is done in a separate cycle to check both the dependencies at ones, otherwise
@@ -833,12 +806,10 @@ bool jd_submit_atom(struct kbase_context *kctx,
 		goto out;
 	}
 
-#ifdef CONFIG_MALI_DMA_FENCE
 	if (atomic_read(&katom->dma_fence.dep_count) != -1) {
 		ret = false;
 		goto out;
 	}
-#endif /* CONFIG_MALI_DMA_FENCE */
 
 	if ((katom->core_req & BASEP_JD_REQ_ATOM_TYPE)
 						  == BASE_JD_REQ_SOFT_REPLAY) {
@@ -1275,18 +1246,14 @@ void kbase_jd_zap_context(struct kbase_context *kctx)
 		kbase_cancel_soft_job(katom);
 	}
 
-#ifdef CONFIG_MALI_DMA_FENCE
 	kbase_dma_fence_cancel_all_atoms(kctx);
-#endif
 
 	mutex_unlock(&kctx->jctx.lock);
 
-#ifdef CONFIG_MALI_DMA_FENCE
 	/* Flush dma-fence workqueue to ensure that any callbacks that may have
 	 * been queued are done before continuing.
 	 */
 	flush_workqueue(kctx->dma_fence.wq);
-#endif
 
 	kbase_jm_wait_for_zero_jobs(kctx);
 }
@@ -1313,11 +1280,9 @@ int kbase_jd_init(struct kbase_context *kctx)
 		kctx->jctx.atoms[i].event_code = BASE_JD_EVENT_JOB_INVALID;
 		kctx->jctx.atoms[i].status = KBASE_JD_ATOM_STATE_UNUSED;
 
-#ifdef CONFIG_MALI_DMA_FENCE
 		kctx->jctx.atoms[i].dma_fence.context = dma_fence_context_alloc(1);
 		atomic_set(&kctx->jctx.atoms[i].dma_fence.seqno, 0);
 		INIT_LIST_HEAD(&kctx->jctx.atoms[i].dma_fence.callbacks);
-#endif
 	}
 
 	mutex_init(&kctx->jctx.lock);

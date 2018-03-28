@@ -67,7 +67,7 @@ obj-$(CONFIG_MALI_MIDGARD) += mali_kbase.o
 # Tell the Linux build system to enable building of our .c files
 mali_kbase-y := $(SRC:.c=.o)
 
-mali_kbase-$(CONFIG_MALI_DMA_FENCE) += mali_kbase_dma_fence.o
+mali_kbase-y += mali_kbase_dma_fence.o
 
 BACKEND += \
 	backend/gpu/mali_kbase_cache_policy_backend.c \

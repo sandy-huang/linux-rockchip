@@ -16,9 +16,6 @@
 #ifndef _KBASE_DMA_FENCE_H_
 #define _KBASE_DMA_FENCE_H_
 
-#ifdef CONFIG_MALI_DMA_FENCE
-
-//#include <linux/fence.h>
 #include <linux/dma-fence.h>
 #include <linux/list.h>
 #include <linux/reservation.h>
@@ -135,14 +132,4 @@ int kbase_dma_fence_init(struct kbase_context *kctx);
  */
 void kbase_dma_fence_waiters_remove(struct kbase_jd_atom *katom);
 
-#else // ifdef CONFIG_MALI_DMA_FENCE
-/* Dummy functions for when dma-buf fence isn't enabled. */
-
-static inline int kbase_dma_fence_init(struct kbase_context *kctx)
-{
-	return 0;
-}
-
-static inline void kbase_dma_fence_term(struct kbase_context *kctx) {}
-#endif // ifdef CONFIG_MALI_DMA_FENCE
 #endif // ifndef _KBASE_DMA_FENCE_H_

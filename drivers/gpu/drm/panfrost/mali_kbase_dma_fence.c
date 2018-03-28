@@ -13,10 +13,6 @@
  *
  */
 
-/* Include mali_kbase_dma_fence.h before checking for CONFIG_MALI_DMA_FENCE as
- * it will be set there.
- */
-#include "mali_kbase_dma_fence.h"
 
 #include <linux/atomic.h>
 #include <linux/dma-fence.h>
@@ -30,6 +26,7 @@
 #include <linux/ww_mutex.h>
 
 #include <mali_kbase.h>
+#include "mali_kbase_dma_fence.h"
 
 /* Spin lock protecting all Mali fences as fence->lock. */
 static DEFINE_SPINLOCK(kbase_dma_fence_lock);
