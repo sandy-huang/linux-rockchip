@@ -350,7 +350,6 @@ void kbase_disjoint_state_down(struct kbase_device *kbdev);
 #if KBASE_TRACE_ENABLE
 void kbasep_trace_debugfs_init(struct kbase_device *kbdev);
 
-#ifndef CONFIG_MALI_SYSTEM_TRACE
 /** Add trace values about a job-slot
  *
  * @note Any functions called through this macro will still be evaluated in
@@ -422,36 +421,6 @@ void kbasep_trace_debugfs_init(struct kbase_device *kbdev);
 void kbasep_trace_add(struct kbase_device *kbdev, enum kbase_trace_code code, void *ctx, struct kbase_jd_atom *katom, u64 gpu_addr, u8 flags, int refcount, int jobslot, unsigned long info_val);
 /** PRIVATE - do not use directly. Use KBASE_TRACE_CLEAR() instead */
 void kbasep_trace_clear(struct kbase_device *kbdev);
-#else // ifndef CONFIG_MALI_SYSTEM_TRACE
-/* Dispatch kbase trace events as system trace events */
-#include <mali_linux_kbase_trace.h>
-#define KBASE_TRACE_ADD_SLOT(kbdev, code, ctx, katom, gpu_addr, jobslot)\
-	trace_mali_##code(jobslot, 0)
-
-#define KBASE_TRACE_ADD_SLOT_INFO(kbdev, code, ctx, katom, gpu_addr, jobslot, info_val)\
-	trace_mali_##code(jobslot, info_val)
-
-#define KBASE_TRACE_ADD_REFCOUNT(kbdev, code, ctx, katom, gpu_addr, refcount)\
-	trace_mali_##code(refcount, 0)
-
-#define KBASE_TRACE_ADD_REFCOUNT_INFO(kbdev, code, ctx, katom, gpu_addr, refcount, info_val)\
-	trace_mali_##code(refcount, info_val)
-
-#define KBASE_TRACE_ADD(kbdev, code, ctx, katom, gpu_addr, info_val)\
-	trace_mali_##code(gpu_addr, info_val)
-
-#define KBASE_TRACE_CLEAR(kbdev)\
-	do {\
-		CSTD_UNUSED(kbdev);\
-		CSTD_NOP(0);\
-	} while (0)
-#define KBASE_TRACE_DUMP(kbdev)\
-	do {\
-		CSTD_UNUSED(kbdev);\
-		CSTD_NOP(0);\
-	} while (0)
-
-#endif // ifndef CONFIG_MALI_SYSTEM_TRACE
 #else // KBASE_TRACE_ENABLE
 #define KBASE_TRACE_ADD_SLOT(kbdev, code, ctx, katom, gpu_addr, jobslot)\
 	do {\

@@ -86,13 +86,3 @@ config MALI_TRACE_TIMELINE
 	default n
 	help
 	  Enables timeline tracing through the kernel tracepoint system.
-
-config MALI_SYSTEM_TRACE
-	bool "Enable system event tracing support"
-	depends on MALI_MIDGARD && MALI_EXPERT
-	default n
-	help
-	  Choose this option to enable system trace events for each
-	  kbase event.	This is typically used for debugging but has
-	  minimal overhead when not in use. Enable only if you know what
-	  you are doing.

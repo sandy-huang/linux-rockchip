@@ -3443,11 +3443,3 @@ MODULE_LICENSE("GPL");
 MODULE_VERSION(MALI_RELEASE_NAME " (UK version " \
 		__stringify(BASE_UK_VERSION_MAJOR) "." \
 		__stringify(BASE_UK_VERSION_MINOR) ")");
-
-#ifdef CONFIG_MALI_SYSTEM_TRACE
-#define CREATE_TRACE_POINTS
-#endif
-
-#ifdef CONFIG_MALI_SYSTEM_TRACE
-#include "mali_linux_kbase_trace.h"
-#endif
