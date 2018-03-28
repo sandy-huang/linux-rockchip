@@ -381,9 +381,6 @@ void kbase_pm_release_gpu_cycle_counter(struct kbase_device *kbdev);
  * Enables access to the GPU registers before power management has powered up
  * the GPU with kbase_pm_powerup().
  *
- * Access to registers should be done using kbase_os_reg_read()/write() at this
- * stage, not kbase_reg_read()/write().
- *
  * This results in the power management callbacks provided in the driver
  * configuration to get called to turn on power and/or clocks to the GPU.
  *

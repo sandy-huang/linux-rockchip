@@ -1436,16 +1436,6 @@ static const struct file_operations kbase_fops = {
 #endif
 };
 
-void kbase_os_reg_write(struct kbase_device *kbdev, u16 offset, u32 value)
-{
-	writel(value, kbdev->reg + offset);
-}
-
-u32 kbase_os_reg_read(struct kbase_device *kbdev, u16 offset)
-{
-	return readl(kbdev->reg + offset);
-}
-
 /** Show callback for the @c power_policy sysfs file.
  *
  * This function is called to get the contents of the @c power_policy sysfs

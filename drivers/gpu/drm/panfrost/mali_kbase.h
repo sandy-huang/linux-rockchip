@@ -190,10 +190,6 @@ int kbasep_read_soft_event_status(
 int kbasep_write_soft_event_status(
 		struct kbase_context *kctx, u64 evt, unsigned char new_status);
 
-/* api to be ported per OS, only need to do the raw register access */
-void kbase_os_reg_write(struct kbase_device *kbdev, u16 offset, u32 value);
-u32 kbase_os_reg_read(struct kbase_device *kbdev, u16 offset);
-
 void kbasep_as_do_poke(struct work_struct *work);
 
 /** Returns the name associated with a Mali exception code
