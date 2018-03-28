@@ -69,69 +69,6 @@ static int kbase_js_get_slot(struct kbase_device *kbdev,
 static void kbase_js_foreach_ctx_job(struct kbase_context *kctx,
 		kbasep_js_policy_ctx_job_cb callback);
 
-/* Helper for trace subcodes */
-#if KBASE_TRACE_ENABLE
-static int kbasep_js_trace_get_refcnt(struct kbase_device *kbdev,
-		struct kbase_context *kctx)
-{
-	unsigned long flags;
-	struct kbasep_js_device_data *js_devdata;
-	int as_nr;
-	int refcnt = 0;
-
-	js_devdata = &kbdev->js_data;
-
-	spin_lock_irqsave(&js_devdata->runpool_irq.lock, flags);
-	as_nr = kctx->as_nr;
-	if (as_nr != KBASEP_AS_NR_INVALID) {
-		struct kbasep_js_per_as_data *js_per_as_data;
-
-		js_per_as_data = &js_devdata->runpool_irq.per_as_data[as_nr];
-
-		refcnt = js_per_as_data->as_busy_refcount;
-	}
-	spin_unlock_irqrestore(&js_devdata->runpool_irq.lock, flags);
-
-	return refcnt;
-}
-
-static int kbasep_js_trace_get_refcnt_nolock(struct kbase_device *kbdev,
-						struct kbase_context *kctx)
-{
-	struct kbasep_js_device_data *js_devdata;
-	int as_nr;
-	int refcnt = 0;
-
-	js_devdata = &kbdev->js_data;
-
-	as_nr = kctx->as_nr;
-	if (as_nr != KBASEP_AS_NR_INVALID) {
-		struct kbasep_js_per_as_data *js_per_as_data;
-
-		js_per_as_data = &js_devdata->runpool_irq.per_as_data[as_nr];
-
-		refcnt = js_per_as_data->as_busy_refcount;
-	}
-
-	return refcnt;
-}
-#else // KBASE_TRACE_ENABLE
-static int kbasep_js_trace_get_refcnt(struct kbase_device *kbdev,
-		struct kbase_context *kctx)
-{
-	CSTD_UNUSED(kbdev);
-	CSTD_UNUSED(kctx);
-	return 0;
-}
-static int kbasep_js_trace_get_refcnt_nolock(struct kbase_device *kbdev,
-						struct kbase_context *kctx)
-{
-	CSTD_UNUSED(kbdev);
-	CSTD_UNUSED(kctx);
-	return 0;
-}
-#endif // KBASE_TRACE_ENABLE
-
 /*
  * Private types
  */
@@ -209,8 +146,6 @@ bool kbasep_js_runpool_retain_ctx_nolock(struct kbase_device *kbdev,
 
 		new_refcnt = ++(js_per_as_data->as_busy_refcount);
 
-		KBASE_TRACE_ADD_REFCOUNT(kbdev, JS_RETAIN_CTX_NOLOCK, kctx,
-				NULL, 0u, new_refcnt);
 		result = true;
 	}
 
@@ -1455,9 +1390,6 @@ bool kbasep_js_add_job(struct kbase_context *kctx,
 
 	enqueue_required = kbase_js_dep_resolved_submit(kctx, atom);
 
-	KBASE_TRACE_ADD_REFCOUNT(kbdev, JS_ADD_JOB, kctx, atom, atom->jc,
-				kbasep_js_trace_get_refcnt_nolock(kbdev, kctx));
-
 	/* Context Attribute Refcounting */
 	kbasep_js_ctx_attr_ctx_retain_atom(kbdev, kctx, atom);
 
@@ -1517,9 +1449,6 @@ void kbasep_js_remove_job(struct kbase_device *kbdev,
 	js_policy = &kbdev->js_data.policy;
 	js_kctx_info = &kctx->jctx.sched_info;
 
-	KBASE_TRACE_ADD_REFCOUNT(kbdev, JS_REMOVE_JOB, kctx, atom, atom->jc,
-			kbasep_js_trace_get_refcnt(kbdev, kctx));
-
 	/* De-refcount ctx.nr_jobs */
 	--(js_kctx_info->ctx.nr_jobs);
 }
@@ -1562,8 +1491,6 @@ bool kbasep_js_runpool_retain_ctx(struct kbase_device *kbdev,
 
 	js_devdata = &kbdev->js_data;
 
-	/* KBASE_TRACE_ADD_REFCOUNT( kbdev, JS_RETAIN_CTX, kctx, NULL, 0,
-	   kbasep_js_trace_get_refcnt(kbdev, kctx)); */
 	spin_lock_irqsave(&js_devdata->runpool_irq.lock, flags);
 	result = kbasep_js_runpool_retain_ctx_nolock(kbdev, kctx);
 	spin_unlock_irqrestore(&js_devdata->runpool_irq.lock, flags);
@@ -1662,9 +1589,6 @@ static kbasep_js_release_result kbasep_js_run_jobs_after_ctx_and_atom_release(
 			/* A change in runpool ctx attributes might mean we can
 			 * run more jobs than before  */
 			result = KBASEP_JS_RELEASE_RESULT_SCHED_ALL;
-
-			KBASE_TRACE_ADD_SLOT(kbdev, JD_DONE_TRY_RUN_NEXT_JOB,
-						kctx, NULL, 0u, retry_jobslot);
 		}
 	}
 	return result;
@@ -1736,9 +1660,6 @@ static kbasep_js_release_result kbasep_js_runpool_release_ctx_internal(
 	if (kbasep_js_has_atom_finished(katom_retained_state))
 		runpool_ctx_attr_change |= kbasep_js_ctx_attr_ctx_release_atom(
 				kbdev, kctx, katom_retained_state);
-
-	KBASE_TRACE_ADD_REFCOUNT(kbdev, JS_RELEASE_CTX, kctx, NULL, 0u,
-			new_ref_count);
 
 	if (new_ref_count == 1 && kctx->jctx.sched_info.ctx.flags &
 			KBASE_CTX_FLAG_PRIVILEGED &&
@@ -2055,10 +1976,6 @@ static bool kbasep_js_schedule_ctx(struct kbase_device *kbdev,
 
 		return false;
 	}
-
-	KBASE_TRACE_ADD_REFCOUNT(kbdev, JS_TRY_SCHEDULE_HEAD_CTX, kctx, NULL,
-				0u,
-				kbasep_js_trace_get_refcnt(kbdev, kctx));
 
 	if (js_devdata->nr_user_contexts_running == 0 &&
 			kbdev->js_timeouts_updated) {
@@ -2977,9 +2894,6 @@ void kbase_js_zap_context(struct kbase_context *kctx)
 		 *           back (this already cancels the jobs)
 		 */
 
-		KBASE_TRACE_ADD(kbdev, JM_ZAP_NON_SCHEDULED, kctx, NULL, 0u,
-						js_kctx_info->ctx.is_scheduled);
-
 		dev_dbg(kbdev->dev, "Zap: Ctx %p scheduled=0", kctx);
 
 		/* Only cancel jobs when we evicted from the policy
@@ -2995,10 +2909,6 @@ void kbase_js_zap_context(struct kbase_context *kctx)
 		unsigned long flags;
 		bool was_retained;
 
-		/* Case c: didn't evict, but it is scheduled - it's in the Run
-		 * Pool */
-		KBASE_TRACE_ADD(kbdev, JM_ZAP_SCHEDULED, kctx, NULL, 0u,
-						js_kctx_info->ctx.is_scheduled);
 		dev_dbg(kbdev->dev, "Zap: Ctx %p is in RunPool", kctx);
 
 		/* Disable the ctx from submitting any more jobs */
@@ -3028,8 +2938,6 @@ void kbase_js_zap_context(struct kbase_context *kctx)
 
 		kbasep_js_runpool_release_ctx(kbdev, kctx);
 	}
-
-	KBASE_TRACE_ADD(kbdev, JM_ZAP_DONE, kctx, NULL, 0u, 0u);
 
 	/* After this, you must wait on both the
 	 * kbase_jd_context::zero_jobs_wait and the
@@ -3091,9 +2999,6 @@ static void kbase_js_foreach_ctx_job(struct kbase_context *kctx,
 	js_devdata = &kbdev->js_data;
 
 	spin_lock_irqsave(&js_devdata->runpool_irq.lock, flags);
-
-	KBASE_TRACE_ADD_REFCOUNT(kbdev, JS_POLICY_FOREACH_CTX_JOBS, kctx, NULL,
-					0u, trace_get_refcnt(kbdev, kctx));
 
 	/* Invoke callback on jobs on each slot in turn */
 	for (js = 0; js < kbdev->gpu_props.num_job_slots; js++)

@@ -114,50 +114,6 @@ static u64 priority_weight(struct kbasep_js_policy_cfs_ctx *ctx_info, u64 time_u
 	return time_delta_us;
 }
 
-#if KBASE_TRACE_ENABLE
-static int kbasep_js_policy_trace_get_refcnt_nolock(struct kbase_device *kbdev, struct kbase_context *kctx)
-{
-	struct kbasep_js_device_data *js_devdata;
-	int as_nr;
-	int refcnt = 0;
-
-	js_devdata = &kbdev->js_data;
-
-	as_nr = kctx->as_nr;
-	if (as_nr != KBASEP_AS_NR_INVALID) {
-		struct kbasep_js_per_as_data *js_per_as_data;
-
-		js_per_as_data = &js_devdata->runpool_irq.per_as_data[as_nr];
-
-		refcnt = js_per_as_data->as_busy_refcount;
-	}
-
-	return refcnt;
-}
-
-static inline int kbasep_js_policy_trace_get_refcnt(struct kbase_device *kbdev, struct kbase_context *kctx)
-{
-	unsigned long flags;
-	struct kbasep_js_device_data *js_devdata;
-	int refcnt = 0;
-
-	js_devdata = &kbdev->js_data;
-
-	spin_lock_irqsave(&js_devdata->runpool_irq.lock, flags);
-	refcnt = kbasep_js_policy_trace_get_refcnt_nolock(kbdev, kctx);
-	spin_unlock_irqrestore(&js_devdata->runpool_irq.lock, flags);
-
-	return refcnt;
-}
-#else				/* KBASE_TRACE_ENABLE  */
-static inline int kbasep_js_policy_trace_get_refcnt(struct kbase_device *kbdev, struct kbase_context *kctx)
-{
-	CSTD_UNUSED(kbdev);
-	CSTD_UNUSED(kctx);
-	return 0;
-}
-#endif				/* KBASE_TRACE_ENABLE  */
-
 /*
  * Non-private functions
  */
@@ -193,8 +149,6 @@ int kbasep_js_policy_init_ctx(struct kbase_device *kbdev, struct kbase_context *
 	js_devdata = &kbdev->js_data;
 	policy_info = &kbdev->js_data.policy.cfs;
 	ctx_info = &kctx->jctx.sched_info.runpool.policy_ctx.cfs;
-
-	KBASE_TRACE_ADD_REFCOUNT(kbdev, JS_POLICY_INIT_CTX, kctx, NULL, 0u, kbasep_js_policy_trace_get_refcnt(kbdev, kctx));
 
 	policy = current->policy;
 	if (policy == SCHED_FIFO || policy == SCHED_RR) {
@@ -232,7 +186,6 @@ void kbasep_js_policy_term_ctx(union kbasep_js_policy *js_policy, struct kbase_c
 	ctx_info = &kctx->jctx.sched_info.runpool.policy_ctx.cfs;
 
 	kbdev = container_of(js_policy, struct kbase_device, js_data.policy);
-	KBASE_TRACE_ADD_REFCOUNT(kbdev, JS_POLICY_TERM_CTX, kctx, NULL, 0u, kbasep_js_policy_trace_get_refcnt(kbdev, kctx));
 
 	/* No work to do */
 }

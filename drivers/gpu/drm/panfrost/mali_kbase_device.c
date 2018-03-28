@@ -29,26 +29,7 @@
 #include <mali_kbase_hw.h>
 #include <mali_kbase_config_defaults.h>
 
-/* NOTE: Magic - 0x45435254 (TRCE in ASCII).
- * Supports tracing feature provided in the base module.
- * Please keep it in sync with the value of base module.
- */
-#define TRACE_BUFFER_HEADER_SPECIAL 0x45435254
-
-#if KBASE_TRACE_ENABLE
-static const char *kbasep_trace_code_string[] = {
-	/* IMPORTANT: USE OF SPECIAL #INCLUDE OF NON-STANDARD HEADER FILE
-	 * THIS MUST BE USED AT THE START OF THE ARRAY */
-#define KBASE_TRACE_CODE_MAKE_CODE(X) # X
-#include "mali_kbase_trace_defs.h"
-#undef  KBASE_TRACE_CODE_MAKE_CODE
-};
-#endif
-
 #define DEBUG_MESSAGE_SIZE 256
-
-static int kbasep_trace_init(struct kbase_device *kbdev);
-static void kbasep_trace_term(struct kbase_device *kbdev);
 
 struct kbase_device *kbase_device_alloc(void)
 {
@@ -206,10 +187,6 @@ int kbase_device_init(struct kbase_device * const kbdev)
 
 	spin_lock_init(&kbdev->hwcnt.lock);
 
-	err = kbasep_trace_init(kbdev);
-	if (err)
-		goto term_as;
-
 	mutex_init(&kbdev->cacheclean_lock);
 
 #ifdef CONFIG_MALI_TRACE_TIMELINE
@@ -224,7 +201,7 @@ int kbase_device_init(struct kbase_device * const kbdev)
 
 	err = kbase_instr_backend_init(kbdev);
 	if (err)
-		goto term_trace;
+		goto term_as;
 
 	kbdev->pm.dvfs_period = DEFAULT_PM_DVFS_PERIOD;
 
@@ -237,8 +214,6 @@ int kbase_device_init(struct kbase_device * const kbdev)
 #endif /* CONFIG_MALI_GPU_MMU_AARCH64 */
 
 	return 0;
-term_trace:
-	kbasep_trace_term(kbdev);
 term_as:
 	kbase_device_all_as_term(kbdev);
 as_init_failed:
@@ -250,9 +225,6 @@ fail:
 void kbase_device_term(struct kbase_device *kbdev)
 {
 	kbase_instr_backend_term(kbdev);
-
-	kbasep_trace_term(kbdev);
-
 	kbase_device_all_as_term(kbdev);
 }
 
@@ -260,243 +232,3 @@ void kbase_device_free(struct kbase_device *kbdev)
 {
 	kfree(kbdev);
 }
-
-int kbase_device_trace_buffer_install(
-		struct kbase_context *kctx, u32 *tb, size_t size)
-{
-	unsigned long flags;
-
-	/* Interface uses 16-bit value to track last accessed entry. Each entry
-	 * is composed of two 32-bit words.
-	 * This limits the size that can be handled without an overflow. */
-	if (0xFFFF * (2 * sizeof(u32)) < size)
-		return -EINVAL;
-
-	/* set up the header */
-	/* magic number in the first 4 bytes */
-	tb[0] = TRACE_BUFFER_HEADER_SPECIAL;
-	/* Store (write offset = 0, wrap counter = 0, transaction active = no)
-	 * write offset 0 means never written.
-	 * Offsets 1 to (wrap_offset - 1) used to store values when trace started
-	 */
-	tb[1] = 0;
-
-	/* install trace buffer */
-	spin_lock_irqsave(&kctx->jctx.tb_lock, flags);
-	kctx->jctx.tb_wrap_offset = size / 8;
-	kctx->jctx.tb = tb;
-	spin_unlock_irqrestore(&kctx->jctx.tb_lock, flags);
-
-	return 0;
-}
-
-void kbase_device_trace_buffer_uninstall(struct kbase_context *kctx)
-{
-	unsigned long flags;
-
-	spin_lock_irqsave(&kctx->jctx.tb_lock, flags);
-	kctx->jctx.tb = NULL;
-	kctx->jctx.tb_wrap_offset = 0;
-	spin_unlock_irqrestore(&kctx->jctx.tb_lock, flags);
-}
-
-void kbase_device_trace_register_access(struct kbase_context *kctx, enum kbase_reg_access_type type, u16 reg_offset, u32 reg_value)
-{
-	unsigned long flags;
-
-	spin_lock_irqsave(&kctx->jctx.tb_lock, flags);
-	if (kctx->jctx.tb) {
-		u16 wrap_count;
-		u16 write_offset;
-		u32 *tb = kctx->jctx.tb;
-		u32 header_word;
-
-		header_word = tb[1];
-
-		wrap_count = (header_word >> 1) & 0x7FFF;
-		write_offset = (header_word >> 16) & 0xFFFF;
-
-		/* mark as transaction in progress */
-		tb[1] |= 0x1;
-		mb();
-
-		/* calculate new offset */
-		write_offset++;
-		if (write_offset == kctx->jctx.tb_wrap_offset) {
-			/* wrap */
-			write_offset = 1;
-			wrap_count++;
-			wrap_count &= 0x7FFF;	/* 15bit wrap counter */
-		}
-
-		/* store the trace entry at the selected offset */
-		tb[write_offset * 2 + 0] = (reg_offset & ~0x3) | ((type == REG_WRITE) ? 0x1 : 0x0);
-		tb[write_offset * 2 + 1] = reg_value;
-		mb();
-
-		/* new header word */
-		header_word = (write_offset << 16) | (wrap_count << 1) | 0x0;	/* transaction complete */
-		tb[1] = header_word;
-	}
-	spin_unlock_irqrestore(&kctx->jctx.tb_lock, flags);
-}
-
-/*
- * Device trace functions
- */
-#if KBASE_TRACE_ENABLE
-
-static int kbasep_trace_init(struct kbase_device *kbdev)
-{
-	struct kbase_trace *rbuf;
-
-	rbuf = kmalloc_array(KBASE_TRACE_SIZE, sizeof(*rbuf), GFP_KERNEL);
-
-	if (!rbuf)
-		return -EINVAL;
-
-	kbdev->trace_rbuf = rbuf;
-	spin_lock_init(&kbdev->trace_lock);
-	return 0;
-}
-
-static void kbasep_trace_term(struct kbase_device *kbdev)
-{
-	kfree(kbdev->trace_rbuf);
-}
-
-static void kbasep_trace_format_msg(struct kbase_trace *trace_msg, char *buffer, int len)
-{
-	s32 written = 0;
-
-	/* Initial part of message */
-	written += MAX(snprintf(buffer + written, MAX(len - written, 0), "%d.%.6d,%d,%d,%s,%p,", (int)trace_msg->timestamp.tv_sec, (int)(trace_msg->timestamp.tv_nsec / 1000), trace_msg->thread_id, trace_msg->cpu, kbasep_trace_code_string[trace_msg->code], trace_msg->ctx), 0);
-
-	if (trace_msg->katom)
-		written += MAX(snprintf(buffer + written, MAX(len - written, 0), "atom %d (ud: 0x%llx 0x%llx)", trace_msg->atom_number, trace_msg->atom_udata[0], trace_msg->atom_udata[1]), 0);
-
-	written += MAX(snprintf(buffer + written, MAX(len - written, 0), ",%.8llx,", trace_msg->gpu_addr), 0);
-
-	/* NOTE: Could add function callbacks to handle different message types */
-	/* Jobslot present */
-	if (trace_msg->flags & KBASE_TRACE_FLAG_JOBSLOT)
-		written += MAX(snprintf(buffer + written, MAX(len - written, 0), "%d", trace_msg->jobslot), 0);
-
-	written += MAX(snprintf(buffer + written, MAX(len - written, 0), ","), 0);
-
-	/* Refcount present */
-	if (trace_msg->flags & KBASE_TRACE_FLAG_REFCOUNT)
-		written += MAX(snprintf(buffer + written, MAX(len - written, 0), "%d", trace_msg->refcount), 0);
-
-	written += MAX(snprintf(buffer + written, MAX(len - written, 0), ","), 0);
-
-	/* Rest of message */
-	written += MAX(snprintf(buffer + written, MAX(len - written, 0), "0x%.8lx", trace_msg->info_val), 0);
-}
-
-static void kbasep_trace_dump_msg(struct kbase_device *kbdev, struct kbase_trace *trace_msg)
-{
-	char buffer[DEBUG_MESSAGE_SIZE];
-
-	kbasep_trace_format_msg(trace_msg, buffer, DEBUG_MESSAGE_SIZE);
-	dev_dbg(kbdev->dev, "%s", buffer);
-}
-
-void kbasep_trace_add(struct kbase_device *kbdev, enum kbase_trace_code code, void *ctx, struct kbase_jd_atom *katom, u64 gpu_addr, u8 flags, int refcount, int jobslot, unsigned long info_val)
-{
-	unsigned long irqflags;
-	struct kbase_trace *trace_msg;
-
-	spin_lock_irqsave(&kbdev->trace_lock, irqflags);
-
-	trace_msg = &kbdev->trace_rbuf[kbdev->trace_next_in];
-
-	/* Fill the message */
-	trace_msg->thread_id = task_pid_nr(current);
-	trace_msg->cpu = task_cpu(current);
-
-	getnstimeofday(&trace_msg->timestamp);
-
-	trace_msg->code = code;
-	trace_msg->ctx = ctx;
-
-	if (katom == NULL) {
-		trace_msg->katom = false;
-	} else {
-		trace_msg->katom = true;
-		trace_msg->atom_number = kbase_jd_atom_id(katom->kctx, katom);
-		trace_msg->atom_udata[0] = katom->udata.blob[0];
-		trace_msg->atom_udata[1] = katom->udata.blob[1];
-	}
-
-	trace_msg->gpu_addr = gpu_addr;
-	trace_msg->jobslot = jobslot;
-	trace_msg->refcount = MIN((unsigned int)refcount, 0xFF);
-	trace_msg->info_val = info_val;
-	trace_msg->flags = flags;
-
-	/* Update the ringbuffer indices */
-	kbdev->trace_next_in = (kbdev->trace_next_in + 1) & KBASE_TRACE_MASK;
-	if (kbdev->trace_next_in == kbdev->trace_first_out)
-		kbdev->trace_first_out = (kbdev->trace_first_out + 1) & KBASE_TRACE_MASK;
-
-	/* Done */
-
-	spin_unlock_irqrestore(&kbdev->trace_lock, irqflags);
-}
-
-void kbasep_trace_clear(struct kbase_device *kbdev)
-{
-	unsigned long flags;
-
-	spin_lock_irqsave(&kbdev->trace_lock, flags);
-	kbdev->trace_first_out = kbdev->trace_next_in;
-	spin_unlock_irqrestore(&kbdev->trace_lock, flags);
-}
-
-void kbasep_trace_dump(struct kbase_device *kbdev)
-{
-	unsigned long flags;
-	u32 start;
-	u32 end;
-
-	dev_dbg(kbdev->dev, "Dumping trace:\nsecs,nthread,cpu,code,ctx,katom,gpu_addr,jobslot,refcount,info_val");
-	spin_lock_irqsave(&kbdev->trace_lock, flags);
-	start = kbdev->trace_first_out;
-	end = kbdev->trace_next_in;
-
-	while (start != end) {
-		struct kbase_trace *trace_msg = &kbdev->trace_rbuf[start];
-
-		kbasep_trace_dump_msg(kbdev, trace_msg);
-
-		start = (start + 1) & KBASE_TRACE_MASK;
-	}
-	dev_dbg(kbdev->dev, "TRACE_END");
-
-	spin_unlock_irqrestore(&kbdev->trace_lock, flags);
-
-	KBASE_TRACE_CLEAR(kbdev);
-}
-
-void kbasep_trace_debugfs_init(struct kbase_device *kbdev)
-{
-}
-
-#else				/* KBASE_TRACE_ENABLE  */
-static int kbasep_trace_init(struct kbase_device *kbdev)
-{
-	CSTD_UNUSED(kbdev);
-	return 0;
-}
-
-static void kbasep_trace_term(struct kbase_device *kbdev)
-{
-	CSTD_UNUSED(kbdev);
-}
-
-void kbasep_trace_dump(struct kbase_device *kbdev)
-{
-	CSTD_UNUSED(kbdev);
-}
-#endif				/* KBASE_TRACE_ENABLE  */

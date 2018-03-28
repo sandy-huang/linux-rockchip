@@ -155,45 +155,10 @@ static void kbase_pm_invoke(struct kbase_device *kbdev,
 		kbase_tlstream_aux_pm_state(core_type, state);
 	}
 
-	/* Tracing */
-	if (cores) {
-		if (action == ACTION_PWRON)
-			switch (core_type) {
-			case KBASE_PM_CORE_SHADER:
-				KBASE_TRACE_ADD(kbdev, PM_PWRON, NULL, NULL, 0u,
-									lo);
-				break;
-			case KBASE_PM_CORE_TILER:
-				KBASE_TRACE_ADD(kbdev, PM_PWRON_TILER, NULL,
-								NULL, 0u, lo);
-				break;
-			case KBASE_PM_CORE_L2:
-				KBASE_TRACE_ADD(kbdev, PM_PWRON_L2, NULL, NULL,
-									0u, lo);
-				break;
-			default:
-				break;
-			}
-		else if (action == ACTION_PWROFF)
-			switch (core_type) {
-			case KBASE_PM_CORE_SHADER:
-				KBASE_TRACE_ADD(kbdev, PM_PWROFF, NULL, NULL,
-									0u, lo);
-				break;
-			case KBASE_PM_CORE_TILER:
-				KBASE_TRACE_ADD(kbdev, PM_PWROFF_TILER, NULL,
-								NULL, 0u, lo);
-				break;
-			case KBASE_PM_CORE_L2:
-				KBASE_TRACE_ADD(kbdev, PM_PWROFF_L2, NULL, NULL,
-									0u, lo);
-				/* disable snoops before L2 is turned off */
-				kbase_pm_cache_snoop_disable(kbdev);
-				break;
-			default:
-				break;
-			}
-	}
+	/* disable snoops before L2 is turned off */
+	if (cores && action == ACTION_PWROFF && core_type == KBASE_PM_CORE_L2)
+		kbase_pm_cache_snoop_disable(kbdev);
+
 
 	if (lo != 0)
 		kbase_reg_write(kbdev, GPU_CONTROL_REG(reg), lo, NULL);
@@ -308,28 +273,7 @@ u64 kbase_pm_get_trans_cores(struct kbase_device *kbdev,
 u64 kbase_pm_get_ready_cores(struct kbase_device *kbdev,
 						enum kbase_pm_core_type type)
 {
-	u64 result;
-
-	result = kbase_pm_get_state(kbdev, type, ACTION_READY);
-
-	switch (type) {
-	case KBASE_PM_CORE_SHADER:
-		KBASE_TRACE_ADD(kbdev, PM_CORES_POWERED, NULL, NULL, 0u,
-								(u32) result);
-		break;
-	case KBASE_PM_CORE_TILER:
-		KBASE_TRACE_ADD(kbdev, PM_CORES_POWERED_TILER, NULL, NULL, 0u,
-								(u32) result);
-		break;
-	case KBASE_PM_CORE_L2:
-		KBASE_TRACE_ADD(kbdev, PM_CORES_POWERED_L2, NULL, NULL, 0u,
-								(u32) result);
-		break;
-	default:
-		break;
-	}
-
-	return result;
+	return kbase_pm_get_state(kbdev, type, ACTION_READY);
 }
 
 /**
@@ -583,23 +527,15 @@ MOCKABLE(kbase_pm_check_transitions_nolock) (struct kbase_device *kbdev)
 				&shader_available_bitmap,
 				&kbdev->pm.backend.powering_on_shader_state);
 
-		if (kbdev->shader_available_bitmap != shader_available_bitmap) {
-			KBASE_TRACE_ADD(kbdev, PM_CORES_CHANGE_AVAILABLE, NULL,
-						NULL, 0u,
-						(u32) shader_available_bitmap);
+		if (kbdev->shader_available_bitmap != shader_available_bitmap)
 			KBASE_TIMELINE_POWER_SHADER(kbdev,
 						shader_available_bitmap);
-		}
 
 		kbdev->shader_available_bitmap = shader_available_bitmap;
 
-		if (kbdev->tiler_available_bitmap != tiler_available_bitmap) {
-			KBASE_TRACE_ADD(kbdev, PM_CORES_CHANGE_AVAILABLE_TILER,
-						NULL, NULL, 0u,
-						(u32) tiler_available_bitmap);
+		if (kbdev->tiler_available_bitmap != tiler_available_bitmap)
 			KBASE_TIMELINE_POWER_TILER(kbdev,
 							tiler_available_bitmap);
-		}
 
 		kbdev->tiler_available_bitmap = tiler_available_bitmap;
 
@@ -634,13 +570,6 @@ MOCKABLE(kbase_pm_check_transitions_nolock) (struct kbase_device *kbdev)
 				== kbdev->pm.backend.desired_tiler_state) {
 		cores_are_available = true;
 
-		KBASE_TRACE_ADD(kbdev, PM_CORES_AVAILABLE, NULL, NULL, 0u,
-				(u32)(kbdev->shader_available_bitmap &
-				kbdev->pm.backend.desired_shader_state));
-		KBASE_TRACE_ADD(kbdev, PM_CORES_AVAILABLE_TILER, NULL, NULL, 0u,
-				(u32)(kbdev->tiler_available_bitmap &
-				kbdev->pm.backend.desired_tiler_state));
-
 		/* Log timelining information about handling events that power
 		 * up cores, to match up either with immediate submission either
 		 * because cores already available, or from PM IRQ */
@@ -664,17 +593,10 @@ MOCKABLE(kbase_pm_check_transitions_nolock) (struct kbase_device *kbdev)
 					kbdev,
 					KBASE_PM_CORE_TILER));
 
-		KBASE_TRACE_ADD(kbdev, PM_DESIRED_REACHED, NULL, NULL,
-				kbdev->pm.backend.gpu_in_desired_state,
-				(u32)kbdev->pm.backend.desired_shader_state);
-		KBASE_TRACE_ADD(kbdev, PM_DESIRED_REACHED_TILER, NULL, NULL, 0u,
-				(u32)kbdev->pm.backend.desired_tiler_state);
-
 		/* Log timelining information for synchronous waiters */
 		kbase_timeline_pm_send_event(kbdev,
 				KBASE_TIMELINE_PM_EVENT_GPU_STATE_CHANGED);
 		/* Wake slow-path waiters. Job scheduler does not use this. */
-		KBASE_TRACE_ADD(kbdev, PM_WAKE_WAITERS, NULL, NULL, 0u, 0);
 		wake_up(&kbdev->pm.backend.gpu_in_desired_state_wait);
 	}
 
@@ -866,8 +788,6 @@ void kbase_pm_clock_on(struct kbase_device *kbdev, bool is_resume)
 
 	kbdev->poweroff_pending = false;
 
-	KBASE_TRACE_ADD(kbdev, PM_GPU_ON, NULL, NULL, 0u, 0u);
-
 	if (is_resume && kbdev->pm.backend.callback_power_resume) {
 		kbdev->pm.backend.callback_power_resume(kbdev);
 		return;
@@ -925,8 +845,6 @@ bool kbase_pm_clock_off(struct kbase_device *kbdev, bool is_suspend)
 			kbdev->pm.backend.callback_power_suspend(kbdev);
 		return true;
 	}
-
-	KBASE_TRACE_ADD(kbdev, PM_GPU_OFF, NULL, NULL, 0u, 0u);
 
 	/* Disable interrupts. This also clears any outstanding interrupts */
 	kbase_pm_disable_interrupts(kbdev);
@@ -1178,20 +1096,12 @@ int kbase_pm_init_hw(struct kbase_device *kbdev, unsigned int flags)
 
 	/* The cores should be made unavailable due to the reset */
 	spin_lock_irqsave(&kbdev->pm.power_change_lock, irq_flags);
-	if (kbdev->shader_available_bitmap != 0u)
-			KBASE_TRACE_ADD(kbdev, PM_CORES_CHANGE_AVAILABLE, NULL,
-						NULL, 0u, (u32)0u);
-	if (kbdev->tiler_available_bitmap != 0u)
-			KBASE_TRACE_ADD(kbdev, PM_CORES_CHANGE_AVAILABLE_TILER,
-						NULL, NULL, 0u, (u32)0u);
 	kbdev->shader_available_bitmap = 0u;
 	kbdev->tiler_available_bitmap = 0u;
 	kbdev->l2_available_bitmap = 0u;
 	spin_unlock_irqrestore(&kbdev->pm.power_change_lock, irq_flags);
 
 	/* Soft reset the GPU */
-	KBASE_TRACE_ADD(kbdev, CORE_GPU_SOFT_RESET, NULL, NULL, 0u, 0);
-
 	kbase_tlstream_jd_gpu_soft_reset(kbdev);
 
 	kbase_reg_write(kbdev, GPU_CONTROL_REG(GPU_COMMAND),
@@ -1238,7 +1148,6 @@ int kbase_pm_init_hw(struct kbase_device *kbdev, unsigned int flags)
 	 * reset */
 	dev_err(kbdev->dev, "Failed to soft-reset GPU (timed out after %d ms), now attempting a hard reset\n",
 								RESET_TIMEOUT);
-	KBASE_TRACE_ADD(kbdev, CORE_GPU_HARD_RESET, NULL, NULL, 0u, 0);
 	kbase_reg_write(kbdev, GPU_CONTROL_REG(GPU_COMMAND),
 						GPU_COMMAND_HARD_RESET, NULL);
 

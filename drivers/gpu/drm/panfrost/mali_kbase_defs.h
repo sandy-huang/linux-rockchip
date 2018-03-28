@@ -52,18 +52,6 @@
 #define KBASE_PM_RUNTIME 1
 #endif
 
-/** Enable SW tracing when set */
-#ifdef CONFIG_MALI_MIDGARD_ENABLE_TRACE
-#define KBASE_TRACE_ENABLE 1
-#endif
-
-#ifndef KBASE_TRACE_ENABLE
-#define KBASE_TRACE_ENABLE 0
-#endif				/* KBASE_TRACE_ENABLE */
-
-/** Dump Job slot trace on error (only active if KBASE_TRACE_ENABLE != 0) */
-#define KBASE_TRACE_DUMP_ON_JOB_SLOT_ERROR 1
-
 /**
  * Number of milliseconds before resetting the GPU when a job cannot be "zapped" from the hardware.
  * Note that the time is actually ZAP_TIMEOUT+SOFT_STOP_RESET_TIMEOUT between the context zap starting and the GPU
@@ -133,10 +121,6 @@
 
 #define KBASE_LOCK_REGION_MAX_SIZE (63)
 #define KBASE_LOCK_REGION_MIN_SIZE (11)
-
-#define KBASE_TRACE_SIZE_LOG2 8	/* 256 entries */
-#define KBASE_TRACE_SIZE (1 << KBASE_TRACE_SIZE_LOG2)
-#define KBASE_TRACE_MASK ((1 << KBASE_TRACE_SIZE_LOG2)-1)
 
 #include "mali_kbase_js_defs.h"
 #include "mali_kbase_hwaccess_defs.h"
@@ -544,39 +528,6 @@ struct kbasep_mem_device {
 
 };
 
-#define KBASE_TRACE_CODE(X) KBASE_TRACE_CODE_ ## X
-
-enum kbase_trace_code {
-	/* IMPORTANT: USE OF SPECIAL #INCLUDE OF NON-STANDARD HEADER FILE
-	 * THIS MUST BE USED AT THE START OF THE ENUM */
-#define KBASE_TRACE_CODE_MAKE_CODE(X) KBASE_TRACE_CODE(X)
-#include "mali_kbase_trace_defs.h"
-#undef  KBASE_TRACE_CODE_MAKE_CODE
-	/* Comma on its own, to extend the list */
-	,
-	/* Must be the last in the enum */
-	KBASE_TRACE_CODE_COUNT
-};
-
-#define KBASE_TRACE_FLAG_REFCOUNT (((u8)1) << 0)
-#define KBASE_TRACE_FLAG_JOBSLOT  (((u8)1) << 1)
-
-struct kbase_trace {
-	struct timespec timestamp;
-	u32 thread_id;
-	u32 cpu;
-	void *ctx;
-	bool katom;
-	int atom_number;
-	u64 atom_udata[2];
-	u64 gpu_addr;
-	unsigned long info_val;
-	u8 code;
-	u8 jobslot;
-	u8 refcount;
-	u8 flags;
-};
-
 /** Event IDs for the power management framework.
  *
  * Any of these events might be missed, so they should not be relied upon to
@@ -902,13 +853,6 @@ struct kbase_device {
 
 	/*value to be written to the irq_throttle register each time an irq is served */
 	atomic_t irq_throttle_cycles;
-
-#if KBASE_TRACE_ENABLE
-	spinlock_t              trace_lock;
-	u16                     trace_first_out;
-	u16                     trace_next_in;
-	struct kbase_trace            *trace_rbuf;
-#endif
 
 	/* This is used to override the current job scheduler values for
 	 * JS_SCHEDULING_PERIOD_NS

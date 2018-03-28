@@ -1919,90 +1919,6 @@ static int kbase_cpu_mmap(struct kbase_va_region *reg, struct vm_area_struct *vm
 	return err;
 }
 
-static int kbase_trace_buffer_mmap(struct kbase_context *kctx, struct vm_area_struct *vma, struct kbase_va_region **const reg, void **const kaddr)
-{
-	struct kbase_va_region *new_reg;
-	u32 nr_pages;
-	size_t size;
-	int err = 0;
-	u32 *tb;
-	int owns_tb = 1;
-
-	dev_dbg(kctx->kbdev->dev, "in %s\n", __func__);
-	size = (vma->vm_end - vma->vm_start);
-	nr_pages = size >> PAGE_SHIFT;
-
-	if (!kctx->jctx.tb) {
-		tb = vmalloc_user(size);
-
-		if (tb == NULL) {
-			err = -ENOMEM;
-			goto out;
-		}
-
-		err = kbase_device_trace_buffer_install(kctx, tb, size);
-		if (err) {
-			vfree(tb);
-			goto out;
-		}
-	} else {
-		err = -EINVAL;
-		goto out;
-	}
-
-	*kaddr = kctx->jctx.tb;
-
-	new_reg = kbase_alloc_free_region(kctx, 0, nr_pages, KBASE_REG_ZONE_SAME_VA);
-	if (!new_reg) {
-		err = -ENOMEM;
-		WARN_ON(1);
-		goto out_no_region;
-	}
-
-	new_reg->cpu_alloc = kbase_alloc_create(0, KBASE_MEM_TYPE_TB);
-	if (IS_ERR_OR_NULL(new_reg->cpu_alloc)) {
-		err = -ENOMEM;
-		new_reg->cpu_alloc = NULL;
-		WARN_ON(1);
-		goto out_no_alloc;
-	}
-
-	new_reg->gpu_alloc = kbase_mem_phy_alloc_get(new_reg->cpu_alloc);
-
-	new_reg->cpu_alloc->imported.kctx = kctx;
-	new_reg->flags &= ~KBASE_REG_FREE;
-	new_reg->flags |= KBASE_REG_CPU_CACHED;
-
-	/* alloc now owns the tb */
-	owns_tb = 0;
-
-	if (kbase_add_va_region(kctx, new_reg, vma->vm_start, nr_pages, 1) != 0) {
-		err = -ENOMEM;
-		WARN_ON(1);
-		goto out_no_va_region;
-	}
-
-	*reg = new_reg;
-
-	/* map read only, noexec */
-	vma->vm_flags &= ~(VM_WRITE | VM_MAYWRITE | VM_EXEC | VM_MAYEXEC);
-	/* the rest of the flags is added by the cpu_mmap handler */
-
-	dev_dbg(kctx->kbdev->dev, "%s done\n", __func__);
-	return 0;
-
-out_no_va_region:
-out_no_alloc:
-	kbase_free_alloced_region(new_reg);
-out_no_region:
-	if (owns_tb) {
-		kbase_device_trace_buffer_uninstall(kctx);
-		vfree(tb);
-	}
-out:
-	return err;
-}
-
 static int kbase_mmu_dump_mmap(struct kbase_context *kctx, struct vm_area_struct *vma, struct kbase_va_region **const reg, void **const kmap_addr)
 {
 	struct kbase_va_region *new_reg;
@@ -2157,14 +2073,6 @@ int kbase_mmap(struct file *file, struct vm_area_struct *vma)
 		/* Illegal handle for direct map */
 		err = -EINVAL;
 		goto out_unlock;
-	case PFN_DOWN(BASE_MEM_TRACE_BUFFER_HANDLE):
-		err = kbase_trace_buffer_mmap(kctx, vma, &reg, &kaddr);
-		if (err != 0)
-			goto out_unlock;
-		dev_dbg(dev, "kbase_trace_buffer_mmap ok\n");
-		/* free the region on munmap */
-		free_on_close = 1;
-		goto map;
 	case PFN_DOWN(BASE_MEM_MMU_DUMP_HANDLE):
 		/* MMU dump */
 		err = kbase_mmu_dump_mmap(kctx, vma, &reg, &kaddr);

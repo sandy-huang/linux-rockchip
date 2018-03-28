@@ -278,9 +278,6 @@ void kbase_backend_ctx_count_changed(struct kbase_device *kbdev)
 		hrtimer_start(&backend->scheduling_timer,
 			HR_TIMER_DELAY_NSEC(js_devdata->scheduling_period_ns),
 							HRTIMER_MODE_REL);
-
-		KBASE_TRACE_ADD(kbdev, JS_POLICY_TIMER_START, NULL, NULL, 0u,
-									0u);
 	}
 }
 

@@ -53,9 +53,6 @@ void kbase_job_hw_submit(struct kbase_device *kbdev,
 
 	kctx = katom->kctx;
 
-	/* Affinity is not violating */
-	kbase_js_debug_log_current_affinities(kbdev);
-
 	kbase_reg_write(kbdev, JOB_SLOT_REG(js, JS_HEAD_NEXT_LO),
 						jc_head & 0xFFFFFFFF, kctx);
 	kbase_reg_write(kbdev, JOB_SLOT_REG(js, JS_HEAD_NEXT_HI),
@@ -113,9 +110,6 @@ void kbase_job_hw_submit(struct kbase_device *kbdev,
 	/* GO ! */
 	dev_dbg(kbdev->dev, "JS: Submitting atom %p from ctx %p to js[%d] with head=0x%llx, affinity=0x%llx",
 				katom, kctx, js, jc_head, katom->affinity);
-
-	KBASE_TRACE_ADD_SLOT_INFO(kbdev, JM_SUBMIT, kctx, katom, jc_head, js,
-							(u32) katom->affinity);
 
 	kbase_tlstream_tl_attrib_atom_config(katom, jc_head,
 			katom->affinity, cfg);
@@ -214,8 +208,6 @@ void kbase_job_done(struct kbase_device *kbdev, u32 done)
 	struct kbasep_js_device_data *js_devdata;
 
 	js_devdata = &kbdev->js_data;
-
-	KBASE_TRACE_ADD(kbdev, JM_IRQ, NULL, NULL, 0, done);
 
 	memset(&kbdev->slot_submit_count_irq[0], 0,
 					sizeof(kbdev->slot_submit_count_irq));
@@ -428,7 +420,6 @@ void kbase_job_done(struct kbase_device *kbdev, u32 done)
 		kbasep_try_reset_gpu_early(kbdev);
 	}
 #endif // KBASE_GPU_RESET_EN
-	KBASE_TRACE_ADD(kbdev, JM_IRQ_END, NULL, NULL, 0, count);
 }
 
 static bool kbasep_soft_stop_allowed(struct kbase_device *kbdev,
@@ -464,20 +455,6 @@ void kbasep_job_slot_soft_or_hard_stop_do_action(struct kbase_device *kbdev,
 					struct kbase_jd_atom *target_katom)
 {
 	struct kbase_context *kctx = target_katom->kctx;
-#if KBASE_TRACE_ENABLE
-	u32 status_reg_before;
-	u64 job_in_head_before;
-	u32 status_reg_after;
-
-	/* Check the head pointer */
-	job_in_head_before = ((u64) kbase_reg_read(kbdev,
-					JOB_SLOT_REG(js, JS_HEAD_LO), NULL))
-			| (((u64) kbase_reg_read(kbdev,
-					JOB_SLOT_REG(js, JS_HEAD_HI), NULL))
-									<< 32);
-	status_reg_before = kbase_reg_read(kbdev, JOB_SLOT_REG(js, JS_STATUS),
-									NULL);
-#endif // KBASE_TRACE_ENABLE
 
 	if (action == JS_COMMAND_SOFT_STOP) {
 		bool soft_stop_allowed = kbasep_soft_stop_allowed(kbdev,
@@ -573,92 +550,6 @@ void kbasep_job_slot_soft_or_hard_stop_do_action(struct kbase_device *kbdev,
 	}
 
 	kbase_reg_write(kbdev, JOB_SLOT_REG(js, JS_COMMAND), action, kctx);
-
-#if KBASE_TRACE_ENABLE
-	status_reg_after = kbase_reg_read(kbdev, JOB_SLOT_REG(js, JS_STATUS),
-									NULL);
-	if (status_reg_after == BASE_JD_EVENT_ACTIVE) {
-		struct kbase_jd_atom *head;
-		struct kbase_context *head_kctx;
-
-		head = kbase_gpu_inspect(kbdev, js, 0);
-		head_kctx = head->kctx;
-
-		if (status_reg_before == BASE_JD_EVENT_ACTIVE)
-			KBASE_TRACE_ADD_SLOT(kbdev, JM_CHECK_HEAD, head_kctx,
-						head, job_in_head_before, js);
-		else
-			KBASE_TRACE_ADD_SLOT(kbdev, JM_CHECK_HEAD, NULL, NULL,
-						0, js);
-
-		switch (action) {
-		case JS_COMMAND_SOFT_STOP:
-			KBASE_TRACE_ADD_SLOT(kbdev, JM_SOFTSTOP, head_kctx,
-							head, head->jc, js);
-			break;
-		case JS_COMMAND_SOFT_STOP_0:
-			KBASE_TRACE_ADD_SLOT(kbdev, JM_SOFTSTOP_0, head_kctx,
-							head, head->jc, js);
-			break;
-		case JS_COMMAND_SOFT_STOP_1:
-			KBASE_TRACE_ADD_SLOT(kbdev, JM_SOFTSTOP_1, head_kctx,
-							head, head->jc, js);
-			break;
-		case JS_COMMAND_HARD_STOP:
-			KBASE_TRACE_ADD_SLOT(kbdev, JM_HARDSTOP, head_kctx,
-							head, head->jc, js);
-			break;
-		case JS_COMMAND_HARD_STOP_0:
-			KBASE_TRACE_ADD_SLOT(kbdev, JM_HARDSTOP_0, head_kctx,
-							head, head->jc, js);
-			break;
-		case JS_COMMAND_HARD_STOP_1:
-			KBASE_TRACE_ADD_SLOT(kbdev, JM_HARDSTOP_1, head_kctx,
-							head, head->jc, js);
-			break;
-		default:
-			BUG();
-			break;
-		}
-	} else {
-		if (status_reg_before == BASE_JD_EVENT_ACTIVE)
-			KBASE_TRACE_ADD_SLOT(kbdev, JM_CHECK_HEAD, NULL, NULL,
-							job_in_head_before, js);
-		else
-			KBASE_TRACE_ADD_SLOT(kbdev, JM_CHECK_HEAD, NULL, NULL,
-							0, js);
-
-		switch (action) {
-		case JS_COMMAND_SOFT_STOP:
-			KBASE_TRACE_ADD_SLOT(kbdev, JM_SOFTSTOP, NULL, NULL, 0,
-							js);
-			break;
-		case JS_COMMAND_SOFT_STOP_0:
-			KBASE_TRACE_ADD_SLOT(kbdev, JM_SOFTSTOP_0, NULL, NULL,
-							0, js);
-			break;
-		case JS_COMMAND_SOFT_STOP_1:
-			KBASE_TRACE_ADD_SLOT(kbdev, JM_SOFTSTOP_1, NULL, NULL,
-							0, js);
-			break;
-		case JS_COMMAND_HARD_STOP:
-			KBASE_TRACE_ADD_SLOT(kbdev, JM_HARDSTOP, NULL, NULL, 0,
-							js);
-			break;
-		case JS_COMMAND_HARD_STOP_0:
-			KBASE_TRACE_ADD_SLOT(kbdev, JM_HARDSTOP_0, NULL, NULL,
-							0, js);
-			break;
-		case JS_COMMAND_HARD_STOP_1:
-			KBASE_TRACE_ADD_SLOT(kbdev, JM_HARDSTOP_1, NULL, NULL,
-							0, js);
-			break;
-		default:
-			BUG();
-			break;
-		}
-	}
-#endif // KBASE_TRACE_ENABLE
 }
 
 void kbase_backend_jm_kill_jobs_from_kctx(struct kbase_context *kctx)
@@ -1105,8 +996,6 @@ static void kbasep_reset_timeout_worker(struct work_struct *data)
 
 	js_devdata = &kbdev->js_data;
 
-	KBASE_TRACE_ADD(kbdev, JM_BEGIN_RESET_WORKER, NULL, NULL, 0u, 0);
-
 	/* Make sure the timer has completed - this cannot be done from
 	 * interrupt context, so this cannot be done within
 	 * kbasep_try_reset_gpu_early. */
@@ -1328,14 +1217,10 @@ static void kbasep_reset_timeout_worker(struct work_struct *data)
 	mutex_unlock(&kbdev->pm.lock);
 
 	/* Try submitting some jobs to restart processing */
-	if (try_schedule) {
-		KBASE_TRACE_ADD(kbdev, JM_SUBMIT_AFTER_RESET, NULL, NULL, 0u,
-									0);
+	if (try_schedule)
 		kbase_js_sched_all(kbdev);
-	}
 
 	kbase_pm_context_idle(kbdev);
-	KBASE_TRACE_ADD(kbdev, JM_END_RESET_WORKER, NULL, NULL, 0u, 0);
 }
 
 static enum hrtimer_restart kbasep_reset_timer_callback(struct hrtimer *timer)

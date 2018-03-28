@@ -1336,14 +1336,6 @@ void kbase_mem_kref_free(struct kref *kref)
 			mmdrop(alloc->imported.user_buf.mm);
 		kfree(alloc->imported.user_buf.pages);
 		break;
-	case KBASE_MEM_TYPE_TB:{
-		void *tb;
-
-		tb = alloc->imported.kctx->jctx.tb;
-		kbase_device_trace_buffer_uninstall(alloc->imported.kctx);
-		vfree(tb);
-		break;
-	}
 	default:
 		WARN(1, "Unexecpted free of type %d\n", alloc->type);
 		break;

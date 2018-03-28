@@ -257,18 +257,3 @@ void kbase_js_affinity_release_slot_cores(struct kbase_device *kbdev, int js,
 		cores &= ~bit;
 	}
 }
-
-#if KBASE_TRACE_ENABLE
-void kbase_js_debug_log_current_affinities(struct kbase_device *kbdev)
-{
-	struct kbasep_js_device_data *js_devdata;
-	int slot_nr;
-
-	js_devdata = &kbdev->js_data;
-
-	for (slot_nr = 0; slot_nr < 3; ++slot_nr)
-		KBASE_TRACE_ADD_SLOT_INFO(kbdev, JS_AFFINITY_CURRENT, NULL,
-							NULL, 0u, slot_nr,
-			(u32) js_devdata->runpool_irq.slot_affinities[slot_nr]);
-}
-#endif // KBASE_TRACE_ENABLE

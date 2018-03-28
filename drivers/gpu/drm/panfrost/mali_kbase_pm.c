@@ -76,7 +76,6 @@ int kbase_pm_context_active_handle_suspend(struct kbase_device *kbdev, enum kbas
 	}
 	c = ++kbdev->pm.active_count;
 	KBASE_TIMELINE_CONTEXT_ACTIVE(kbdev, c);
-	KBASE_TRACE_ADD_REFCOUNT(kbdev, PM_CONTEXT_ACTIVE, NULL, NULL, 0u, c);
 
 	/* Trace the event being handled */
 	if (old_count == 0)
@@ -112,7 +111,6 @@ void kbase_pm_context_idle(struct kbase_device *kbdev)
 
 	c = --kbdev->pm.active_count;
 	KBASE_TIMELINE_CONTEXT_ACTIVE(kbdev, c);
-	KBASE_TRACE_ADD_REFCOUNT(kbdev, PM_CONTEXT_IDLE, NULL, NULL, 0u, c);
 
 	/* Trace the event being handled */
 	if (old_count == 0)

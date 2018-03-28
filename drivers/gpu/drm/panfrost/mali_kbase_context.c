@@ -199,8 +199,6 @@ void kbase_destroy_context(struct kbase_context *kctx)
 
 	kbdev = kctx->kbdev;
 
-	KBASE_TRACE_ADD(kbdev, CORE_CTX_DESTROY, kctx, NULL, 0u, 0u);
-
 	/* Ensure the core is powered up for the destroy process */
 	/* A suspend won't happen here, because we're in a syscall from a userspace
 	 * thread. */

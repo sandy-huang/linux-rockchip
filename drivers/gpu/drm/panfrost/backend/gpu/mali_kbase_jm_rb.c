@@ -95,8 +95,6 @@ static struct kbase_jd_atom *kbase_gpu_dequeue_atom(struct kbase_device *kbdev,
 
 	katom->gpu_rb_state = KBASE_ATOM_GPU_RB_NOT_IN_SLOT_RB;
 
-	kbase_js_debug_log_current_affinities(kbdev);
-
 	return katom;
 }
 
@@ -306,11 +304,6 @@ static bool kbasep_js_job_check_ref_cores(struct kbase_device *kbdev,
 					 * previous state */
 					kbasep_js_job_check_deref_cores(kbdev,
 									katom);
-					KBASE_TRACE_ADD_SLOT_INFO(kbdev,
-					JS_CORE_REF_REGISTER_INUSE_FAILED,
-							katom->kctx, katom,
-							katom->jc, js,
-							(u32) katom->affinity);
 					/* *** BREAK OUT: Return to previous
 					 * state, retry *** */
 					retry = true;
@@ -319,11 +312,6 @@ static bool kbasep_js_job_check_ref_cores(struct kbase_device *kbdev,
 				if (cores_ready == KBASE_CORES_NOT_READY) {
 					/* Stay in this state and return, to
 					 * retry at this state later */
-					KBASE_TRACE_ADD_SLOT_INFO(kbdev,
-					JS_CORE_REF_REGISTER_INUSE_FAILED,
-							katom->kctx, katom,
-							katom->jc, js,
-							(u32) katom->affinity);
 					/* *** BREAK OUT: No state transition
 					 * *** */
 					break;
@@ -347,11 +335,6 @@ static bool kbasep_js_job_check_ref_cores(struct kbase_device *kbdev,
 					/* No cores are currently available */
 					kbasep_js_job_check_deref_cores(kbdev,
 									katom);
-					KBASE_TRACE_ADD_SLOT_INFO(kbdev,
-					JS_CORE_REF_REQUEST_ON_RECHECK_FAILED,
-						katom->kctx, katom,
-						katom->jc, js,
-						(u32) recently_chosen_affinity);
 					/* *** BREAK OUT: Transition to lower
 					 * state *** */
 					break;
@@ -388,12 +371,6 @@ static bool kbasep_js_job_check_ref_cores(struct kbase_device *kbdev,
 
 					kbasep_js_job_check_deref_cores(kbdev,
 									katom);
-
-					KBASE_TRACE_ADD_SLOT_INFO(kbdev,
-					JS_CORE_REF_REGISTER_INUSE_FAILED,
-							katom->kctx, katom,
-							katom->jc, js,
-							(u32) katom->affinity);
 					/* *** BREAK OUT: Return to previous
 					 * state, retry *** */
 					retry = true;
@@ -405,11 +382,6 @@ static bool kbasep_js_job_check_ref_cores(struct kbase_device *kbdev,
 					/* Return to previous state */
 					katom->coreref_state =
 					KBASE_ATOM_COREREF_STATE_WAITING_FOR_REQUESTED_CORES;
-					KBASE_TRACE_ADD_SLOT_INFO(kbdev,
-					JS_CORE_REF_REGISTER_ON_RECHECK_FAILED,
-							katom->kctx, katom,
-							katom->jc, js,
-							(u32) katom->affinity);
 					/* *** BREAK OUT: Transition to lower
 					 * state *** */
 					break;
@@ -434,10 +406,6 @@ static bool kbasep_js_job_check_ref_cores(struct kbase_device *kbdev,
 				KBASE_ATOM_COREREF_STATE_RECHECK_AFFINITY;
 				/* *** BREAK OUT: Transition to lower state ***
 				 */
-				KBASE_TRACE_ADD_SLOT_INFO(kbdev,
-					JS_CORE_REF_AFFINITY_WOULD_VIOLATE,
-					katom->kctx, katom, katom->jc, js,
-					(u32) katom->affinity);
 				break;
 			}
 
@@ -914,9 +882,6 @@ void kbase_gpu_complete_hw(struct kbase_device *kbdev, int js,
 		struct kbasep_js_device_data *js_devdata = &kbdev->js_data;
 		int i;
 
-#if KBASE_TRACE_DUMP_ON_JOB_SLOT_ERROR != 0
-		KBASE_TRACE_DUMP(kbdev);
-#endif
 		kbasep_js_clear_submit_allowed(js_devdata, katom->kctx);
 
 		/*
@@ -966,27 +931,17 @@ void kbase_gpu_complete_hw(struct kbase_device *kbdev, int js,
 		}
 	}
 
-	KBASE_TRACE_ADD_SLOT_INFO(kbdev, JM_JOB_DONE, kctx, katom, katom->jc,
-					js, completion_code);
-
 	if (job_tail != 0 && job_tail != katom->jc) {
 		bool was_updated = (job_tail != katom->jc);
 
 		/* Some of the job has been executed, so we update the job chain
 		 * address to where we should resume from */
 		katom->jc = job_tail;
-		if (was_updated)
-			KBASE_TRACE_ADD_SLOT(kbdev, JM_UPDATE_HEAD, katom->kctx,
-						katom, job_tail, js);
 	}
 
 	/* Only update the event code for jobs that weren't cancelled */
 	if (katom->event_code != BASE_JD_EVENT_JOB_CANCELLED)
 		katom->event_code = (base_jd_event_code)completion_code;
-
-	kbase_device_trace_register_access(kctx, REG_WRITE,
-						JOB_CONTROL_REG(JOB_IRQ_CLEAR),
-						1 << js);
 
 	/* Complete the job, and start new ones
 	 *
@@ -1316,7 +1271,6 @@ void kbase_gpu_cacheclean(struct kbase_device *kbdev,
 
 	/* use GPU_COMMAND completion solution */
 	/* clean & invalidate the caches */
-	KBASE_TRACE_ADD(kbdev, CORE_GPU_CLEAN_INV_CACHES, NULL, NULL, 0u, 0);
 	kbase_reg_write(kbdev, GPU_CONTROL_REG(GPU_COMMAND),
 					GPU_COMMAND_CLEAN_INV_CACHES, NULL);
 
@@ -1327,8 +1281,6 @@ void kbase_gpu_cacheclean(struct kbase_device *kbdev,
 		;
 
 	/* clear the CLEAN_CACHES_COMPLETED irq */
-	KBASE_TRACE_ADD(kbdev, CORE_GPU_IRQ_CLEAR, NULL, NULL, 0u,
-							CLEAN_CACHES_COMPLETED);
 	kbase_reg_write(kbdev, GPU_CONTROL_REG(GPU_IRQ_CLEAR),
 						CLEAN_CACHES_COMPLETED, NULL);
 

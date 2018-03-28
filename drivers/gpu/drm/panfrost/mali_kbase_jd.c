@@ -1187,8 +1187,6 @@ void kbase_jd_done_worker(struct work_struct *data)
 	js_devdata = &kbdev->js_data;
 	js_policy = &kbdev->js_data.policy;
 
-	KBASE_TRACE_ADD(kbdev, JD_DONE_WORKER, kctx, katom, katom->jc, 0);
-
 	kbase_backend_complete_wq(kbdev, katom);
 
 	/*
@@ -1329,8 +1327,6 @@ void kbase_jd_done_worker(struct work_struct *data)
 
 	kbase_backend_complete_wq_post_sched(kbdev, core_req, affinity,
 			coreref_state);
-
-	KBASE_TRACE_ADD(kbdev, JD_DONE_WORKER_END, kctx, NULL, cache_jc, 0);
 }
 
 /**
@@ -1361,8 +1357,6 @@ static void jd_cancel_worker(struct work_struct *data)
 	kbdev = kctx->kbdev;
 	jctx = &kctx->jctx;
 	js_kctx_info = &kctx->jctx.sched_info;
-
-	KBASE_TRACE_ADD(kbdev, JD_CANCEL_WORKER, kctx, katom, katom->jc, 0);
 
 	/* Scheduler: Remove the job from the system */
 	mutex_lock(&js_kctx_info->ctx.jsctx_mutex);
@@ -1410,8 +1404,6 @@ void kbase_jd_done(struct kbase_jd_atom *katom, int slot_nr,
 	if (done_code & KBASE_JS_ATOM_DONE_EVICTED_FROM_NEXT)
 		katom->event_code = BASE_JD_EVENT_REMOVED_FROM_NEXT;
 
-	KBASE_TRACE_ADD(kbdev, JD_DONE, kctx, katom, katom->jc, 0);
-
 	kbase_job_check_leave_disjoint(kbdev, katom);
 
 	katom->slot_nr = slot_nr;
@@ -1432,8 +1424,6 @@ void kbase_jd_cancel(struct kbase_device *kbdev, struct kbase_jd_atom *katom)
 
 	js_kctx_info = &kctx->jctx.sched_info;
 
-	KBASE_TRACE_ADD(kbdev, JD_CANCEL, kctx, katom, katom->jc, 0);
-
 	WARN_ON(work_pending(&katom->work));
 
 	katom->event_code = BASE_JD_EVENT_JOB_CANCELLED;
@@ -1449,8 +1439,6 @@ void kbase_jd_zap_context(struct kbase_context *kctx)
 	struct kbase_device *kbdev;
 
 	kbdev = kctx->kbdev;
-
-	KBASE_TRACE_ADD(kbdev, JD_ZAP_CONTEXT, kctx, NULL, 0u, 0u);
 
 	kbase_js_zap_context(kctx);
 

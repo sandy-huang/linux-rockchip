@@ -24,14 +24,6 @@ menuconfig MALI_MIDGARD
 	  To compile this driver as a module, choose M here:
 	  this will generate a single module, called mali_kbase.
 
-config MALI_MIDGARD_ENABLE_TRACE
-	bool "Enable kbase tracing"
-	depends on MALI_MIDGARD
-	default n
-	help
-	  Enables tracing in kbase.  Trace log available through
-	  the "mali_trace" debugfs file, when the CONFIG_DEBUG_FS is enabled
-
 config MALI_DMA_FENCE
 	bool "DMA_BUF fence support for Mali (EXPERIMENTAL)"
 	depends on MALI_MIDGARD && !KDS

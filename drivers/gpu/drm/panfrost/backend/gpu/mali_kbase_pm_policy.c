@@ -420,9 +420,6 @@ void kbase_pm_update_cores_state_nolock(struct kbase_device *kbdev)
 	if (kbdev->tiler_needed_cnt > 0 || kbdev->tiler_inuse_cnt > 0)
 		desired_bitmap |= 1;
 
-	if (kbdev->pm.backend.desired_shader_state != desired_bitmap)
-		KBASE_TRACE_ADD(kbdev, PM_CORES_CHANGE_DESIRED, NULL, NULL, 0u,
-							(u32)desired_bitmap);
 	/* Are any cores being powered on? */
 	if (~kbdev->pm.backend.desired_shader_state & desired_bitmap ||
 	    kbdev->pm.backend.ca_in_transition) {
@@ -518,8 +515,6 @@ void kbase_pm_set_policy(struct kbase_device *kbdev,
 	const struct kbase_pm_policy *old_policy;
 	unsigned long flags;
 
-	KBASE_TRACE_ADD(kbdev, PM_SET_POLICY, NULL, NULL, 0u, new_policy->id);
-
 	/* During a policy change we pretend the GPU is active */
 	/* A suspend won't happen here, because we're in a syscall from a
 	 * userspace thread */
@@ -534,13 +529,9 @@ void kbase_pm_set_policy(struct kbase_device *kbdev,
 	kbdev->pm.backend.pm_current_policy = NULL;
 	spin_unlock_irqrestore(&kbdev->pm.power_change_lock, flags);
 
-	KBASE_TRACE_ADD(kbdev, PM_CURRENT_POLICY_TERM, NULL, NULL, 0u,
-								old_policy->id);
 	if (old_policy->term)
 		old_policy->term(kbdev);
 
-	KBASE_TRACE_ADD(kbdev, PM_CURRENT_POLICY_INIT, NULL, NULL, 0u,
-								new_policy->id);
 	if (new_policy->init)
 		new_policy->init(kbdev);
 
@@ -614,9 +605,6 @@ void kbase_pm_request_cores(struct kbase_device *kbdev,
 	}
 
 	if (change_gpu_state) {
-		KBASE_TRACE_ADD(kbdev, PM_REQUEST_CHANGE_SHADER_NEEDED, NULL,
-				NULL, 0u, (u32) kbdev->shader_needed_bitmap);
-
 		kbase_timeline_pm_cores_func(kbdev,
 					KBASE_PM_FUNC_ID_REQUEST_CORES_START,
 							change_gpu_state);
@@ -664,9 +652,6 @@ void kbase_pm_unrequest_cores(struct kbase_device *kbdev,
 	}
 
 	if (change_gpu_state) {
-		KBASE_TRACE_ADD(kbdev, PM_UNREQUEST_CHANGE_SHADER_NEEDED, NULL,
-				NULL, 0u, (u32) kbdev->shader_needed_bitmap);
-
 		kbase_pm_update_cores_state_nolock(kbdev);
 
 		/* Trace that any state change effectively completes immediately
@@ -740,14 +725,6 @@ kbase_pm_register_inuse_cores(struct kbase_device *kbdev,
 		kbdev->tiler_inuse_cnt++;
 	}
 
-	if (prev_shader_needed != kbdev->shader_needed_bitmap)
-		KBASE_TRACE_ADD(kbdev, PM_REGISTER_CHANGE_SHADER_NEEDED, NULL,
-				NULL, 0u, (u32) kbdev->shader_needed_bitmap);
-
-	if (prev_shader_inuse != kbdev->shader_inuse_bitmap)
-		KBASE_TRACE_ADD(kbdev, PM_REGISTER_CHANGE_SHADER_INUSE, NULL,
-				NULL, 0u, (u32) kbdev->shader_inuse_bitmap);
-
 	spin_unlock_irqrestore(&kbdev->pm.power_change_lock, flags);
 
 	return KBASE_CORES_READY;
@@ -786,9 +763,6 @@ void kbase_pm_release_cores(struct kbase_device *kbdev,
 	}
 
 	if (change_gpu_state) {
-		KBASE_TRACE_ADD(kbdev, PM_RELEASE_CHANGE_SHADER_INUSE, NULL,
-				NULL, 0u, (u32) kbdev->shader_inuse_bitmap);
-
 		kbase_timeline_pm_cores_func(kbdev,
 					KBASE_PM_FUNC_ID_RELEASE_CORES_START,
 							change_gpu_state);

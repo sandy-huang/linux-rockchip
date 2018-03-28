@@ -114,20 +114,4 @@ void kbase_js_affinity_retain_slot_cores(struct kbase_device *kbdev, int js,
 void kbase_js_affinity_release_slot_cores(struct kbase_device *kbdev, int js,
 								u64 affinity);
 
-/**
- * kbase_js_debug_log_current_affinities - log the current affinities
- *
- * @kbdev:  Kbase device structure
- *
- * Output to the Trace log the current tracked affinities on all slots
- */
-#if KBASE_TRACE_ENABLE
-void kbase_js_debug_log_current_affinities(struct kbase_device *kbdev);
-#else
-static inline void
-kbase_js_debug_log_current_affinities(struct kbase_device *kbdev)
-{
-}
-#endif // KBASE_TRACE_ENABLE
-
 #endif // ifndef _KBASE_JS_AFFINITY_H_

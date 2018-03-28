@@ -28,10 +28,6 @@ void kbase_reg_write(struct kbase_device *kbdev, u16 offset, u32 value,
 	dev_dbg(kbdev->dev, "w: reg %04x val %08x", offset, value);
 
 	writel(value, kbdev->reg + offset);
-
-	if (kctx && kctx->jctx.tb)
-		kbase_device_trace_register_access(kctx, REG_WRITE, offset,
-									value);
 }
 
 u32 kbase_reg_read(struct kbase_device *kbdev, u16 offset,
@@ -40,8 +36,6 @@ u32 kbase_reg_read(struct kbase_device *kbdev, u16 offset,
 	u32 val = readl(kbdev->reg + offset);
 
 	dev_dbg(kbdev->dev, "r: reg %04x val %08x", offset, val);
-	if (kctx && kctx->jctx.tb)
-		kbase_device_trace_register_access(kctx, REG_READ, offset, val);
 	return val;
 }
 
@@ -75,7 +69,6 @@ static void kbase_report_gpu_fault(struct kbase_device *kbdev, int multiple)
 
 void kbase_gpu_interrupt(struct kbase_device *kbdev, u32 val)
 {
-	KBASE_TRACE_ADD(kbdev, CORE_GPU_IRQ, NULL, NULL, 0u, val);
 	if (val & GPU_FAULT)
 		kbase_report_gpu_fault(kbdev, val & MULTIPLE_GPU_FAULTS);
 
@@ -88,7 +81,6 @@ void kbase_gpu_interrupt(struct kbase_device *kbdev, u32 val)
 	if (val & CLEAN_CACHES_COMPLETED)
 		kbase_clean_caches_done(kbdev);
 
-	KBASE_TRACE_ADD(kbdev, CORE_GPU_IRQ_CLEAR, NULL, NULL, 0u, val);
 	kbase_reg_write(kbdev, GPU_CONTROL_REG(GPU_IRQ_CLEAR), val, NULL);
 
 	/* kbase_pm_check_transitions must be called after the IRQ has been
@@ -98,6 +90,4 @@ void kbase_gpu_interrupt(struct kbase_device *kbdev, u32 val)
 	 */
 	if (val & POWER_CHANGED_ALL)
 		kbase_pm_power_changed(kbdev);
-
-	KBASE_TRACE_ADD(kbdev, CORE_GPU_IRQ_DONE, NULL, NULL, 0u, val);
 }

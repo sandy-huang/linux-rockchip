@@ -68,9 +68,6 @@ void kbase_pm_ca_set_policy(struct kbase_device *kbdev,
 	const struct kbase_pm_ca_policy *old_policy;
 	unsigned long flags;
 
-	KBASE_TRACE_ADD(kbdev, PM_CA_SET_POLICY, NULL, NULL, 0u,
-								new_policy->id);
-
 	/* During a policy change we pretend the GPU is active */
 	/* A suspend won't happen here, because we're in a syscall from a
 	 * userspace thread */

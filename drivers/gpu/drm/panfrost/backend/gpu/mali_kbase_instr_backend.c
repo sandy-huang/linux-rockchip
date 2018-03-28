@@ -55,7 +55,6 @@ static void kbasep_instr_hwcnt_cacheclean(struct kbase_device *kbdev)
 
 	/* clean&invalidate the caches so we're sure the mmu tables for the dump
 	 * buffer is valid */
-	KBASE_TRACE_ADD(kbdev, CORE_GPU_CLEAN_INV_CACHES, NULL, NULL, 0u, 0);
 	kbase_reg_write(kbdev, GPU_CONTROL_REG(GPU_COMMAND),
 					GPU_COMMAND_CLEAN_INV_CACHES, NULL);
 	kbdev->hwcnt.backend.state = KBASE_INSTR_STATE_CLEANING;
@@ -298,8 +297,6 @@ int kbase_instr_hwcnt_request_dump(struct kbase_context *kctx)
 					kbdev->hwcnt.addr >> 32, NULL);
 
 	/* Start dumping */
-	KBASE_TRACE_ADD(kbdev, CORE_GPU_PRFCNT_SAMPLE, NULL, NULL,
-					kbdev->hwcnt.addr, 0);
 	kbase_reg_write(kbdev, GPU_CONTROL_REG(GPU_COMMAND),
 					GPU_COMMAND_PRFCNT_SAMPLE, kctx);
 
@@ -483,7 +480,6 @@ int kbase_instr_hwcnt_clear(struct kbase_context *kctx)
 		goto out;
 
 	/* Clear the counters */
-	KBASE_TRACE_ADD(kbdev, CORE_GPU_PRFCNT_CLEAR, NULL, NULL, 0u, 0);
 	kbase_reg_write(kbdev, GPU_CONTROL_REG(GPU_COMMAND),
 						GPU_COMMAND_PRFCNT_CLEAR, kctx);
 
