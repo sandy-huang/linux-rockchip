@@ -227,22 +227,4 @@ struct kbase_platform_config {
  */
 struct kbase_platform_config *kbase_get_platform_config(void);
 
-/**
- * kbase_platform_early_init - Early initialisation of the platform code
- *
- * This function will be called when the module is loaded to perform any
- * early initialisation required by the platform code. Such as reading
- * platform specific device tree entries for the GPU.
- *
- * Return: 0 for success, any other fail causes module initialisation to fail
- */
-int kbase_platform_early_init(void);
-
-#ifndef CONFIG_OF
-#endif // ifndef CONFIG_OF
-
-	  /** @} *//* end group kbase_config */
-	  /** @} *//* end group base_kbase_api */
-	  /** @} *//* end group base_api */
-
-#endif // ifndef _KBASE_CONFIG_H_
+#endif

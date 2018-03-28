@@ -100,9 +100,3 @@ struct kbase_pm_callback_conf pm_callbacks = {
 	.power_runtime_on_callback = rk_pm_callback_runtime_on,
 	.power_runtime_off_callback = rk_pm_callback_runtime_off,
 };
-
-int kbase_platform_early_init(void)
-{
-	/* Nothing needed at this stage */
-	return 0;
-}

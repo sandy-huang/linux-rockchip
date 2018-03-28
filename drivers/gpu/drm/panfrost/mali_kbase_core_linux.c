@@ -56,7 +56,6 @@
 #include <linux/security.h>
 #include <linux/pm_runtime.h>
 #include <mali_kbase_hw.h>
-#include <platform/mali_kbase_platform_common.h>
 #ifdef CONFIG_SYNC
 #include <mali_kbase_sync.h>
 #endif /* CONFIG_SYNC */
@@ -3225,15 +3224,6 @@ static int kbase_platform_device_probe(struct platform_device *pdev)
 	const struct list_head *dev_list;
 	int err = 0;
 
-#ifdef CONFIG_OF
-	err = kbase_platform_early_init();
-	if (err) {
-		dev_err(&pdev->dev, "Early platform initialization failed\n");
-		kbase_platform_device_remove(pdev);
-		return err;
-	}
-#endif
-
 	kbdev = kbase_device_alloc();
 	if (!kbdev) {
 		dev_err(&pdev->dev, "Allocate device failed\n");
@@ -3590,31 +3580,7 @@ static struct platform_driver kbase_platform_driver = {
  * The driver will not provide a shortcut to create the Mali platform device
  * anymore when using Device Tree.
  */
-#ifdef CONFIG_OF
 module_platform_driver(kbase_platform_driver);
-#else
-
-static int __init kbase_driver_init(void)
-{
-	int ret;
-
-	ret = kbase_platform_early_init();
-	if (ret)
-		return ret;
-
-	ret = platform_driver_register(&kbase_platform_driver);
-	return ret;
-}
-
-static void __exit kbase_driver_exit(void)
-{
-	platform_driver_unregister(&kbase_platform_driver);
-}
-
-module_init(kbase_driver_init);
-module_exit(kbase_driver_exit);
-
-#endif /* CONFIG_OF */
 
 MODULE_LICENSE("GPL");
 MODULE_VERSION(MALI_RELEASE_NAME " (UK version " \
