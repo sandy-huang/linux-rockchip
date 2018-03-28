@@ -28,7 +28,6 @@
 #include <linux/compat.h>
 #include <linux/sched/mm.h>
 
-#include <mali_kbase_config.h>
 #include <mali_kbase.h>
 #include <mali_midg_regmap.h>
 #include <mali_kbase_cache_policy.h>

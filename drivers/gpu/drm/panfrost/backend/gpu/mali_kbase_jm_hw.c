@@ -18,7 +18,6 @@
  */
 
 #include <mali_kbase.h>
-#include <mali_kbase_config.h>
 #include <mali_midg_regmap.h>
 #include <mali_kbase_tlstream.h>
 #include <mali_kbase_hw.h>

@@ -66,7 +66,6 @@
 
 #include <linux/dma-buf.h>
 
-#include <mali_kbase_config.h>
 #include <mali_kbase_tlstream.h>
 
 #include <linux/pm_opp.h>

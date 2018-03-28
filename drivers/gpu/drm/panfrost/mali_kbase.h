@@ -55,6 +55,10 @@
 #ifdef CONFIG_GPU_TRACEPOINTS
 #include <trace/events/gpu.h>
 #endif
+
+/* Enable GPU reset API */
+#define KBASE_GPU_RESET_EN 1
+
 /**
  * @page page_base_kernel_main Kernel-side Base (KBase) APIs
  *

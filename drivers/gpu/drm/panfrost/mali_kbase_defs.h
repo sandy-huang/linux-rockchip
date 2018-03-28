@@ -23,7 +23,6 @@
 #ifndef _KBASE_DEFS_H_
 #define _KBASE_DEFS_H_
 
-#include <mali_kbase_config.h>
 #include <mali_base_hwconfig_features.h>
 #include <mali_base_hwconfig_issues.h>
 #include <mali_kbase_mem_lowlevel.h>

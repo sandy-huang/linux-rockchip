@@ -10,7 +10,6 @@
 
 #include <mali_kbase.h>
 #include <mali_kbase_defs.h>
-#include <mali_kbase_config.h>
 #include <backend/gpu/mali_kbase_pm_internal.h>
 
 #include <linux/pm_runtime.h>
