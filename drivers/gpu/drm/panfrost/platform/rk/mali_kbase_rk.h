@@ -25,11 +25,7 @@ struct rk_context {
 	 * record the status of common_parts calling 'power_on_callback'
 	 * and 'power_off_callback'.
 	 */
-	bool is_powered;
 	struct kbase_device *kbdev;
-	struct workqueue_struct *power_off_wq;
-	struct delayed_work work;
-	unsigned int delay_ms;
 };
 
 /*---------------------------------------------------------------------------*/

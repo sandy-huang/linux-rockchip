@@ -49,28 +49,6 @@ static void rk_pm_disable_clk(struct kbase_device *kbdev);
 
 /*---------------------------------------------------------------------------*/
 
-static void rk_pm_power_off_delay_work(struct work_struct *work)
-{
-	struct rk_context *platform =
-		container_of(to_delayed_work(work), struct rk_context, work);
-	struct kbase_device *kbdev = platform->kbdev;
-
-	if (!platform->is_powered) {
-		pr_debug("mali_dev is already powered off.");
-		return;
-	}
-
-	if (pm_runtime_enabled(kbdev->dev)) {
-		pr_debug("to put_sync_suspend mali_dev.");
-		pm_runtime_put_sync_suspend(kbdev->dev);
-	}
-
-	rk_pm_disable_regulator(kbdev);
-
-	platform->is_powered = false;
-	KBASE_TIMELINE_GPU_POWER(kbdev, 0);
-}
-
 static int kbase_platform_rk_init(struct kbase_device *kbdev)
 {
 	int ret = 0;
@@ -82,20 +60,7 @@ static int kbase_platform_rk_init(struct kbase_device *kbdev)
 		return -ENOMEM;
 	}
 
-	platform->is_powered = false;
 	platform->kbdev = kbdev;
-
-	platform->delay_ms = 200;
-	if (of_property_read_u32(kbdev->dev->of_node, "power-off-delay-ms",
-				 &platform->delay_ms))
-		pr_warn("power-off-delay-ms not available.");
-
-	platform->power_off_wq = create_freezable_workqueue("gpu_power_off_wq");
-	if (!platform->power_off_wq) {
-		pr_err("couldn't create workqueue");
-		return -ENOMEM;
-	}
-	INIT_DEFERRABLE_WORK(&platform->work, rk_pm_power_off_delay_work);
 
 	kbdev->platform_context = (void *)platform;
 	pm_runtime_enable(kbdev->dev);
@@ -113,8 +78,6 @@ static void kbase_platform_rk_term(struct kbase_device *kbdev)
 	kbdev->platform_context = NULL;
 
 	if (platform) {
-		destroy_workqueue(platform->power_off_wq);
-		platform->is_powered = false;
 		platform->kbdev = NULL;
 		kfree(platform);
 	}
@@ -140,19 +103,11 @@ static int rk_pm_callback_power_on(struct kbase_device *kbdev)
 {
 	int ret = 1; /* Assume GPU has been powered off */
 	int err = 0;
-	struct rk_context *platform = get_rk_context(kbdev);
-
-	cancel_delayed_work_sync(&platform->work);
 
 	err = rk_pm_enable_clk(kbdev);
 	if (err) {
 		pr_err("failed to enable clk: %d", err);
 		return err;
-	}
-
-	if (platform->is_powered) {
-		pr_debug("mali_device is already powered.");
-		return 0;
 	}
 
 	/* we must enable vdd_gpu before pd_gpu_in_chip. */
@@ -178,7 +133,6 @@ static int rk_pm_callback_power_on(struct kbase_device *kbdev)
 		}
 	}
 
-	platform->is_powered = true;
 	KBASE_TIMELINE_GPU_POWER(kbdev, 1);
 
 	return ret;
@@ -186,11 +140,16 @@ static int rk_pm_callback_power_on(struct kbase_device *kbdev)
 
 static void rk_pm_callback_power_off(struct kbase_device *kbdev)
 {
-	struct rk_context *platform = get_rk_context(kbdev);
-
 	rk_pm_disable_clk(kbdev);
-	queue_delayed_work(platform->power_off_wq, &platform->work,
-			   msecs_to_jiffies(platform->delay_ms));
+
+	if (pm_runtime_enabled(kbdev->dev)) {
+		pr_debug("to put_sync_suspend mali_dev.");
+		pm_runtime_put_sync_suspend(kbdev->dev);
+	}
+
+	rk_pm_disable_regulator(kbdev);
+
+	KBASE_TIMELINE_GPU_POWER(kbdev, 0);
 }
 
 int rk_kbase_device_runtime_init(struct kbase_device *kbdev)
