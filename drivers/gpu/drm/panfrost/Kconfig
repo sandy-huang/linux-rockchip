@@ -23,13 +23,3 @@ menuconfig MALI_MIDGARD
 
 	  To compile this driver as a module, choose M here:
 	  this will generate a single module, called mali_kbase.
-
-# MALI_EXPERT configuration options
-
-menuconfig MALI_EXPERT
-	depends on MALI_MIDGARD
-	bool "Enable Expert Settings"
-	default n
-	help
-	  Enabling this option and modifying the default settings may produce a driver with performance or
-	  other limitations.
