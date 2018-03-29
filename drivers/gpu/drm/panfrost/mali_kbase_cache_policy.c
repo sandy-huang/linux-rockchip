@@ -38,21 +38,11 @@ u32 kbase_cache_enabled(u32 flags, u32 nr_pages)
 void kbase_sync_single_for_device(struct kbase_device *kbdev, dma_addr_t handle,
 		size_t size, enum dma_data_direction dir)
 {
-/* Check if kernel is using coherency with GPU */
-#ifdef CONFIG_MALI_COH_KERN
-	if (kbdev->system_coherency == COHERENCY_ACE)
-		return;
-#endif
 	dma_sync_single_for_device(kbdev->dev, handle, size, dir);
 }
 
 void kbase_sync_single_for_cpu(struct kbase_device *kbdev, dma_addr_t handle,
 		size_t size, enum dma_data_direction dir)
 {
-/* Check if kernel is using coherency with GPU */
-#ifdef CONFIG_MALI_COH_KERN
-	if (kbdev->system_coherency == COHERENCY_ACE)
-		return;
-#endif
 	dma_sync_single_for_cpu(kbdev->dev, handle, size, dir);
 }

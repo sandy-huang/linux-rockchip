@@ -2209,12 +2209,6 @@ void *kbase_vmap(struct kbase_context *kctx, u64 gpu_addr, size_t size,
 	map->is_cached = (reg->flags & KBASE_REG_CPU_CACHED) != 0;
 	sync_needed = map->is_cached;
 
-#ifdef CONFIG_MALI_COH_KERN
-	/* kernel can use coherent memory if supported */
-	if (kctx->kbdev->system_coherency == COHERENCY_ACE)
-		sync_needed = false;
-#endif
-
 	if (sync_needed) {
 		/* Sync first page */
 		size_t sz = MIN(((size_t) PAGE_SIZE - offset), size);
@@ -2256,11 +2250,6 @@ void kbase_vunmap(struct kbase_context *kctx, struct kbase_vmap_struct *map)
 	bool sync_needed = map->is_cached;
 
 	vunmap(addr);
-#ifdef CONFIG_MALI_COH_KERN
-	/* kernel can use coherent memory if supported */
-	if (kctx->kbdev->system_coherency == COHERENCY_ACE)
-		sync_needed = false;
-#endif
 	if (sync_needed) {
 		off_t offset = (uintptr_t)map->addr & ~PAGE_MASK;
 		size_t size = map->size;

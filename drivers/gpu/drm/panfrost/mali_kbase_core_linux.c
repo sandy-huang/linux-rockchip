@@ -481,10 +481,8 @@ copy_failed:
 				break;
 			}
 
-#ifndef CONFIG_MALI_COH_USER
 			if (kbase_sync_now(kctx, &sn->sset) != 0)
 				ukh->ret = MALI_ERROR_FUNCTION_FAILED;
-#endif
 			break;
 		}
 

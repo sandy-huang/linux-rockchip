@@ -68,10 +68,8 @@ void kbase_job_hw_submit(struct kbase_device *kbdev,
 	if (kbase_hw_has_feature(kbdev, BASE_HW_FEATURE_FLUSH_REDUCTION))
 		cfg |= JS_CONFIG_ENABLE_FLUSH_REDUCTION;
 
-#ifndef CONFIG_MALI_COH_GPU
 	cfg |= JS_CONFIG_END_FLUSH_CLEAN_INVALIDATE;
 	cfg |= JS_CONFIG_START_FLUSH_CLEAN_INVALIDATE;
-#endif
 
 	cfg |= JS_CONFIG_START_MMU;
 	cfg |= JS_CONFIG_THREAD_PRI(8);
