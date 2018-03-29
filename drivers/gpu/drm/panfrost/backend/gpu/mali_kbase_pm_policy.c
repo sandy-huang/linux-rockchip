@@ -62,67 +62,6 @@ enum {
 };
 typedef u32 kbase_pm_change_state;
 
-#ifdef CONFIG_MALI_TRACE_TIMELINE
-/* Timeline Trace code lookups for each function */
-static u32 kbase_pm_change_state_trace_code[KBASE_PM_FUNC_ID_COUNT]
-					[KBASE_PM_CHANGE_STATE_COUNT] = {
-	/* kbase_pm_request_cores */
-	[KBASE_PM_FUNC_ID_REQUEST_CORES_START][0] = 0,
-	[KBASE_PM_FUNC_ID_REQUEST_CORES_START][KBASE_PM_CHANGE_STATE_SHADER] =
-		SW_FLOW_PM_CHECKTRANS_PM_REQUEST_CORES_SHADER_START,
-	[KBASE_PM_FUNC_ID_REQUEST_CORES_START][KBASE_PM_CHANGE_STATE_TILER] =
-		SW_FLOW_PM_CHECKTRANS_PM_REQUEST_CORES_TILER_START,
-	[KBASE_PM_FUNC_ID_REQUEST_CORES_START][KBASE_PM_CHANGE_STATE_SHADER |
-						KBASE_PM_CHANGE_STATE_TILER] =
-		SW_FLOW_PM_CHECKTRANS_PM_REQUEST_CORES_SHADER_TILER_START,
-
-	[KBASE_PM_FUNC_ID_REQUEST_CORES_END][0] = 0,
-	[KBASE_PM_FUNC_ID_REQUEST_CORES_END][KBASE_PM_CHANGE_STATE_SHADER] =
-		SW_FLOW_PM_CHECKTRANS_PM_REQUEST_CORES_SHADER_END,
-	[KBASE_PM_FUNC_ID_REQUEST_CORES_END][KBASE_PM_CHANGE_STATE_TILER] =
-		SW_FLOW_PM_CHECKTRANS_PM_REQUEST_CORES_TILER_END,
-	[KBASE_PM_FUNC_ID_REQUEST_CORES_END][KBASE_PM_CHANGE_STATE_SHADER |
-						KBASE_PM_CHANGE_STATE_TILER] =
-		SW_FLOW_PM_CHECKTRANS_PM_REQUEST_CORES_SHADER_TILER_END,
-
-	/* kbase_pm_release_cores */
-	[KBASE_PM_FUNC_ID_RELEASE_CORES_START][0] = 0,
-	[KBASE_PM_FUNC_ID_RELEASE_CORES_START][KBASE_PM_CHANGE_STATE_SHADER] =
-		SW_FLOW_PM_CHECKTRANS_PM_RELEASE_CORES_SHADER_START,
-	[KBASE_PM_FUNC_ID_RELEASE_CORES_START][KBASE_PM_CHANGE_STATE_TILER] =
-		SW_FLOW_PM_CHECKTRANS_PM_RELEASE_CORES_TILER_START,
-	[KBASE_PM_FUNC_ID_RELEASE_CORES_START][KBASE_PM_CHANGE_STATE_SHADER |
-						KBASE_PM_CHANGE_STATE_TILER] =
-		SW_FLOW_PM_CHECKTRANS_PM_RELEASE_CORES_SHADER_TILER_START,
-
-	[KBASE_PM_FUNC_ID_RELEASE_CORES_END][0] = 0,
-	[KBASE_PM_FUNC_ID_RELEASE_CORES_END][KBASE_PM_CHANGE_STATE_SHADER] =
-		SW_FLOW_PM_CHECKTRANS_PM_RELEASE_CORES_SHADER_END,
-	[KBASE_PM_FUNC_ID_RELEASE_CORES_END][KBASE_PM_CHANGE_STATE_TILER] =
-		SW_FLOW_PM_CHECKTRANS_PM_RELEASE_CORES_TILER_END,
-	[KBASE_PM_FUNC_ID_RELEASE_CORES_END][KBASE_PM_CHANGE_STATE_SHADER |
-						KBASE_PM_CHANGE_STATE_TILER] =
-		SW_FLOW_PM_CHECKTRANS_PM_RELEASE_CORES_SHADER_TILER_END
-};
-
-static inline void kbase_timeline_pm_cores_func(struct kbase_device *kbdev,
-		enum kbase_pm_func_id func_id,
-		kbase_pm_change_state state)
-{
-	int trace_code;
-
-	trace_code = kbase_pm_change_state_trace_code[func_id][state];
-	KBASE_TIMELINE_PM_CHECKTRANS(kbdev, trace_code);
-}
-
-#else // ifdef CONFIG_MALI_TRACE_TIMELINE
-static inline void kbase_timeline_pm_cores_func(struct kbase_device *kbdev,
-		enum kbase_pm_func_id func_id, kbase_pm_change_state state)
-{
-}
-
-#endif // ifdef CONFIG_MALI_TRACE_TIMELINE
-
 /**
  * kbasep_pm_do_poweroff_cores - Process a poweroff request and power down any
  *                               requested shader cores
@@ -143,11 +82,7 @@ static void kbasep_pm_do_poweroff_cores(struct kbase_device *kbdev)
 			|| kbdev->pm.backend.ca_in_transition) {
 		bool cores_are_available;
 
-		KBASE_TIMELINE_PM_CHECKTRANS(kbdev,
-			SW_FLOW_PM_CHECKTRANS_PM_RELEASE_CORES_DEFERRED_START);
 		cores_are_available = kbase_pm_check_transitions_nolock(kbdev);
-		KBASE_TIMELINE_PM_CHECKTRANS(kbdev,
-			SW_FLOW_PM_CHECKTRANS_PM_RELEASE_CORES_DEFERRED_END);
 
 		/* Don't need 'cores_are_available',
 		 * because we don't return anything */
@@ -553,20 +488,6 @@ void kbase_pm_set_policy(struct kbase_device *kbdev,
 	kbase_pm_context_idle(kbdev);
 }
 
-/* Check whether a state change has finished, and trace it as completed */
-static void
-kbase_pm_trace_check_and_finish_state_change(struct kbase_device *kbdev)
-{
-	if ((kbdev->shader_available_bitmap &
-					kbdev->pm.backend.desired_shader_state)
-				== kbdev->pm.backend.desired_shader_state &&
-		(kbdev->tiler_available_bitmap &
-					kbdev->pm.backend.desired_tiler_state)
-				== kbdev->pm.backend.desired_tiler_state)
-		kbase_timeline_pm_check_handle_event(kbdev,
-				KBASE_TIMELINE_PM_EVENT_GPU_STATE_CHANGED);
-}
-
 void kbase_pm_request_cores(struct kbase_device *kbdev,
 				bool tiler_required, u64 shader_cores)
 {
@@ -604,15 +525,8 @@ void kbase_pm_request_cores(struct kbase_device *kbdev,
 			change_gpu_state |= KBASE_PM_CHANGE_STATE_TILER;
 	}
 
-	if (change_gpu_state) {
-		kbase_timeline_pm_cores_func(kbdev,
-					KBASE_PM_FUNC_ID_REQUEST_CORES_START,
-							change_gpu_state);
+	if (change_gpu_state)
 		kbase_pm_update_cores_state_nolock(kbdev);
-		kbase_timeline_pm_cores_func(kbdev,
-					KBASE_PM_FUNC_ID_REQUEST_CORES_END,
-							change_gpu_state);
-	}
 
 	spin_unlock_irqrestore(&kbdev->pm.power_change_lock, flags);
 }
@@ -651,13 +565,8 @@ void kbase_pm_unrequest_cores(struct kbase_device *kbdev,
 			change_gpu_state |= KBASE_PM_CHANGE_STATE_TILER;
 	}
 
-	if (change_gpu_state) {
+	if (change_gpu_state)
 		kbase_pm_update_cores_state_nolock(kbdev);
-
-		/* Trace that any state change effectively completes immediately
-		 * - no-one will wait on the state change */
-		kbase_pm_trace_check_and_finish_state_change(kbdev);
-	}
 
 	spin_unlock_irqrestore(&kbdev->pm.power_change_lock, flags);
 }
@@ -688,17 +597,9 @@ kbase_pm_register_inuse_cores(struct kbase_device *kbdev,
 
 	if ((kbdev->shader_available_bitmap & shader_cores) != shader_cores ||
 	    (tiler_required && !kbdev->tiler_available_bitmap)) {
-		/* Trace ongoing core transition */
-		kbase_timeline_pm_l2_transition_start(kbdev);
 		spin_unlock_irqrestore(&kbdev->pm.power_change_lock, flags);
 		return KBASE_CORES_NOT_READY;
 	}
-
-	/* If we started to trace a state change, then trace it has being
-	 * finished by now, at the very latest */
-	kbase_pm_trace_check_and_finish_state_change(kbdev);
-	/* Trace core transition done */
-	kbase_timeline_pm_l2_transition_done(kbdev);
 
 	while (shader_cores) {
 		int bitnum = fls64(shader_cores) - 1;
@@ -762,18 +663,8 @@ void kbase_pm_release_cores(struct kbase_device *kbdev,
 			change_gpu_state |= KBASE_PM_CHANGE_STATE_TILER;
 	}
 
-	if (change_gpu_state) {
-		kbase_timeline_pm_cores_func(kbdev,
-					KBASE_PM_FUNC_ID_RELEASE_CORES_START,
-							change_gpu_state);
+	if (change_gpu_state)
 		kbase_pm_update_cores_state_nolock(kbdev);
-		kbase_timeline_pm_cores_func(kbdev,
-					KBASE_PM_FUNC_ID_RELEASE_CORES_END,
-							change_gpu_state);
-
-		/* Trace that any state change completed immediately */
-		kbase_pm_trace_check_and_finish_state_change(kbdev);
-	}
 
 	spin_unlock_irqrestore(&kbdev->pm.power_change_lock, flags);
 }
@@ -805,9 +696,6 @@ void kbase_pm_request_l2_caches(struct kbase_device *kbdev)
 	spin_unlock_irqrestore(&kbdev->pm.power_change_lock, flags);
 	wait_event(kbdev->pm.backend.l2_powered_wait,
 					kbdev->pm.backend.l2_powered == 1);
-
-	/* Trace that any state change completed immediately */
-	kbase_pm_trace_check_and_finish_state_change(kbdev);
 }
 
 void kbase_pm_request_l2_caches_l2_is_on(struct kbase_device *kbdev)
@@ -829,11 +717,8 @@ void kbase_pm_release_l2_caches(struct kbase_device *kbdev)
 
 	--kbdev->l2_users_count;
 
-	if (!kbdev->l2_users_count) {
+	if (!kbdev->l2_users_count)
 		kbase_pm_check_transitions_nolock(kbdev);
-		/* Trace that any state change completed immediately */
-		kbase_pm_trace_check_and_finish_state_change(kbdev);
-	}
 
 	spin_unlock_irqrestore(&kbdev->pm.power_change_lock, flags);
 }

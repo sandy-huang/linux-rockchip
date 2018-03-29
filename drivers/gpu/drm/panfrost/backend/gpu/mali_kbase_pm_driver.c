@@ -469,15 +469,6 @@ MOCKABLE(kbase_pm_check_transitions_nolock) (struct kbase_device *kbdev)
 		return false;
 	}
 
-	/* Trace that a change-state is being requested, and that it took
-	 * (effectively) no time to start it. This is useful for counting how
-	 * many state changes occurred, in a way that's backwards-compatible
-	 * with processing the trace data */
-	kbase_timeline_pm_send_event(kbdev,
-				KBASE_TIMELINE_PM_EVENT_CHANGE_GPU_STATE);
-	kbase_timeline_pm_handle_event(kbdev,
-				KBASE_TIMELINE_PM_EVENT_CHANGE_GPU_STATE);
-
 	/* If any cores are already powered then, we must keep the caches on */
 	cores_powered = kbase_pm_get_ready_cores(kbdev, KBASE_PM_CORE_SHADER);
 
@@ -508,9 +499,6 @@ MOCKABLE(kbase_pm_check_transitions_nolock) (struct kbase_device *kbdev)
 				&l2_available_bitmap,
 				&kbdev->pm.backend.powering_on_l2_state);
 
-	if (kbdev->l2_available_bitmap != l2_available_bitmap)
-		KBASE_TIMELINE_POWER_L2(kbdev, l2_available_bitmap);
-
 	kbdev->l2_available_bitmap = l2_available_bitmap;
 
 	if (in_desired_state) {
@@ -526,27 +514,12 @@ MOCKABLE(kbase_pm_check_transitions_nolock) (struct kbase_device *kbdev)
 				&shader_available_bitmap,
 				&kbdev->pm.backend.powering_on_shader_state);
 
-		if (kbdev->shader_available_bitmap != shader_available_bitmap)
-			KBASE_TIMELINE_POWER_SHADER(kbdev,
-						shader_available_bitmap);
-
 		kbdev->shader_available_bitmap = shader_available_bitmap;
-
-		if (kbdev->tiler_available_bitmap != tiler_available_bitmap)
-			KBASE_TIMELINE_POWER_TILER(kbdev,
-							tiler_available_bitmap);
-
 		kbdev->tiler_available_bitmap = tiler_available_bitmap;
-
 	} else if ((l2_available_bitmap &
 			kbdev->gpu_props.props.raw_props.tiler_present) !=
 			kbdev->gpu_props.props.raw_props.tiler_present) {
 		tiler_available_bitmap = 0;
-
-		if (kbdev->tiler_available_bitmap != tiler_available_bitmap)
-			KBASE_TIMELINE_POWER_TILER(kbdev,
-							tiler_available_bitmap);
-
 		kbdev->tiler_available_bitmap = tiler_available_bitmap;
 	}
 
@@ -568,13 +541,6 @@ MOCKABLE(kbase_pm_check_transitions_nolock) (struct kbase_device *kbdev)
 					kbdev->pm.backend.desired_tiler_state)
 				== kbdev->pm.backend.desired_tiler_state) {
 		cores_are_available = true;
-
-		/* Log timelining information about handling events that power
-		 * up cores, to match up either with immediate submission either
-		 * because cores already available, or from PM IRQ */
-		if (!in_desired_state)
-			kbase_timeline_pm_send_event(kbdev,
-				KBASE_TIMELINE_PM_EVENT_GPU_STATE_CHANGED);
 	}
 
 	if (in_desired_state) {
@@ -592,9 +558,6 @@ MOCKABLE(kbase_pm_check_transitions_nolock) (struct kbase_device *kbdev)
 					kbdev,
 					KBASE_PM_CORE_TILER));
 
-		/* Log timelining information for synchronous waiters */
-		kbase_timeline_pm_send_event(kbdev,
-				KBASE_TIMELINE_PM_EVENT_GPU_STATE_CHANGED);
 		/* Wake slow-path waiters. Job scheduler does not use this. */
 		wake_up(&kbdev->pm.backend.gpu_in_desired_state_wait);
 	}
@@ -708,11 +671,6 @@ void kbase_pm_check_transitions_sync(struct kbase_device *kbdev)
 		if (kbase_prepare_to_reset_gpu(kbdev))
 			kbase_reset_gpu(kbdev);
 #endif
-	} else {
-		/* Log timelining information that a change in state has
-		 * completed */
-		kbase_timeline_pm_handle_event(kbdev,
-				KBASE_TIMELINE_PM_EVENT_GPU_STATE_CHANGED);
 	}
 }
 

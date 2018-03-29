@@ -189,14 +189,6 @@ int kbase_device_init(struct kbase_device * const kbdev)
 
 	mutex_init(&kbdev->cacheclean_lock);
 
-#ifdef CONFIG_MALI_TRACE_TIMELINE
-	for (i = 0; i < BASE_JM_MAX_NR_SLOTS; ++i)
-		kbdev->timeline.slot_atoms_submitted[i] = 0;
-
-	for (i = 0; i <= KBASEP_TIMELINE_PM_EVENT_LAST; ++i)
-		atomic_set(&kbdev->timeline.pm_event_uid[i], 0);
-#endif /* CONFIG_MALI_TRACE_TIMELINE */
-
 	atomic_set(&kbdev->ctx_num, 0);
 
 	err = kbase_instr_backend_init(kbdev);

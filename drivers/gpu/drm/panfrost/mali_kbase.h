@@ -42,7 +42,6 @@
 #include "mali_kbase_pm.h"
 #include "mali_kbase_mem_lowlevel.h"
 #include "mali_kbase_defs.h"
-#include "mali_kbase_trace_timeline.h"
 #include "mali_kbase_js.h"
 #include "mali_kbase_mem.h"
 #include "mali_kbase_utility.h"

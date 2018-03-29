@@ -50,8 +50,6 @@ int kbase_pm_context_active_handle_suspend(struct kbase_device *kbdev, enum kbas
 	 * outside of mutex, but this is necessary to get the trace timing
 	 * correct. */
 	old_count = kbdev->pm.active_count;
-	if (old_count == 0)
-		kbase_timeline_pm_send_event(kbdev, KBASE_TIMELINE_PM_EVENT_GPU_ACTIVE);
 
 	mutex_lock(&js_devdata->runpool_mutex);
 	mutex_lock(&kbdev->pm.lock);
@@ -64,8 +62,6 @@ int kbase_pm_context_active_handle_suspend(struct kbase_device *kbdev, enum kbas
 		case KBASE_PM_SUSPEND_HANDLER_DONT_INCREASE:
 			mutex_unlock(&kbdev->pm.lock);
 			mutex_unlock(&js_devdata->runpool_mutex);
-			if (old_count == 0)
-				kbase_timeline_pm_handle_event(kbdev, KBASE_TIMELINE_PM_EVENT_GPU_ACTIVE);
 			return 1;
 
 		case KBASE_PM_SUSPEND_HANDLER_NOT_POSSIBLE:
@@ -75,11 +71,6 @@ int kbase_pm_context_active_handle_suspend(struct kbase_device *kbdev, enum kbas
 		}
 	}
 	c = ++kbdev->pm.active_count;
-	KBASE_TIMELINE_CONTEXT_ACTIVE(kbdev, c);
-
-	/* Trace the event being handled */
-	if (old_count == 0)
-		kbase_timeline_pm_handle_event(kbdev, KBASE_TIMELINE_PM_EVENT_GPU_ACTIVE);
 
 	if (c == 1)
 		/* First context active: Power on the GPU and any cores requested by
@@ -103,18 +94,11 @@ void kbase_pm_context_idle(struct kbase_device *kbdev)
 	 * count outside of mutex, but this is necessary to get the trace timing
 	 * correct. */
 	old_count = kbdev->pm.active_count;
-	if (old_count == 0)
-		kbase_timeline_pm_send_event(kbdev, KBASE_TIMELINE_PM_EVENT_GPU_IDLE);
 
 	mutex_lock(&js_devdata->runpool_mutex);
 	mutex_lock(&kbdev->pm.lock);
 
 	c = --kbdev->pm.active_count;
-	KBASE_TIMELINE_CONTEXT_ACTIVE(kbdev, c);
-
-	/* Trace the event being handled */
-	if (old_count == 0)
-		kbase_timeline_pm_handle_event(kbdev, KBASE_TIMELINE_PM_EVENT_GPU_IDLE);
 
 	if (c == 0) {
 		/* Last context has gone idle */

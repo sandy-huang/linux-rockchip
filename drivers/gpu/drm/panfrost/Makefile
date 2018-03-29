@@ -39,7 +39,6 @@ panfrost-y := \
 	mali_kbase_10969_workaround.o \
 	mali_kbase_hw.o \
 	mali_kbase_utility.o \
-	mali_kbase_trace_timeline.o \
 	mali_kbase_mem_linux.o \
 	mali_kbase_core_linux.o \
 	mali_kbase_replay.o \

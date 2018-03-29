@@ -1386,8 +1386,6 @@ bool kbasep_js_add_job(struct kbase_context *kctx,
 		goto out_unlock;
 	}
 
-	KBASE_TIMELINE_ATOM_READY(kctx, kbase_jd_atom_id(kctx, atom));
-
 	enqueue_required = kbase_js_dep_resolved_submit(kctx, atom);
 
 	/* Context Attribute Refcounting */

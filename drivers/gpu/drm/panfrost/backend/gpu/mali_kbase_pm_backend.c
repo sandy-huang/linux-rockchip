@@ -64,8 +64,6 @@ static int pm_callback_power_on(struct kbase_device *kbdev)
 		}
 	}
 
-	KBASE_TIMELINE_GPU_POWER(kbdev, 1);
-
 	return ret;
 }
 
@@ -80,8 +78,6 @@ static void pm_callback_power_off(struct kbase_device *kbdev)
 
 	if (kbdev->regulator)
 		regulator_disable(kbdev->regulator);
-
-	KBASE_TIMELINE_GPU_POWER(kbdev, 0);
 }
 
 void kbase_pm_register_access_enable(struct kbase_device *kbdev)
@@ -152,11 +148,7 @@ void kbase_pm_do_poweron(struct kbase_device *kbdev, bool is_resume)
 	kbase_pm_clock_on(kbdev, is_resume);
 
 	/* Update core status as required by the policy */
-	KBASE_TIMELINE_PM_CHECKTRANS(kbdev,
-				SW_FLOW_PM_CHECKTRANS_PM_DO_POWERON_START);
 	kbase_pm_update_cores_state(kbdev);
-	KBASE_TIMELINE_PM_CHECKTRANS(kbdev,
-				SW_FLOW_PM_CHECKTRANS_PM_DO_POWERON_END);
 
 	/* NOTE: We don't wait to reach the desired state, since running atoms
 	 * will wait for that state to be reached anyway */
@@ -182,11 +174,7 @@ bool kbase_pm_do_poweroff(struct kbase_device *kbdev, bool is_suspend)
 	kbdev->tiler_available_bitmap = 0;
 	kbdev->l2_available_bitmap = 0;
 
-	KBASE_TIMELINE_PM_CHECKTRANS(kbdev,
-				SW_FLOW_PM_CHECKTRANS_PM_DO_POWEROFF_START);
 	cores_are_available = kbase_pm_check_transitions_nolock(kbdev);
-	KBASE_TIMELINE_PM_CHECKTRANS(kbdev,
-				SW_FLOW_PM_CHECKTRANS_PM_DO_POWEROFF_END);
 	/* Don't need 'cores_are_available', because we don't return anything */
 	CSTD_UNUSED(cores_are_available);
 
@@ -197,9 +185,6 @@ bool kbase_pm_do_poweroff(struct kbase_device *kbdev, bool is_suspend)
 	 * they're transitioning to off, because the cores should be idle and
 	 * all cache flushes should already have occurred */
 
-	/* Consume any change-state events */
-	kbase_timeline_pm_check_handle_event(kbdev,
-				KBASE_TIMELINE_PM_EVENT_GPU_STATE_CHANGED);
 	/* Disable interrupts and turn the clock off */
 	return kbase_pm_clock_off(kbdev, is_suspend);
 }
@@ -288,20 +273,11 @@ void kbase_pm_power_changed(struct kbase_device *kbdev)
 	bool cores_are_available;
 	unsigned long flags;
 
-	KBASE_TIMELINE_PM_CHECKTRANS(kbdev,
-				SW_FLOW_PM_CHECKTRANS_GPU_INTERRUPT_START);
 	spin_lock_irqsave(&kbdev->pm.power_change_lock, flags);
 	cores_are_available = kbase_pm_check_transitions_nolock(kbdev);
 	spin_unlock_irqrestore(&kbdev->pm.power_change_lock, flags);
-	KBASE_TIMELINE_PM_CHECKTRANS(kbdev,
-				SW_FLOW_PM_CHECKTRANS_GPU_INTERRUPT_END);
 
 	if (cores_are_available) {
-		/* Log timelining information that a change in state has
-		 * completed */
-		kbase_timeline_pm_handle_event(kbdev,
-				KBASE_TIMELINE_PM_EVENT_GPU_STATE_CHANGED);
-
 		spin_lock_irqsave(&kbdev->js_data.runpool_irq.lock, flags);
 		kbase_gpu_slot_update(kbdev);
 		spin_unlock_irqrestore(&kbdev->js_data.runpool_irq.lock, flags);

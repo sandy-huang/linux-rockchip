@@ -862,8 +862,6 @@ void kbase_gpu_complete_hw(struct kbase_device *kbdev, int js,
 
 	katom = kbase_gpu_dequeue_atom(kbdev, js, end_timestamp);
 
-	kbase_timeline_job_slot_done(kbdev, katom->kctx, katom, js, 0);
-
 	if (completion_code == BASE_JD_EVENT_STOPPED) {
 		struct kbase_jd_atom *next_katom = kbase_gpu_inspect(kbdev, js,
 									0);
@@ -1059,8 +1057,6 @@ static int should_stop_x_dep_slot(struct kbase_jd_atom *katom)
 
 static void kbase_job_evicted(struct kbase_jd_atom *katom)
 {
-	kbase_timeline_job_slot_done(katom->kctx->kbdev, katom->kctx, katom,
-			katom->slot_nr, KBASE_JS_ATOM_DONE_EVICTED_FROM_NEXT);
 }
 
 bool kbase_backend_soft_hard_stop_slot(struct kbase_device *kbdev,

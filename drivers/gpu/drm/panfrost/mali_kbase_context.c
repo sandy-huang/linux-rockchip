@@ -49,9 +49,6 @@ kbase_create_context(struct kbase_device *kbdev, bool is_compat)
 	kctx->kbdev = kbdev;
 	kctx->as_nr = KBASEP_AS_NR_INVALID;
 	kctx->is_compat = is_compat;
-#ifdef CONFIG_MALI_TRACE_TIMELINE
-	kctx->timeline.owner_tgid = task_tgid_nr(current);
-#endif
 	atomic_set(&kctx->setup_complete, 0);
 	atomic_set(&kctx->setup_in_progress, 0);
 	kctx->infinite_cache_active = 0;
@@ -124,9 +121,6 @@ kbase_create_context(struct kbase_device *kbdev, bool is_compat)
 		goto no_jit;
 #ifdef CONFIG_GPU_TRACEPOINTS
 	atomic_set(&kctx->jctx.work_id, 0);
-#endif
-#ifdef CONFIG_MALI_TRACE_TIMELINE
-	atomic_set(&kctx->timeline.jd_atoms_in_flight, 0);
 #endif
 
 	kctx->id = atomic_add_return(1, &(kbdev->ctx_num)) - 1;

@@ -24,8 +24,6 @@ static struct base_jd_udata kbase_event_process(struct kbase_context *kctx, stru
 
 	data = katom->udata;
 
-	KBASE_TIMELINE_ATOMS_IN_FLIGHT(kctx, atomic_sub_return(1, &kctx->timeline.jd_atoms_in_flight));
-
 	kbase_tlstream_tl_nret_atom_ctx(katom, kctx);
 	kbase_tlstream_tl_del_atom(katom);
 

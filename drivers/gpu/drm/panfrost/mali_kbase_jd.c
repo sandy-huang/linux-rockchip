@@ -871,8 +871,6 @@ int kbase_jd_submit(struct kbase_context *kctx,
 
 	user_addr = get_compat_pointer(kctx, &submit_data->addr);
 
-	KBASE_TIMELINE_ATOMS_IN_FLIGHT(kctx, atomic_add_return(submit_data->nr_atoms, &kctx->timeline.jd_atoms_in_flight));
-
 	/* All atoms submitted in this call have the same flush ID */
 	latest_flush = kbase_backend_get_current_flush_id(kbdev);
 
@@ -882,7 +880,6 @@ int kbase_jd_submit(struct kbase_context *kctx,
 
 		if (copy_from_user(&user_atom, user_addr, sizeof(user_atom)) != 0) {
 			err = -EINVAL;
-			KBASE_TIMELINE_ATOMS_IN_FLIGHT(kctx, atomic_sub_return(submit_data->nr_atoms - i, &kctx->timeline.jd_atoms_in_flight));
 			break;
 		}
 

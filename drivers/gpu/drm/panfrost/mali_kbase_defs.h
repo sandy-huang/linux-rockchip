@@ -506,88 +506,6 @@ struct kbasep_mem_device {
 
 };
 
-/** Event IDs for the power management framework.
- *
- * Any of these events might be missed, so they should not be relied upon to
- * find the precise state of the GPU at a particular time in the
- * trace. Overall, we should get a high percentage of these events for
- * statisical purposes, and so a few missing should not be a problem */
-enum kbase_timeline_pm_event {
-	/* helper for tests */
-	KBASEP_TIMELINE_PM_EVENT_FIRST,
-
-	/** Event reserved for backwards compatibility with 'init' events */
-	KBASE_TIMELINE_PM_EVENT_RESERVED_0 = KBASEP_TIMELINE_PM_EVENT_FIRST,
-
-	/** The power state of the device has changed.
-	 *
-	 * Specifically, the device has reached a desired or available state.
-	 */
-	KBASE_TIMELINE_PM_EVENT_GPU_STATE_CHANGED,
-
-	/** The GPU is becoming active.
-	 *
-	 * This event is sent when the first context is about to use the GPU.
-	 */
-	KBASE_TIMELINE_PM_EVENT_GPU_ACTIVE,
-
-	/** The GPU is becoming idle.
-	 *
-	 * This event is sent when the last context has finished using the GPU.
-	 */
-	KBASE_TIMELINE_PM_EVENT_GPU_IDLE,
-
-	/** Event reserved for backwards compatibility with 'policy_change'
-	 * events */
-	KBASE_TIMELINE_PM_EVENT_RESERVED_4,
-
-	/** Event reserved for backwards compatibility with 'system_suspend'
-	 * events */
-	KBASE_TIMELINE_PM_EVENT_RESERVED_5,
-
-	/** Event reserved for backwards compatibility with 'system_resume'
-	 * events */
-	KBASE_TIMELINE_PM_EVENT_RESERVED_6,
-
-	/** The job scheduler is requesting to power up/down cores.
-	 *
-	 * This event is sent when:
-	 * - powered down cores are needed to complete a job
-	 * - powered up cores are not needed anymore
-	 */
-	KBASE_TIMELINE_PM_EVENT_CHANGE_GPU_STATE,
-
-	KBASEP_TIMELINE_PM_EVENT_LAST = KBASE_TIMELINE_PM_EVENT_CHANGE_GPU_STATE,
-};
-
-#ifdef CONFIG_MALI_TRACE_TIMELINE
-struct kbase_trace_kctx_timeline {
-	atomic_t jd_atoms_in_flight;
-	u32 owner_tgid;
-};
-
-struct kbase_trace_kbdev_timeline {
-	/* Note: strictly speaking, not needed, because it's in sync with
-	 * kbase_device::jm_slots[]::submitted_nr
-	 *
-	 * But it's kept as an example of how to add global timeline tracking
-	 * information
-	 *
-	 * The caller must hold kbasep_js_device_data::runpool_irq::lock when
-	 * accessing this */
-	u8 slot_atoms_submitted[BASE_JM_MAX_NR_SLOTS];
-
-	/* Last UID for each PM event */
-	atomic_t pm_event_uid[KBASEP_TIMELINE_PM_EVENT_LAST+1];
-	/* Counter for generating PM event UIDs */
-	atomic_t pm_event_uid_counter;
-	/*
-	 * L2 transition state - true indicates that the transition is ongoing
-	 * Expected to be protected by pm.power_change_lock */
-	bool l2_transitioning;
-};
-#endif /* CONFIG_MALI_TRACE_TIMELINE */
-
 struct kbasep_kctx_list_element {
 	struct list_head link;
 	struct kbase_context *kctx;
@@ -871,10 +789,6 @@ struct kbase_device {
 
 	struct kbase_ipa_context *ipa_ctx;
 
-#ifdef CONFIG_MALI_TRACE_TIMELINE
-	struct kbase_trace_kbdev_timeline timeline;
-#endif
-
 	/*
 	 * Control for enabling job dump on failure, set when control debugfs
 	 * is opened.
@@ -1073,10 +987,6 @@ struct kbase_context {
 	struct mm_struct *process_mm;
 	/* End of the SAME_VA zone */
 	u64 same_va_end;
-
-#ifdef CONFIG_MALI_TRACE_TIMELINE
-	struct kbase_trace_kctx_timeline timeline;
-#endif
 
 	struct jsctx_queue jsctx_queue
 		[KBASE_JS_ATOM_SCHED_PRIO_COUNT][BASE_JM_MAX_NR_SLOTS];

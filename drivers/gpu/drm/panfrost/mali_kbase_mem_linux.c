@@ -1846,37 +1846,6 @@ void kbase_os_mem_map_unlock(struct kbase_context *kctx)
 	up_read(&mm->mmap_sem);
 }
 
-#if defined(CONFIG_MALI_TRACE_TIMELINE)
-/* This section is required only for instrumentation. */
-
-static void kbase_dma_buf_vm_open(struct vm_area_struct *vma)
-{
-	struct kbase_cpu_mapping *map = vma->vm_private_data;
-
-	/* Non-atomic as we're under Linux's mm lock. */
-	map->count++;
-}
-
-static void kbase_dma_buf_vm_close(struct vm_area_struct *vma)
-{
-	struct kbase_cpu_mapping *map = vma->vm_private_data;
-
-	/* Non-atomic as we're under Linux's mm lock. */
-	if (--map->count)
-		return;
-
-	kbase_gpu_vm_lock(map->kctx);
-	list_del(&map->mappings_list);
-	kbase_gpu_vm_unlock(map->kctx);
-	kfree(map);
-}
-
-static const struct vm_operations_struct kbase_dma_mmap_ops = {
-	.open  = kbase_dma_buf_vm_open,
-	.close = kbase_dma_buf_vm_close,
-};
-#endif /* CONFIG_MALI_TRACE_TIMELINE */
-
 int kbase_mmap(struct file *file, struct vm_area_struct *vma)
 {
 	struct kbase_context *kctx = file->private_data;
@@ -2086,35 +2055,6 @@ map:
 
 dma_map:
 	err = dma_buf_mmap(reg->cpu_alloc->imported.umm.dma_buf, vma, vma->vm_pgoff - reg->start_pfn);
-#if defined(CONFIG_MALI_TRACE_TIMELINE)
-	/* This section is required only for instrumentation. */
-	/* Add created mapping to imported region mapping list.
-	 * It is important to make it visible to dumping infrastructure.
-	 * Add mapping only if vm_ops structure is not used by memory owner. */
-	WARN_ON(vma->vm_ops);
-	WARN_ON(vma->vm_private_data);
-	if (!err && !vma->vm_ops && !vma->vm_private_data) {
-		struct kbase_cpu_mapping *map = kzalloc(
-			sizeof(*map),
-			GFP_KERNEL);
-
-		if (map) {
-			map->kctx     = reg->kctx;
-			map->region   = NULL;
-			map->page_off = vma->vm_pgoff;
-			map->vm_start = vma->vm_start;
-			map->vm_end   = vma->vm_end;
-			map->count    = 1; /* start with one ref */
-
-			vma->vm_ops          = &kbase_dma_mmap_ops;
-			vma->vm_private_data = map;
-
-			list_add(
-				&map->mappings_list,
-				&reg->cpu_alloc->mappings);
-		}
-	}
-#endif /* CONFIG_MALI_TRACE_TIMELINE */
 out_unlock:
 	kbase_gpu_vm_unlock(kctx);
 out:

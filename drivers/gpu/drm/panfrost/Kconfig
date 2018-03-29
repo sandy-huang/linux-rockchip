@@ -34,10 +34,3 @@ menuconfig MALI_EXPERT
 	help
 	  Enabling this option and modifying the default settings may produce a driver with performance or
 	  other limitations.
-
-config MALI_TRACE_TIMELINE
-	bool "Timeline tracing"
-	depends on MALI_MIDGARD && MALI_EXPERT
-	default n
-	help
-	  Enables timeline tracing through the kernel tracepoint system.

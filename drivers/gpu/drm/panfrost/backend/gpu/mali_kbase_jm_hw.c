@@ -131,7 +131,6 @@ void kbase_job_hw_submit(struct kbase_device *kbdev,
 		kbdev->hwaccess.backend.slot_rb[js].last_context = katom->kctx;
 	}
 #endif // ifdef CONFIG_GPU_TRACEPOINTS
-	kbase_timeline_job_slot_submit(kbdev, kctx, katom, js);
 
 	kbase_reg_write(kbdev, JOB_SLOT_REG(js, JS_COMMAND_NEXT),
 						JS_COMMAND_START, katom->kctx);
