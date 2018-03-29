@@ -34,6 +34,7 @@
 #include <linux/mempool.h>
 #include <linux/slab.h>
 #include <linux/file.h>
+#include <linux/miscdevice.h>
 
 #include "mali_kbase_dma_fence.h"
 

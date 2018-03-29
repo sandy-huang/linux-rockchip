@@ -2363,7 +2363,7 @@ no_reg:
 err:
 	return NULL;
 }
-KBASE_EXPORT_SYMBOL(kbase_va_alloc);
+EXPORT_SYMBOL(kbase_va_alloc);
 
 void kbase_va_free(struct kbase_context *kctx, struct kbase_hwc_dma_mapping *handle)
 {
@@ -2384,5 +2384,5 @@ void kbase_va_free(struct kbase_context *kctx, struct kbase_hwc_dma_mapping *han
 	dma_free_attrs(kctx->kbdev->dev, handle->size,
 			handle->cpu_va, handle->dma_pa, attrs);
 }
-KBASE_EXPORT_SYMBOL(kbase_va_free);
+EXPORT_SYMBOL(kbase_va_free);
 

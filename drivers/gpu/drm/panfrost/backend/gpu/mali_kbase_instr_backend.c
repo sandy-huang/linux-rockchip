@@ -308,7 +308,7 @@ int kbase_instr_hwcnt_request_dump(struct kbase_context *kctx)
 	spin_unlock_irqrestore(&kbdev->hwcnt.lock, flags);
 	return err;
 }
-KBASE_EXPORT_SYMBOL(kbase_instr_hwcnt_request_dump);
+EXPORT_SYMBOL(kbase_instr_hwcnt_request_dump);
 
 bool kbase_instr_hwcnt_dump_complete(struct kbase_context *kctx,
 						bool * const success)
@@ -332,7 +332,7 @@ bool kbase_instr_hwcnt_dump_complete(struct kbase_context *kctx,
 
 	return complete;
 }
-KBASE_EXPORT_SYMBOL(kbase_instr_hwcnt_dump_complete);
+EXPORT_SYMBOL(kbase_instr_hwcnt_dump_complete);
 
 void kbasep_cache_clean_worker(struct work_struct *data)
 {
@@ -489,7 +489,7 @@ out:
 	spin_unlock_irqrestore(&kbdev->hwcnt.lock, flags);
 	return err;
 }
-KBASE_EXPORT_SYMBOL(kbase_instr_hwcnt_clear);
+EXPORT_SYMBOL(kbase_instr_hwcnt_clear);
 
 int kbase_instr_backend_init(struct kbase_device *kbdev)
 {

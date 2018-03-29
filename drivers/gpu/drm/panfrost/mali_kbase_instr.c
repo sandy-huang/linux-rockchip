@@ -77,7 +77,7 @@ int kbase_instr_hwcnt_enable(struct kbase_context *kctx,
 
 	return err;
 }
-KBASE_EXPORT_SYMBOL(kbase_instr_hwcnt_enable);
+EXPORT_SYMBOL(kbase_instr_hwcnt_enable);
 
 int kbase_instr_hwcnt_disable(struct kbase_context *kctx)
 {
@@ -100,7 +100,7 @@ int kbase_instr_hwcnt_disable(struct kbase_context *kctx)
 out:
 	return err;
 }
-KBASE_EXPORT_SYMBOL(kbase_instr_hwcnt_disable);
+EXPORT_SYMBOL(kbase_instr_hwcnt_disable);
 
 int kbase_instr_hwcnt_dump(struct kbase_context *kctx)
 {
@@ -113,5 +113,5 @@ int kbase_instr_hwcnt_dump(struct kbase_context *kctx)
 	err = kbase_instr_hwcnt_wait_for_dump(kctx);
 	return err;
 }
-KBASE_EXPORT_SYMBOL(kbase_instr_hwcnt_dump);
+EXPORT_SYMBOL(kbase_instr_hwcnt_dump);
 

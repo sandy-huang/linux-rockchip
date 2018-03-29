@@ -37,7 +37,6 @@
 
 #include "mali_base_kernel.h"
 #include <mali_kbase_uku.h>
-#include <mali_kbase_linux.h>
 
 #include "mali_kbase_pm.h"
 #include "mali_kbase_mem_lowlevel.h"
