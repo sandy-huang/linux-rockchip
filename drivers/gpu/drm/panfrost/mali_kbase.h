@@ -49,9 +49,6 @@
 #include "mali_kbase_jm.h"
 #include "mali_kbase_vinstr.h"
 #include "mali_kbase_ipa.h"
-#ifdef CONFIG_GPU_TRACEPOINTS
-#include <trace/events/gpu.h>
-#endif
 
 /* Enable GPU reset API */
 #define KBASE_GPU_RESET_EN 1

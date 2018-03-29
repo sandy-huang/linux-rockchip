@@ -343,9 +343,6 @@ struct kbase_jd_atom {
 
 	wait_queue_head_t completed;
 	enum kbase_jd_atom_state status;
-#ifdef CONFIG_GPU_TRACEPOINTS
-	int work_id;
-#endif
 	/* Assigned after atom is completed. Used to check whether PRLAM-10676 workaround should be applied */
 	int slot_nr;
 
@@ -434,10 +431,6 @@ struct kbase_jd_context {
 	spinlock_t tb_lock;
 	u32 *tb;
 	size_t tb_wrap_offset;
-
-#ifdef CONFIG_GPU_TRACEPOINTS
-	atomic_t work_id;
-#endif
 };
 
 struct kbase_device_info {

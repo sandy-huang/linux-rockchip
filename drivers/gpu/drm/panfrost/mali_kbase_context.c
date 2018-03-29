@@ -119,9 +119,6 @@ kbase_create_context(struct kbase_device *kbdev, bool is_compat)
 	err = kbase_jit_init(kctx);
 	if (err)
 		goto no_jit;
-#ifdef CONFIG_GPU_TRACEPOINTS
-	atomic_set(&kctx->jctx.work_id, 0);
-#endif
 
 	kctx->id = atomic_add_return(1, &(kbdev->ctx_num)) - 1;
 

@@ -51,14 +51,6 @@ void kbase_job_submit_nolock(struct kbase_device *kbdev,
 void kbase_job_done_slot(struct kbase_device *kbdev, int s, u32 completion_code,
 					u64 job_tail, ktime_t *end_timestamp);
 
-#ifdef CONFIG_GPU_TRACEPOINTS
-static inline char *kbasep_make_job_slot_string(int js, char *js_string)
-{
-	sprintf(js_string, "job_slot_%i", js);
-	return js_string;
-}
-#endif // ifdef CONFIG_GPU_TRACEPOINTS
-
 /**
  * kbase_job_hw_submit() - Submit a job to the GPU
  * @kbdev:	Device pointer

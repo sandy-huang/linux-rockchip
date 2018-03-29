@@ -949,35 +949,6 @@ void kbase_gpu_complete_hw(struct kbase_device *kbdev, int js,
 	 * - Schedule out the parent context if necessary, and schedule a new
 	 *   one in.
 	 */
-#ifdef CONFIG_GPU_TRACEPOINTS
-	{
-		/* The atom in the HEAD */
-		struct kbase_jd_atom *next_katom = kbase_gpu_inspect(kbdev, js,
-									0);
-
-		if (next_katom && next_katom->gpu_rb_state ==
-						KBASE_ATOM_GPU_RB_SUBMITTED) {
-			char js_string[16];
-
-			trace_gpu_sched_switch(kbasep_make_job_slot_string(js,
-								js_string),
-						ktime_to_ns(*end_timestamp),
-						(u32)next_katom->kctx->id, 0,
-						next_katom->work_id);
-			kbdev->hwaccess.backend.slot_rb[js].last_context =
-							next_katom->kctx;
-		} else {
-			char js_string[16];
-
-			trace_gpu_sched_switch(kbasep_make_job_slot_string(js,
-								js_string),
-						ktime_to_ns(ktime_get()), 0, 0,
-						0);
-			kbdev->hwaccess.backend.slot_rb[js].last_context = 0;
-		}
-	}
-#endif // ifdef CONFIG_GPU_TRACEPOINTS
-
 	if (completion_code == BASE_JD_EVENT_STOPPED)
 		kbase_jm_return_atom_to_js(kbdev, katom);
 	else
