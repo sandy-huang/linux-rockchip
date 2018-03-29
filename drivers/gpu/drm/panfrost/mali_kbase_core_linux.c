@@ -65,7 +65,7 @@ static int kbase_dev_nr;
 static DEFINE_MUTEX(kbase_dev_list_lock);
 static LIST_HEAD(kbase_dev_list);
 
-#define KERNEL_SIDE_DDK_VERSION_STRING "K:" MALI_RELEASE_NAME "(GPL)"
+#define KERNEL_SIDE_DDK_VERSION_STRING "K:r12p0-04rel0(GPL)"
 static inline void __compile_time_asserts(void)
 {
 	CSTD_COMPILE_TIME_ASSERT(sizeof(KERNEL_SIDE_DDK_VERSION_STRING) <= KBASE_GET_VERSION_BUFFER_SIZE);
@@ -2956,6 +2956,6 @@ static struct platform_driver kbase_platform_driver = {
 module_platform_driver(kbase_platform_driver);
 
 MODULE_LICENSE("GPL");
-MODULE_VERSION(MALI_RELEASE_NAME " (UK version " \
+MODULE_VERSION("r12p0-04rel0 (UK version " \
 		__stringify(BASE_UK_VERSION_MAJOR) "." \
 		__stringify(BASE_UK_VERSION_MINOR) ")");
