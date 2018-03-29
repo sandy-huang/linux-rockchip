@@ -26,9 +26,7 @@
 #include <linux/fs.h>
 #include <linux/version.h>
 #include <linux/dma-mapping.h>
-#ifdef CONFIG_DMA_SHARED_BUFFER
 #include <linux/dma-buf.h>
-#endif				/* defined(CONFIG_DMA_SHARED_BUFFER) */
 #include <linux/shrinker.h>
 
 #include <mali_kbase.h>
@@ -821,7 +819,6 @@ int kbase_mem_flags_change(struct kbase_context *kctx, u64 gpu_addr, unsigned in
 
 	/* Currently supporting only imported memory */
 	switch (reg->gpu_alloc->type) {
-#ifdef CONFIG_DMA_SHARED_BUFFER
 	case KBASE_MEM_TYPE_IMPORTED_UMM:
 		/* Future use will use the new flags, existing mapping will NOT be updated
 		 * as memory should not be in use by the GPU when updating the flags.
@@ -829,7 +826,6 @@ int kbase_mem_flags_change(struct kbase_context *kctx, u64 gpu_addr, unsigned in
 		ret = 0;
 		WARN_ON(reg->gpu_alloc->imported.umm.current_mapping_usage_count);
 		break;
-#endif
 	default:
 		break;
 	}
@@ -847,7 +843,6 @@ out:
 
 #define KBASE_MEM_IMPORT_HAVE_PAGES (1UL << BASE_MEM_FLAGS_NR_BITS)
 
-#ifdef CONFIG_DMA_SHARED_BUFFER
 static struct kbase_va_region *kbase_mem_from_umm(struct kbase_context *kctx, int fd, u64 *va_pages, u64 *flags)
 {
 	struct kbase_va_region *reg;
@@ -947,7 +942,6 @@ no_attachment:
 no_buf:
 	return NULL;
 }
-#endif  /* CONFIG_DMA_SHARED_BUFFER */
 
 static struct kbase_va_region *kbase_mem_from_user_buffer(
 		struct kbase_context *kctx, unsigned long address,
@@ -1260,7 +1254,6 @@ int kbase_mem_import(struct kbase_context *kctx, enum base_mem_import_type type,
 	}
 
 	switch (type) {
-#ifdef CONFIG_DMA_SHARED_BUFFER
 	case BASE_MEM_IMPORT_TYPE_UMM: {
 		int fd;
 
@@ -1270,7 +1263,6 @@ int kbase_mem_import(struct kbase_context *kctx, enum base_mem_import_type type,
 			reg = kbase_mem_from_umm(kctx, fd, va_pages, flags);
 	}
 	break;
-#endif /* CONFIG_DMA_SHARED_BUFFER */
 	case BASE_MEM_IMPORT_TYPE_USER_BUFFER: {
 		struct base_mem_import_user_buffer user_buffer;
 		void __user *uptr;
@@ -1854,7 +1846,7 @@ void kbase_os_mem_map_unlock(struct kbase_context *kctx)
 	up_read(&mm->mmap_sem);
 }
 
-#if defined(CONFIG_DMA_SHARED_BUFFER) && defined(CONFIG_MALI_TRACE_TIMELINE)
+#if defined(CONFIG_MALI_TRACE_TIMELINE)
 /* This section is required only for instrumentation. */
 
 static void kbase_dma_buf_vm_open(struct vm_area_struct *vma)
@@ -1883,7 +1875,7 @@ static const struct vm_operations_struct kbase_dma_mmap_ops = {
 	.open  = kbase_dma_buf_vm_open,
 	.close = kbase_dma_buf_vm_close,
 };
-#endif /* CONFIG_DMA_SHARED_BUFFER && CONFIG_MALI_TRACE_TIMELINE */
+#endif /* CONFIG_MALI_TRACE_TIMELINE */
 
 int kbase_mmap(struct file *file, struct vm_area_struct *vma)
 {
@@ -2061,10 +2053,8 @@ int kbase_mmap(struct file *file, struct vm_area_struct *vma)
 				goto out_unlock;
 			}
 
-#ifdef CONFIG_DMA_SHARED_BUFFER
 			if (reg->cpu_alloc->type == KBASE_MEM_TYPE_IMPORTED_UMM)
 				goto dma_map;
-#endif /* CONFIG_DMA_SHARED_BUFFER */
 
 			/* limit what we map to the amount currently backed */
 			if (reg->cpu_alloc->nents < (vma->vm_pgoff - reg->start_pfn + nr_pages)) {
@@ -2094,7 +2084,6 @@ map:
 	}
 	goto out_unlock;
 
-#ifdef CONFIG_DMA_SHARED_BUFFER
 dma_map:
 	err = dma_buf_mmap(reg->cpu_alloc->imported.umm.dma_buf, vma, vma->vm_pgoff - reg->start_pfn);
 #if defined(CONFIG_MALI_TRACE_TIMELINE)
@@ -2126,7 +2115,6 @@ dma_map:
 		}
 	}
 #endif /* CONFIG_MALI_TRACE_TIMELINE */
-#endif /* CONFIG_DMA_SHARED_BUFFER */
 out_unlock:
 	kbase_gpu_vm_unlock(kctx);
 out:

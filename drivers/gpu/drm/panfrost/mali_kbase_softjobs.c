@@ -15,10 +15,8 @@
 
 #include <mali_kbase.h>
 
-#if defined(CONFIG_DMA_SHARED_BUFFER)
 #include <linux/dma-buf.h>
 #include <asm/cacheflush.h>
-#endif /* defined(CONFIG_DMA_SHARED_BUFFER) */
 #include <linux/dma-mapping.h>
 #include <mali_base_kernel.h>
 #include <mali_kbase_hwaccess_time.h>
@@ -658,7 +656,6 @@ static int kbase_mem_copy_from_extres(struct kbase_context *kctx,
 		break;
 	}
 	break;
-#ifdef CONFIG_DMA_SHARED_BUFFER
 	case BASE_MEM_IMPORT_TYPE_UMM: {
 		struct dma_buf *dma_buf = reg->gpu_alloc->imported.umm.dma_buf;
 
@@ -686,7 +683,6 @@ static int kbase_mem_copy_from_extres(struct kbase_context *kctx,
 				DMA_FROM_DEVICE);
 		break;
 	}
-#endif
 	default:
 		ret = -EINVAL;
 	}

@@ -120,14 +120,12 @@ struct kbase_mem_phy_alloc {
 
 	/* member in union valid based on @a type */
 	union {
-#ifdef CONFIG_DMA_SHARED_BUFFER
 		struct {
 			struct dma_buf *dma_buf;
 			struct dma_buf_attachment *dma_attachment;
 			unsigned int current_mapping_usage_count;
 			struct sg_table *sgt;
 		} umm;
-#endif // ifdef CONFIG_DMA_SHARED_BUFFER
 		struct {
 			u64 stride;
 			size_t nents;

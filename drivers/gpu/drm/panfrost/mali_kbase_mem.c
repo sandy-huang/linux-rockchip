@@ -17,9 +17,7 @@
  * @file mali_kbase_mem.c
  * Base kernel memory APIs
  */
-#ifdef CONFIG_DMA_SHARED_BUFFER
 #include <linux/dma-buf.h>
-#endif				/* CONFIG_DMA_SHARED_BUFFER */
 #include <linux/kernel.h>
 #include <linux/bug.h>
 #include <linux/compat.h>
@@ -1316,13 +1314,11 @@ void kbase_mem_kref_free(struct kref *kref)
 	case KBASE_MEM_TYPE_RAW:
 		/* raw pages, external cleanup */
 		break;
-#ifdef CONFIG_DMA_SHARED_BUFFER
 	case KBASE_MEM_TYPE_IMPORTED_UMM:
 		dma_buf_detach(alloc->imported.umm.dma_buf,
 			       alloc->imported.umm.dma_attachment);
 		dma_buf_put(alloc->imported.umm.dma_buf);
 		break;
-#endif
 	case KBASE_MEM_TYPE_IMPORTED_USER_BUF:
 		if (alloc->imported.user_buf.mm)
 			mmdrop(alloc->imported.user_buf.mm);
@@ -1817,7 +1813,6 @@ static void kbase_jd_user_buf_unmap(struct kbase_context *kctx,
 	alloc->nents = 0;
 }
 
-#ifdef CONFIG_DMA_SHARED_BUFFER
 extern int kbase_jd_umm_map(struct kbase_context *kctx,
 		struct kbase_va_region *reg)
 {
@@ -1895,7 +1890,6 @@ extern void kbase_jd_umm_unmap(struct kbase_context *kctx,
 	alloc->imported.umm.sgt = NULL;
 	alloc->nents = 0;
 }
-#endif				/* CONFIG_DMA_SHARED_BUFFER */
 
 struct kbase_mem_phy_alloc *kbase_map_external_resource(
 		struct kbase_context *kctx, struct kbase_va_region *reg,
@@ -1919,7 +1913,6 @@ struct kbase_mem_phy_alloc *kbase_map_external_resource(
 		}
 	}
 	break;
-#ifdef CONFIG_DMA_SHARED_BUFFER
 	case BASE_MEM_IMPORT_TYPE_UMM: {
 		reg->gpu_alloc->imported.umm.current_mapping_usage_count++;
 		if (reg->gpu_alloc->imported.umm.current_mapping_usage_count == 1) {
@@ -1931,7 +1924,6 @@ struct kbase_mem_phy_alloc *kbase_map_external_resource(
 		}
 		break;
 	}
-#endif
 	default:
 		goto exit;
 	}
@@ -1945,7 +1937,6 @@ void kbase_unmap_external_resource(struct kbase_context *kctx,
 		struct kbase_va_region *reg, struct kbase_mem_phy_alloc *alloc)
 {
 	switch (alloc->type) {
-#ifdef CONFIG_DMA_SHARED_BUFFER
 	case KBASE_MEM_TYPE_IMPORTED_UMM: {
 		alloc->imported.umm.current_mapping_usage_count--;
 
@@ -1960,7 +1951,6 @@ void kbase_unmap_external_resource(struct kbase_context *kctx,
 		}
 	}
 	break;
-#endif /* CONFIG_DMA_SHARED_BUFFER */
 	case KBASE_MEM_TYPE_IMPORTED_USER_BUF: {
 		alloc->imported.user_buf.current_mapping_usage_count--;
 

@@ -13,9 +13,7 @@
  *
  */
 
-#if defined(CONFIG_DMA_SHARED_BUFFER)
 #include <linux/dma-buf.h>
-#endif				/* defined(CONFIG_DMA_SHARED_BUFFER) */
 #ifdef CONFIG_COMPAT
 #include <linux/compat.h>
 #endif
