@@ -12,14 +12,13 @@
 #
 #
 
-
-
-menuconfig MALI_MIDGARD
-	tristate "Mali Midgard series support"
+config DRM_PANFROST
+	tristate "Panfrost (DRM support for ARM Mali Midgard and Bifrost)"
 	depends on DRM
 	default n
 	help
-	  Enable this option to build support for a ARM Mali Midgard GPU.
+	  Enable this option to build support for ARM Mali Midgard
+	  or Bifrost GPUs.
 
 	  To compile this driver as a module, choose M here:
-	  this will generate a single module, called mali_kbase.
+	  this will generate a single module, called panfrost.

@@ -12,11 +12,8 @@
 #
 #
 
-# Paths required for build
-KBASE_PATH = $(src)
-
 # Use our defines when compiling
-ccflags-y += $(DEFINES) -I$(KBASE_PATH) -I$(srctree)/include/linux -I$(KBASE_PATH)/backend/gpu
+ccflags-y += -I$(src) -I$(src)/backend/gpu
 
 panfrost-y := \
 	mali_kbase_device.o \
@@ -71,4 +68,4 @@ panfrost-y := \
 	backend/gpu/mali_kbase_time.o
 
 # Tell the Linux build system from which .o file to create the kernel module
-obj-$(CONFIG_MALI_MIDGARD) += panfrost.o
+obj-$(CONFIG_DRM_PANFROST) += panfrost.o
