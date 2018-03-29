@@ -55,6 +55,8 @@
 
 #include <linux/pm_opp.h>
 
+#include "panfrost.h"
+
 /* GPU IRQ Tags */
 #define	JOB_IRQ_TAG	0
 #define MMU_IRQ_TAG	1
@@ -186,9 +188,7 @@ enum {
 	inited_get_device = (1u << 12),
 	inited_sysfs_group = (1u << 13),
 	inited_dev_list = (1u << 14),
-	inited_debugfs = (1u << 15),
 	inited_gpu_device = (1u << 16),
-	inited_registers_map = (1u << 17),
 	inited_power_control = (1u << 19),
 	inited_buslogger = (1u << 20)
 };
@@ -719,7 +719,12 @@ copy_failed:
 
 static struct kbase_device *to_kbase_device(struct device *dev)
 {
-	return dev_get_drvdata(dev);
+	struct panfrost_device *pandev = dev_get_drvdata(dev);
+
+	if (!pandev)
+		return NULL;
+
+	return &pandev->kbdev;
 }
 
 static int assign_irqs(struct platform_device *pdev)
@@ -2364,74 +2369,6 @@ static void kbasep_secure_mode_init(struct kbase_device *kbdev)
 	}
 }
 
-static int kbase_common_reg_map(struct kbase_device *kbdev)
-{
-	int err = -ENOMEM;
-
-	if (!request_mem_region(kbdev->reg_start, kbdev->reg_size, dev_name(kbdev->dev))) {
-		dev_err(kbdev->dev, "Register window unavailable\n");
-		err = -EIO;
-		goto out_region;
-	}
-
-	kbdev->reg = ioremap(kbdev->reg_start, kbdev->reg_size);
-	if (!kbdev->reg) {
-		dev_err(kbdev->dev, "Can't remap register window\n");
-		err = -EINVAL;
-		goto out_ioremap;
-	}
-
-	return 0;
-
- out_ioremap:
-	release_mem_region(kbdev->reg_start, kbdev->reg_size);
- out_region:
-	return err;
-}
-
-static void kbase_common_reg_unmap(struct kbase_device * const kbdev)
-{
-	if (kbdev->reg) {
-		iounmap(kbdev->reg);
-		release_mem_region(kbdev->reg_start, kbdev->reg_size);
-		kbdev->reg = NULL;
-		kbdev->reg_start = 0;
-		kbdev->reg_size = 0;
-	}
-}
-
-static int registers_map(struct kbase_device * const kbdev)
-{
-
-		/* the first memory resource is the physical address of the GPU
-		 * registers */
-		struct platform_device *pdev = to_platform_device(kbdev->dev);
-		struct resource *reg_res;
-		int err;
-
-		reg_res = platform_get_resource(pdev, IORESOURCE_MEM, 0);
-		if (!reg_res) {
-			dev_err(kbdev->dev, "Invalid register resource\n");
-			return -ENOENT;
-		}
-
-		kbdev->reg_start = reg_res->start;
-		kbdev->reg_size = resource_size(reg_res);
-
-		err = kbase_common_reg_map(kbdev);
-		if (err) {
-			dev_err(kbdev->dev, "Failed to map registers\n");
-			return err;
-		}
-
-	return 0;
-}
-
-static void registers_unmap(struct kbase_device *kbdev)
-{
-	kbase_common_reg_unmap(kbdev);
-}
-
 static int power_control_init(struct platform_device *pdev)
 {
 	struct kbase_device *kbdev = to_kbase_device(&pdev->dev);
@@ -2511,49 +2448,6 @@ static void power_control_term(struct kbase_device *kbdev)
 	}
 }
 
-static inline int kbase_device_debugfs_init(struct kbase_device *kbdev)
-{
-	return 0;
-}
-
-static inline void kbase_device_debugfs_term(struct kbase_device *kbdev) { }
-
-static void kbase_device_coherency_init(struct kbase_device *kbdev, u32 gpu_id)
-{
-	u32 supported_coherency_bitmap =
-		kbdev->gpu_props.props.raw_props.coherency_mode;
-	const void *coherency_override_dts;
-	u32 override_coherency;
-
-	kbdev->system_coherency = COHERENCY_NONE;
-
-	/* device tree may override the coherency */
-	coherency_override_dts = of_get_property(kbdev->dev->of_node,
-						"system-coherency",
-						NULL);
-	if (coherency_override_dts) {
-
-		override_coherency = be32_to_cpup(coherency_override_dts);
-
-		if ((override_coherency <= COHERENCY_NONE) &&
-			(supported_coherency_bitmap &
-			 COHERENCY_FEATURE_BIT(override_coherency))) {
-
-			kbdev->system_coherency = override_coherency;
-
-			dev_info(kbdev->dev,
-				"Using coherency mode %u set from dtb",
-				override_coherency);
-		} else
-			dev_warn(kbdev->dev,
-				"Ignoring unsupported coherency mode %u set from dtb",
-				override_coherency);
-	}
-
-	kbdev->gpu_props.props.raw_props.coherency_mode =
-		kbdev->system_coherency;
-}
-
 static struct attribute *kbase_attrs[] = {
 	&dev_attr_js_timeouts.attr,
 	&dev_attr_soft_event_timeout.attr,
@@ -2604,7 +2498,9 @@ static const struct dev_pm_ops panfrost_pm_ops = {
 
 static int panfrost_remove(struct platform_device *pdev)
 {
-	struct kbase_device *kbdev = to_kbase_device(&pdev->dev);
+	struct panfrost_device *pandev = platform_get_drvdata(pdev);
+	struct drm_device *ddev = pandev->ddev;
+	struct kbase_device *kbdev = &pandev->kbdev;
 	const struct list_head *dev_list;
 
 	if (!kbdev)
@@ -2630,11 +2526,6 @@ static int panfrost_remove(struct platform_device *pdev)
 	if (kbdev->inited_subsys & inited_get_device) {
 		put_device(kbdev->dev);
 		kbdev->inited_subsys &= ~inited_get_device;
-	}
-
-	if (kbdev->inited_subsys & inited_debugfs) {
-		kbase_device_debugfs_term(kbdev);
-		kbdev->inited_subsys &= ~inited_debugfs;
 	}
 
 	if (kbdev->inited_subsys & inited_ipa) {
@@ -2690,51 +2581,38 @@ static int panfrost_remove(struct platform_device *pdev)
 		kbdev->inited_subsys &= ~inited_power_control;
 	}
 
-	if (kbdev->inited_subsys & inited_registers_map) {
-		registers_unmap(kbdev);
-		kbdev->inited_subsys &= ~inited_registers_map;
-	}
-
 	if (kbdev->inited_subsys != 0)
 		dev_err(kbdev->dev, "Missing sub system termination\n");
-
-	kbase_device_free(kbdev);
 
 	return 0;
 }
 
 static int panfrost_probe(struct platform_device *pdev)
 {
+	struct panfrost_device *pandev;
 	struct kbase_device *kbdev;
 	struct mali_base_gpu_core_props *core_props;
 	u32 gpu_id;
 	const struct list_head *dev_list;
+	struct resource *res;
 	int err = 0;
 
-	kbdev = kbase_device_alloc();
-	if (!kbdev) {
-		dev_err(&pdev->dev, "Allocate device failed\n");
-		panfrost_remove(pdev);
+	pandev = devm_kzalloc(&pdev->dev, sizeof(*pandev), GFP_KERNEL);
+	if (!pandev)
 		return -ENOMEM;
-	}
 
+	/* legacy */
+	kbdev = &pandev->kbdev;
 	kbdev->dev = &pdev->dev;
-	dev_set_drvdata(kbdev->dev, kbdev);
 
-	err = assign_irqs(pdev);
-	if (err) {
-		dev_err(&pdev->dev, "IRQ search failed\n");
-		panfrost_remove(pdev);
-		return err;
-	}
+	platform_set_drvdata(pdev, pandev);
 
-	err = registers_map(kbdev);
-	if (err) {
-		dev_err(&pdev->dev, "Register map failed\n");
-		panfrost_remove(pdev);
-		return err;
+	res = platform_get_resource(pdev, IORESOURCE_MEM, 0);
+	kbdev->reg = devm_ioremap_resource(kbdev->dev, res);
+	if (!kbdev->reg) {
+		dev_err(kbdev->dev, "Can't remap register window\n");
+		return -ENODEV;
 	}
-	kbdev->inited_subsys |= inited_registers_map;
 
 	err = power_control_init(pdev);
 	if (err) {
@@ -2743,6 +2621,13 @@ static int panfrost_probe(struct platform_device *pdev)
 		return err;
 	}
 	kbdev->inited_subsys |= inited_power_control;
+
+	err = assign_irqs(pdev);
+	if (err) {
+		dev_err(&pdev->dev, "IRQ search failed\n");
+		panfrost_remove(pdev);
+		return err;
+	}
 
 	err = kbase_backend_early_init(kbdev);
 	if (err) {
@@ -2783,7 +2668,9 @@ static int panfrost_probe(struct platform_device *pdev)
 	gpu_id &= GPU_ID_VERSION_PRODUCT_ID;
 	gpu_id = gpu_id >> GPU_ID_VERSION_PRODUCT_ID_SHIFT;
 
-	kbase_device_coherency_init(kbdev, gpu_id);
+	kbdev->system_coherency = COHERENCY_NONE;
+	kbdev->gpu_props.props.raw_props.coherency_mode =
+		kbdev->system_coherency;
 
 	kbasep_secure_mode_init(kbdev);
 
@@ -2828,14 +2715,6 @@ static int panfrost_probe(struct platform_device *pdev)
 	}
 
 	kbdev->inited_subsys |= inited_ipa;
-
-	err = kbase_device_debugfs_init(kbdev);
-	if (err) {
-		dev_err(kbdev->dev, "DebugFS initialization failed");
-		panfrost_remove(pdev);
-		return err;
-	}
-	kbdev->inited_subsys |= inited_debugfs;
 
 	/* initialize the kctx list */
 	mutex_init(&kbdev->kctx_list_lock);

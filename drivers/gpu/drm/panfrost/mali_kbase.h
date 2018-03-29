@@ -64,7 +64,6 @@
  * @defgroup base_kbase_api Kernel-side Base (KBase) APIs
  */
 
-struct kbase_device *kbase_device_alloc(void);
 /*
 * note: configuration attributes member of kbdev needs to have
 * been setup before calling kbase_device_init
@@ -80,7 +79,6 @@ void kbase_dev_list_put(const struct list_head *dev_list);
 
 int kbase_device_init(struct kbase_device * const kbdev);
 void kbase_device_term(struct kbase_device *kbdev);
-void kbase_device_free(struct kbase_device *kbdev);
 int kbase_device_has_feature(struct kbase_device *kbdev, u32 feature);
 
 /* Needed for gator integration and for reporting vsync information */

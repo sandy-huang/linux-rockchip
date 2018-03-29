@@ -640,8 +640,6 @@ struct kbase_device {
 	struct list_head entry;
 	struct device *dev;
 	struct miscdevice mdev;
-	u64 reg_start;
-	size_t reg_size;
 	void __iomem *reg;
 
 	int irq_job;

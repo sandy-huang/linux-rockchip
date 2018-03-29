@@ -31,11 +31,6 @@
 
 #define DEBUG_MESSAGE_SIZE 256
 
-struct kbase_device *kbase_device_alloc(void)
-{
-	return kzalloc(sizeof(struct kbase_device), GFP_KERNEL);
-}
-
 static int kbase_device_as_init(struct kbase_device *kbdev, int i)
 {
 	const char format[] = "mali_mmu%d";
@@ -218,9 +213,4 @@ void kbase_device_term(struct kbase_device *kbdev)
 {
 	kbase_instr_backend_term(kbdev);
 	kbase_device_all_as_term(kbdev);
-}
-
-void kbase_device_free(struct kbase_device *kbdev)
-{
-	kfree(kbdev);
 }
