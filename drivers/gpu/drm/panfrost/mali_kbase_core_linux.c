@@ -2364,24 +2364,6 @@ static void kbasep_secure_mode_init(struct kbase_device *kbdev)
 		kbdev->secure_ops = &kbasep_secure_ops;
 		kbdev->secure_mode_support = true;
 	}
-#ifdef SECURE_CALLBACKS
-	else {
-		kbdev->secure_ops = SECURE_CALLBACKS;
-		kbdev->secure_mode_support = false;
-
-		if (kbdev->secure_ops) {
-			int err;
-
-			/* Make sure secure mode is disabled on startup */
-			err = kbdev->secure_ops->secure_mode_disable(kbdev);
-
-			/* secure_mode_disable() returns -EINVAL if not
-			 * supported
-			 */
-			kbdev->secure_mode_support = (err != -EINVAL);
-		}
-	}
-#endif
 }
 
 static int kbase_common_reg_map(struct kbase_device *kbdev)
@@ -2460,7 +2442,6 @@ static int power_control_init(struct platform_device *pdev)
 	if (!kbdev)
 		return -ENODEV;
 
-#if defined(CONFIG_OF) && defined(CONFIG_REGULATOR)
 	kbdev->regulator = regulator_get_optional(kbdev->dev, "mali");
 	if (IS_ERR_OR_NULL(kbdev->regulator)) {
 		err = PTR_ERR(kbdev->regulator);
@@ -2473,7 +2454,6 @@ static int power_control_init(struct platform_device *pdev)
 			"Continuing without Mali regulator control\n");
 		/* Allow probe to continue without regulator */
 	}
-#endif
 
 	kbdev->clock = clk_get(kbdev->dev, NULL);
 	if (IS_ERR_OR_NULL(kbdev->clock)) {
@@ -2495,10 +2475,8 @@ static int power_control_init(struct platform_device *pdev)
 		}
 	}
 
-#if defined(CONFIG_OF) && defined(CONFIG_PM_OPP)
 	/* Register the OPPs if they are available in device tree */
 	err = dev_pm_opp_of_add_table(kbdev->dev);
-#endif
 	if (err)
 		dev_dbg(kbdev->dev, "OPP table not found\n");
 
@@ -2511,12 +2489,10 @@ if (kbdev->clock != NULL) {
 	kbdev->clock = NULL;
 }
 
-#ifdef CONFIG_REGULATOR
 	if (kbdev->regulator != NULL) {
 		regulator_put(kbdev->regulator);
 		kbdev->regulator = NULL;
 	}
-#endif
 
 	return err;
 }
@@ -2531,12 +2507,10 @@ static void power_control_term(struct kbase_device *kbdev)
 		kbdev->clock = NULL;
 	}
 
-#if defined(CONFIG_OF) && defined(CONFIG_REGULATOR)
 	if (kbdev->regulator) {
 		regulator_put(kbdev->regulator);
 		kbdev->regulator = NULL;
 	}
-#endif
 }
 
 static inline int kbase_device_debugfs_init(struct kbase_device *kbdev)
@@ -2548,17 +2522,14 @@ static inline void kbase_device_debugfs_term(struct kbase_device *kbdev) { }
 
 static void kbase_device_coherency_init(struct kbase_device *kbdev, u32 gpu_id)
 {
-#ifdef CONFIG_OF
 	u32 supported_coherency_bitmap =
 		kbdev->gpu_props.props.raw_props.coherency_mode;
 	const void *coherency_override_dts;
 	u32 override_coherency;
-#endif /* CONFIG_OF */
 
 	kbdev->system_coherency = COHERENCY_NONE;
 
 	/* device tree may override the coherency */
-#ifdef CONFIG_OF
 	coherency_override_dts = of_get_property(kbdev->dev->of_node,
 						"system-coherency",
 						NULL);
@@ -2580,8 +2551,6 @@ static void kbase_device_coherency_init(struct kbase_device *kbdev, u32 gpu_id)
 				"Ignoring unsupported coherency mode %u set from dtb",
 				override_coherency);
 	}
-
-#endif /* CONFIG_OF */
 
 	kbdev->gpu_props.props.raw_props.coherency_mode =
 		kbdev->system_coherency;
@@ -2607,7 +2576,35 @@ static const struct attribute_group kbase_attr_group = {
 	.attrs = kbase_attrs,
 };
 
-static int kbase_platform_device_remove(struct platform_device *pdev)
+static int panfrost_suspend(struct device *dev)
+{
+	struct kbase_device *kbdev = to_kbase_device(dev);
+
+	if (!kbdev)
+		return -ENODEV;
+
+	kbase_pm_suspend(kbdev);
+	return 0;
+}
+
+static int panfrost_resume(struct device *dev)
+{
+	struct kbase_device *kbdev = to_kbase_device(dev);
+
+	if (!kbdev)
+		return -ENODEV;
+
+	kbase_pm_resume(kbdev);
+
+	return 0;
+}
+
+static const struct dev_pm_ops panfrost_pm_ops = {
+	.suspend = panfrost_suspend,
+	.resume = panfrost_resume,
+};
+
+static int panfrost_remove(struct platform_device *pdev)
 {
 	struct kbase_device *kbdev = to_kbase_device(&pdev->dev);
 	const struct list_head *dev_list;
@@ -2708,7 +2705,7 @@ static int kbase_platform_device_remove(struct platform_device *pdev)
 	return 0;
 }
 
-static int kbase_platform_device_probe(struct platform_device *pdev)
+static int panfrost_probe(struct platform_device *pdev)
 {
 	struct kbase_device *kbdev;
 	struct mali_base_gpu_core_props *core_props;
@@ -2719,7 +2716,7 @@ static int kbase_platform_device_probe(struct platform_device *pdev)
 	kbdev = kbase_device_alloc();
 	if (!kbdev) {
 		dev_err(&pdev->dev, "Allocate device failed\n");
-		kbase_platform_device_remove(pdev);
+		panfrost_remove(pdev);
 		return -ENOMEM;
 	}
 
@@ -2729,14 +2726,14 @@ static int kbase_platform_device_probe(struct platform_device *pdev)
 	err = assign_irqs(pdev);
 	if (err) {
 		dev_err(&pdev->dev, "IRQ search failed\n");
-		kbase_platform_device_remove(pdev);
+		panfrost_remove(pdev);
 		return err;
 	}
 
 	err = registers_map(kbdev);
 	if (err) {
 		dev_err(&pdev->dev, "Register map failed\n");
-		kbase_platform_device_remove(pdev);
+		panfrost_remove(pdev);
 		return err;
 	}
 	kbdev->inited_subsys |= inited_registers_map;
@@ -2744,7 +2741,7 @@ static int kbase_platform_device_probe(struct platform_device *pdev)
 	err = power_control_init(pdev);
 	if (err) {
 		dev_err(&pdev->dev, "Power control initialization failed\n");
-		kbase_platform_device_remove(pdev);
+		panfrost_remove(pdev);
 		return err;
 	}
 	kbdev->inited_subsys |= inited_power_control;
@@ -2752,7 +2749,7 @@ static int kbase_platform_device_probe(struct platform_device *pdev)
 	err = kbase_backend_early_init(kbdev);
 	if (err) {
 		dev_err(kbdev->dev, "Early backend initialization failed\n");
-		kbase_platform_device_remove(pdev);
+		panfrost_remove(pdev);
 		return err;
 	}
 	kbdev->inited_subsys |= inited_backend_early;
@@ -2771,7 +2768,7 @@ static int kbase_platform_device_probe(struct platform_device *pdev)
 	err = kbase_device_init(kbdev);
 	if (err) {
 		dev_err(kbdev->dev, "Device initialization failed (%d)\n", err);
-		kbase_platform_device_remove(pdev);
+		panfrost_remove(pdev);
 		return err;
 	}
 	kbdev->inited_subsys |= inited_device;
@@ -2779,7 +2776,7 @@ static int kbase_platform_device_probe(struct platform_device *pdev)
 	err = kbase_mem_init(kbdev);
 	if (err) {
 		dev_err(kbdev->dev, "Memory subsystem initialization failed\n");
-		kbase_platform_device_remove(pdev);
+		panfrost_remove(pdev);
 		return err;
 	}
 	kbdev->inited_subsys |= inited_mem;
@@ -2795,7 +2792,7 @@ static int kbase_platform_device_probe(struct platform_device *pdev)
 	err = kbasep_js_devdata_init(kbdev);
 	if (err) {
 		dev_err(kbdev->dev, "Job JS devdata initialization failed\n");
-		kbase_platform_device_remove(pdev);
+		panfrost_remove(pdev);
 		return err;
 	}
 	kbdev->inited_subsys |= inited_js;
@@ -2803,7 +2800,7 @@ static int kbase_platform_device_probe(struct platform_device *pdev)
 	err = kbase_tlstream_init();
 	if (err) {
 		dev_err(kbdev->dev, "Timeline stream initialization failed\n");
-		kbase_platform_device_remove(pdev);
+		panfrost_remove(pdev);
 		return err;
 	}
 	kbdev->inited_subsys |= inited_tlstream;
@@ -2811,7 +2808,7 @@ static int kbase_platform_device_probe(struct platform_device *pdev)
 	err = kbase_backend_late_init(kbdev);
 	if (err) {
 		dev_err(kbdev->dev, "Late backend initialization failed\n");
-		kbase_platform_device_remove(pdev);
+		panfrost_remove(pdev);
 		return err;
 	}
 	kbdev->inited_subsys |= inited_backend_late;
@@ -2820,7 +2817,7 @@ static int kbase_platform_device_probe(struct platform_device *pdev)
 	if (!kbdev->vinstr_ctx) {
 		dev_err(kbdev->dev,
 			"Virtual instrumentation initialization failed\n");
-		kbase_platform_device_remove(pdev);
+		panfrost_remove(pdev);
 		return -EINVAL;
 	}
 	kbdev->inited_subsys |= inited_vinstr;
@@ -2828,7 +2825,7 @@ static int kbase_platform_device_probe(struct platform_device *pdev)
 	kbdev->ipa_ctx = kbase_ipa_init(kbdev);
 	if (!kbdev->ipa_ctx) {
 		dev_err(kbdev->dev, "IPA initialization failed\n");
-		kbase_platform_device_remove(pdev);
+		panfrost_remove(pdev);
 		return -EINVAL;
 	}
 
@@ -2837,7 +2834,7 @@ static int kbase_platform_device_probe(struct platform_device *pdev)
 	err = kbase_device_debugfs_init(kbdev);
 	if (err) {
 		dev_err(kbdev->dev, "DebugFS initialization failed");
-		kbase_platform_device_remove(pdev);
+		panfrost_remove(pdev);
 		return err;
 	}
 	kbdev->inited_subsys |= inited_debugfs;
@@ -2856,7 +2853,7 @@ static int kbase_platform_device_probe(struct platform_device *pdev)
 	if (err) {
 		dev_err(kbdev->dev, "Misc device registration failed for %s\n",
 			kbdev->devname);
-		kbase_platform_device_remove(pdev);
+		panfrost_remove(pdev);
 		return err;
 	}
 	kbdev->inited_subsys |= inited_misc_register;
@@ -2869,7 +2866,7 @@ static int kbase_platform_device_probe(struct platform_device *pdev)
 	err = sysfs_create_group(&kbdev->dev->kobj, &kbase_attr_group);
 	if (err) {
 		dev_err(&pdev->dev, "SysFS group creation failed\n");
-		kbase_platform_device_remove(pdev);
+		panfrost_remove(pdev);
 		return err;
 	}
 	kbdev->inited_subsys |= inited_sysfs_group;
@@ -2882,78 +2879,31 @@ static int kbase_platform_device_probe(struct platform_device *pdev)
 	return err;
 }
 
-/** Suspend callback from the OS.
- *
- * This is called by Linux when the device should suspend.
- *
- * @param dev  The device to suspend
- *
- * @return A standard Linux error code
- */
-static int kbase_device_suspend(struct device *dev)
-{
-	struct kbase_device *kbdev = to_kbase_device(dev);
-
-	if (!kbdev)
-		return -ENODEV;
-
-	kbase_pm_suspend(kbdev);
-	return 0;
-}
-
-/** Resume callback from the OS.
- *
- * This is called by Linux when the device should resume from suspension.
- *
- * @param dev  The device to resume
- *
- * @return A standard Linux error code
- */
-static int kbase_device_resume(struct device *dev)
-{
-	struct kbase_device *kbdev = to_kbase_device(dev);
-
-	if (!kbdev)
-		return -ENODEV;
-
-	kbase_pm_resume(kbdev);
-
-	return 0;
-}
-
-/** The power management operations for the platform driver.
- */
-static const struct dev_pm_ops kbase_pm_ops = {
-	.suspend = kbase_device_suspend,
-	.resume = kbase_device_resume,
-};
-
-#ifdef CONFIG_OF
-static const struct of_device_id kbase_dt_ids[] = {
-	{ .compatible = "arm,malit6xx" },
+static const struct of_device_id panfrost_dt_ids[] = {
+	{ .compatible = "arm,mali-t604" },
+	{ .compatible = "arm,mali-t624" },
+	{ .compatible = "arm,mali-t628" },
+	{ .compatible = "arm,mali-t720" },
 	{ .compatible = "arm,mali-t760" },
-	{ .compatible = "arm,mali-midgard" },
+	{ .compatible = "arm,mali-t820" },
+	{ .compatible = "arm,mali-t830" },
+	{ .compatible = "arm,mali-t860" },
+	{ .compatible = "arm,mali-t880" },
 	{ /* sentinel */ }
 };
-MODULE_DEVICE_TABLE(of, kbase_dt_ids);
-#endif
+MODULE_DEVICE_TABLE(of, panfrost_dt_ids);
 
-static struct platform_driver kbase_platform_driver = {
-	.probe = kbase_platform_device_probe,
-	.remove = kbase_platform_device_remove,
+static struct platform_driver panfrost_driver = {
+	.probe = panfrost_probe,
+	.remove = panfrost_remove,
 	.driver = {
-		   .name = "mali",
-		   .owner = THIS_MODULE,
-		   .pm = &kbase_pm_ops,
-		   .of_match_table = of_match_ptr(kbase_dt_ids),
+		   .name = "panfrost",
+		   .pm = &panfrost_pm_ops,
+		   .of_match_table = of_match_ptr(panfrost_dt_ids),
 	},
 };
 
-/*
- * The driver will not provide a shortcut to create the Mali platform device
- * anymore when using Device Tree.
- */
-module_platform_driver(kbase_platform_driver);
+module_platform_driver(panfrost_driver);
 
 MODULE_LICENSE("GPL");
 MODULE_VERSION("r12p0-04rel0 (UK version " \
