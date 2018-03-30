@@ -828,12 +828,6 @@ void kbase_sync_single_for_cpu(struct kbase_device *kbdev, dma_addr_t handle,
 		size_t size, enum dma_data_direction dir);
 
 /**
- * kbase_jit_debugfs_add - Add per context debugfs entry for JIT.
- * @kctx: kbase context
- */
-void kbase_jit_debugfs_add(struct kbase_context *kctx);
-
-/**
  * kbase_jit_init - Initialize the JIT memory pool management
  * @kctx: kbase context
  *

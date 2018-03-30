@@ -17,7 +17,6 @@
  * Base kernel device APIs
  */
 
-#include <linux/debugfs.h>
 #include <linux/dma-mapping.h>
 #include <linux/seq_file.h>
 #include <linux/kernel.h>

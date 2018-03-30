@@ -17,7 +17,6 @@ ccflags-y += -I$(src) -I$(src)/backend/gpu
 
 panfrost-y := \
 	mali_kbase_device.o \
-	mali_kbase_cache_policy.o \
 	mali_kbase_mem.o \
 	mali_kbase_mmu.o \
 	mali_kbase_ipa.o \
@@ -45,7 +44,6 @@ panfrost-y := \
 	mali_kbase_mem_pool.o \
 	mali_kbase_tlstream.o \
 	mali_kbase_dma_fence.o \
-	backend/gpu/mali_kbase_cache_policy_backend.o \
 	backend/gpu/mali_kbase_device_hw.o \
 	backend/gpu/mali_kbase_gpu.o \
 	backend/gpu/mali_kbase_gpuprops_backend.o \

@@ -698,12 +698,6 @@ copy_failed:
 			break;
 		}
 
-	case KBASE_FUNC_DEBUGFS_MEM_PROFILE_ADD:
-		{
-			/* Trap */
-			break;
-		}
-
 	default:
 		dev_err(kbdev->dev, "unknown ioctl %u\n", id);
 		goto out_bad;

@@ -319,12 +319,6 @@ struct kbase_uk_soft_event_update {
 	u32 flags;
 };
 
-struct kbase_uk_debugfs_mem_profile_add {
-	union uk_header header;
-	u32 len;
-	union kbase_pointer buf;
-};
-
 /**
  * struct kbase_uk_mem_jit_init - User/Kernel space data exchange structure
  * @header:     UK structure header
@@ -379,7 +373,6 @@ enum kbase_uk_function_id {
 					    * purposes, otherwise these controls
 					    * are set through gator API */
 
-	KBASE_FUNC_DEBUGFS_MEM_PROFILE_ADD = (UK_FUNC_ID + 27),
 	KBASE_FUNC_JOB_SUBMIT = (UK_FUNC_ID + 28),
 	KBASE_FUNC_DISJOINT_QUERY = (UK_FUNC_ID + 29),
 

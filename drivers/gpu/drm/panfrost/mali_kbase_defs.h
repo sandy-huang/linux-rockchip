@@ -781,12 +781,6 @@ struct kbase_device {
 
 	struct kbase_ipa_context *ipa_ctx;
 
-	/*
-	 * Control for enabling job dump on failure, set when control debugfs
-	 * is opened.
-	 */
-	bool job_fault_debug;
-
 	/* Total number of created contexts */
 	atomic_t ctx_num;
 

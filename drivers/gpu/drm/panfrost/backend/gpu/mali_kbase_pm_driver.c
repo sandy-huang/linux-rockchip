@@ -22,11 +22,9 @@
 #include <mali_midg_regmap.h>
 #include <mali_kbase_tlstream.h>
 #include <mali_kbase_pm.h>
-#include <mali_kbase_cache_policy.h>
 #include <mali_kbase_config_defaults.h>
 #include <mali_kbase_smc.h>
 #include <mali_kbase_hwaccess_jm.h>
-#include <backend/gpu/mali_kbase_cache_policy_backend.h>
 #include <backend/gpu/mali_kbase_device_internal.h>
 #include <backend/gpu/mali_kbase_pm_internal.h>
 
@@ -83,6 +81,13 @@ static u32 core_type_to_reg(enum kbase_pm_core_type core_type,
 						enum kbasep_pm_action action)
 {
 	return (u32)core_type + (u32)action;
+}
+
+static void kbase_cache_set_coherency_mode(struct kbase_device *kbdev,
+		u32 mode)
+{
+	if (kbase_hw_has_feature(kbdev, BASE_HW_FEATURE_COHERENCY_REG))
+		kbase_reg_write(kbdev, COHERENCY_ENABLE, mode, NULL);
 }
 
 #ifdef CONFIG_ARM64

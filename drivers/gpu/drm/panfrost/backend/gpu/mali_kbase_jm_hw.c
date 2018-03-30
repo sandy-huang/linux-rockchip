@@ -1243,12 +1243,6 @@ static void kbasep_try_reset_gpu_early_locked(struct kbase_device *kbdev)
 		return;
 	}
 
-	/* To prevent getting incorrect registers when dumping failed job,
-	 * skip early reset.
-	 */
-	if (kbdev->job_fault_debug != false)
-		return;
-
 	/* Check that the reset has been committed to (i.e. kbase_reset_gpu has
 	 * been called), and that no other thread beat this thread to starting
 	 * the reset */
