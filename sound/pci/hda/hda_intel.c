@@ -2312,6 +2312,19 @@ static int azx_probe_continue(struct azx *chip)
 	chip->running = 1;
 	azx_add_card_list(chip);
 
+	val = power_save;
+#ifdef CONFIG_PM
+	if (pm_blacklist) {
+		const struct snd_pci_quirk *q;
+
+		q = snd_pci_quirk_lookup(chip->pci, power_save_blacklist);
+		if (q && val) {
+			dev_info(chip->card->dev, "device %04x:%04x is on the power_save blacklist, forcing power_save to 0\n",
+				 q->subvendor, q->subdevice);
+			val = 0;
+		}
+	}
+#endif /* CONFIG_PM */
 	/*
 	 * The discrete GPU cannot power down unless the HDA controller runtime
 	 * suspends, so activate runtime PM on codecs even if power_save == 0.
@@ -2320,7 +2333,7 @@ static int azx_probe_continue(struct azx *chip)
 		list_for_each_codec(codec, &chip->bus)
 			codec->auto_runtime_pm = 1;
 
-	snd_hda_set_power_save(&chip->bus, power_save * 1000);
+	snd_hda_set_power_save(&chip->bus, val * 1000);
 	if (azx_has_pm_runtime(chip))
 		pm_runtime_put_autosuspend(&pci->dev);
 
