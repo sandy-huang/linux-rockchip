@@ -84,7 +84,7 @@ static inline void stm32_usbphyc_clr_bits(void __iomem *reg, u32 bits)
 	writel_relaxed(readl_relaxed(reg) & ~bits, reg);
 }
 
-void stm32_usbphyc_get_pll_params(u32 clk_rate, struct pll_params *pll_params)
+static void stm32_usbphyc_get_pll_params(u32 clk_rate, struct pll_params *pll_params)
 {
 	unsigned long long fvco, ndiv, frac;
 
