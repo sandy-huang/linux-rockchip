@@ -74,9 +74,6 @@ to specify one more vendor-specific compatible, among:
       * resets: phandle to the reset line for the GPU
 
   - allwinner,sun50i-h5-mali
-      * resets: phandle to the reset line for the GPU
-
-  - Rockchip variants:
     Required properties:
       * resets: phandle to the reset line for the GPU
 
