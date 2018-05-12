@@ -38,51 +38,11 @@ static int tegra_atomic_check(struct drm_device *drm,
 {
 	int err;
 
-	err = drm_atomic_helper_check_modeset(drm, state);
+	err = drm_atomic_helper_check(drm, state);
 	if (err < 0)
 		return err;
 
-	err = drm_atomic_normalize_zpos(drm, state);
-	if (err < 0)
-		return err;
-
-	err = drm_atomic_helper_check_planes(drm, state);
-	if (err < 0)
-		return err;
-
-	if (state->legacy_cursor_update)
-		state->async_update = !drm_atomic_helper_async_check(drm, state);
-
-	return 0;
-}
-
-static struct drm_atomic_state *
-tegra_atomic_state_alloc(struct drm_device *drm)
-{
-	struct tegra_atomic_state *state = kzalloc(sizeof(*state), GFP_KERNEL);
-
-	if (!state || drm_atomic_state_init(drm, &state->base) < 0) {
-		kfree(state);
-		return NULL;
-	}
-
-	return &state->base;
-}
-
-static void tegra_atomic_state_clear(struct drm_atomic_state *state)
-{
-	struct tegra_atomic_state *tegra = to_tegra_atomic_state(state);
-
-	drm_atomic_state_default_clear(state);
-	tegra->clk_disp = NULL;
-	tegra->dc = NULL;
-	tegra->rate = 0;
-}
-
-static void tegra_atomic_state_free(struct drm_atomic_state *state)
-{
-	drm_atomic_state_default_release(state);
-	kfree(state);
+	return tegra_display_hub_atomic_check(drm, state);
 }
 
 static const struct drm_mode_config_funcs tegra_drm_mode_config_funcs = {
@@ -92,9 +52,6 @@ static const struct drm_mode_config_funcs tegra_drm_mode_config_funcs = {
 #endif
 	.atomic_check = tegra_atomic_check,
 	.atomic_commit = drm_atomic_helper_commit,
-	.atomic_state_alloc = tegra_atomic_state_alloc,
-	.atomic_state_clear = tegra_atomic_state_clear,
-	.atomic_state_free = tegra_atomic_state_free,
 };
 
 static void tegra_atomic_commit_tail(struct drm_atomic_state *old_state)
@@ -179,6 +136,8 @@ static int tegra_drm_load(struct drm_device *drm, unsigned long flags)
 
 	drm->mode_config.allow_fb_modifiers = true;
 
+	drm->mode_config.normalize_zpos = true;
+
 	drm->mode_config.funcs = &tegra_drm_mode_config_funcs;
 	drm->mode_config.helper_private = &tegra_drm_mode_config_helpers;
 
@@ -250,6 +209,7 @@ static void tegra_drm_unload(struct drm_device *drm)
 
 	drm_kms_helper_poll_fini(drm);
 	tegra_drm_fb_exit(drm);
+	drm_atomic_helper_shutdown(drm);
 	drm_mode_config_cleanup(drm);
 
 	err = host1x_device_exit(device);

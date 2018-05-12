@@ -288,6 +288,7 @@
 #define DP_PSR_SUPPORT                      0x070   /* XXX 1.2? */
 # define DP_PSR_IS_SUPPORTED                1
 # define DP_PSR2_IS_SUPPORTED		    2	    /* eDP 1.4 */
+# define DP_PSR2_WITH_Y_COORD_IS_SUPPORTED  3	    /* eDP 1.4a */
 
 #define DP_PSR_CAPS                         0x071   /* XXX 1.2? */
 # define DP_PSR_NO_TRAIN_ON_EXIT            1
@@ -870,6 +871,23 @@
 #define DP_CEC_TX_MESSAGE_BUFFER               0x3020
 #define DP_CEC_MESSAGE_BUFFER_LENGTH             0x10
 
+#define DP_AUX_HDCP_BKSV		0x68000
+#define DP_AUX_HDCP_RI_PRIME		0x68005
+#define DP_AUX_HDCP_AKSV		0x68007
+#define DP_AUX_HDCP_AN			0x6800C
+#define DP_AUX_HDCP_V_PRIME(h)		(0x68014 + h * 4)
+#define DP_AUX_HDCP_BCAPS		0x68028
+# define DP_BCAPS_REPEATER_PRESENT	BIT(1)
+# define DP_BCAPS_HDCP_CAPABLE		BIT(0)
+#define DP_AUX_HDCP_BSTATUS		0x68029
+# define DP_BSTATUS_REAUTH_REQ		BIT(3)
+# define DP_BSTATUS_LINK_FAILURE	BIT(2)
+# define DP_BSTATUS_R0_PRIME_READY	BIT(1)
+# define DP_BSTATUS_READY		BIT(0)
+#define DP_AUX_HDCP_BINFO		0x6802A
+#define DP_AUX_HDCP_KSV_FIFO		0x6802C
+#define DP_AUX_HDCP_AINFO		0x6803B
+
 /* DP 1.2 Sideband message defines */
 /* peer device type - DP 1.2a Table 2-92 */
 #define DP_PEER_DEVICE_NONE		0x0
@@ -949,18 +967,18 @@ int drm_dp_bw_code_to_link_rate(u8 link_bw);
 #define DP_SDP_VSC_EXT_CEA		0x21 /* DP 1.4 */
 /* 0x80+ CEA-861 infoframe types */
 
-struct edp_sdp_header {
+struct dp_sdp_header {
 	u8 HB0; /* Secondary Data Packet ID */
 	u8 HB1; /* Secondary Data Packet Type */
-	u8 HB2; /* 7:5 reserved, 4:0 revision number */
-	u8 HB3; /* 7:5 reserved, 4:0 number of valid data bytes */
+	u8 HB2; /* Secondary Data Packet Specific header, Byte 0 */
+	u8 HB3; /* Secondary Data packet Specific header, Byte 1 */
 } __packed;
 
 #define EDP_SDP_HEADER_REVISION_MASK		0x1F
 #define EDP_SDP_HEADER_VALID_PAYLOAD_BYTES	0x1F
 
 struct edp_vsc_psr {
-	struct edp_sdp_header sdp_header;
+	struct dp_sdp_header sdp_header;
 	u8 DB0; /* Stereo Interface */
 	u8 DB1; /* 0 - PSR State; 1 - Update RFB; 2 - CRC Valid */
 	u8 DB2; /* CRC value bits 7:0 of the R or Cr component */

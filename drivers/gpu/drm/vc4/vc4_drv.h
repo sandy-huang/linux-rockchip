@@ -10,6 +10,7 @@
 #include <drm/drmP.h>
 #include <drm/drm_encoder.h>
 #include <drm/drm_gem_cma_helper.h>
+#include <drm/drm_atomic.h>
 
 #include "uapi/drm/vc4_drm.h"
 
@@ -193,6 +194,9 @@ struct vc4_dev {
 	} hangcheck;
 
 	struct semaphore async_modeset;
+
+	struct drm_modeset_lock ctm_state_lock;
+	struct drm_private_obj ctm_manager;
 };
 
 static inline struct vc4_dev *
@@ -310,6 +314,66 @@ to_vc4_plane(struct drm_plane *plane)
 	return (struct vc4_plane *)plane;
 }
 
+enum vc4_scaling_mode {
+	VC4_SCALING_NONE,
+	VC4_SCALING_TPZ,
+	VC4_SCALING_PPF,
+};
+
+struct vc4_plane_state {
+	struct drm_plane_state base;
+	/* System memory copy of the display list for this element, computed
+	 * at atomic_check time.
+	 */
+	u32 *dlist;
+	u32 dlist_size; /* Number of dwords allocated for the display list */
+	u32 dlist_count; /* Number of used dwords in the display list. */
+
+	/* Offset in the dlist to various words, for pageflip or
+	 * cursor updates.
+	 */
+	u32 pos0_offset;
+	u32 pos2_offset;
+	u32 ptr0_offset;
+
+	/* Offset where the plane's dlist was last stored in the
+	 * hardware at vc4_crtc_atomic_flush() time.
+	 */
+	u32 __iomem *hw_dlist;
+
+	/* Clipped coordinates of the plane on the display. */
+	int crtc_x, crtc_y, crtc_w, crtc_h;
+	/* Clipped area being scanned from in the FB. */
+	u32 src_x, src_y;
+
+	u32 src_w[2], src_h[2];
+
+	/* Scaling selection for the RGB/Y plane and the Cb/Cr planes. */
+	enum vc4_scaling_mode x_scaling[2], y_scaling[2];
+	bool is_unity;
+	bool is_yuv;
+
+	/* Offset to start scanning out from the start of the plane's
+	 * BO.
+	 */
+	u32 offsets[3];
+
+	/* Our allocation in LBM for temporary storage during scaling. */
+	struct drm_mm_node lbm;
+
+	/* Set when the plane has per-pixel alpha content or does not cover
+	 * the entire screen. This is a hint to the CRTC that it might need
+	 * to enable background color fill.
+	 */
+	bool needs_bg_fill;
+};
+
+static inline struct vc4_plane_state *
+to_vc4_plane_state(struct drm_plane_state *state)
+{
+	return (struct vc4_plane_state *)state;
+}
+
 enum vc4_encoder_type {
 	VC4_ENCODER_TYPE_NONE,
 	VC4_ENCODER_TYPE_HDMI,
@@ -330,6 +394,39 @@ static inline struct vc4_encoder *
 to_vc4_encoder(struct drm_encoder *encoder)
 {
 	return container_of(encoder, struct vc4_encoder, base);
+}
+
+struct vc4_crtc_data {
+	/* Which channel of the HVS this pixelvalve sources from. */
+	int hvs_channel;
+
+	enum vc4_encoder_type encoder_types[4];
+};
+
+struct vc4_crtc {
+	struct drm_crtc base;
+	const struct vc4_crtc_data *data;
+	void __iomem *regs;
+
+	/* Timestamp at start of vblank irq - unaffected by lock delays. */
+	ktime_t t_vblank;
+
+	/* Which HVS channel we're using for our CRTC. */
+	int channel;
+
+	u8 lut_r[256];
+	u8 lut_g[256];
+	u8 lut_b[256];
+	/* Size in pixels of the COB memory allocated to this CRTC. */
+	u32 cob_size;
+
+	struct drm_pending_vblank_event *event;
+};
+
+static inline struct vc4_crtc *
+to_vc4_crtc(struct drm_crtc *crtc)
+{
+	return (struct vc4_crtc *)crtc;
 }
 
 #define V3D_READ(offset) readl(vc4->v3d->regs + offset)

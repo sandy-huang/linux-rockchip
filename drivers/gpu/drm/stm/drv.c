@@ -35,7 +35,6 @@ static int stm_gem_cma_dumb_create(struct drm_file *file,
 				   struct drm_device *dev,
 				   struct drm_mode_create_dumb *args)
 {
-#ifdef CONFIG_MMU
 	unsigned int min_pitch = DIV_ROUND_UP(args->width * args->bpp, 8);
 
 	/*
@@ -44,7 +43,6 @@ static int stm_gem_cma_dumb_create(struct drm_file *file,
 	 */
 	args->pitch = roundup(min_pitch, 128);
 	args->height = roundup(args->height, 4);
-#endif
 
 	return drm_gem_cma_dumb_create_internal(file, dev, args);
 }
@@ -74,8 +72,6 @@ static struct drm_driver drv_driver = {
 	.gem_prime_vmap = drm_gem_cma_prime_vmap,
 	.gem_prime_vunmap = drm_gem_cma_prime_vunmap,
 	.gem_prime_mmap = drm_gem_cma_prime_mmap,
-	.enable_vblank = ltdc_crtc_enable_vblank,
-	.disable_vblank = ltdc_crtc_disable_vblank,
 };
 
 static int drv_load(struct drm_device *ddev)
