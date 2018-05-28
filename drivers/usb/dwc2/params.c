@@ -70,6 +70,7 @@ static void dwc2_set_his_params(struct dwc2_hsotg *hsotg)
 		GAHBCFG_HBSTLEN_SHIFT;
 	p->uframe_sched = false;
 	p->change_speed_quirk = true;
+	p->power_down = false;
 }
 
 static void dwc2_set_rk_params(struct dwc2_hsotg *hsotg)
@@ -269,6 +270,9 @@ static void dwc2_set_param_power_down(struct dwc2_hsotg *hsotg)
 /**
  * dwc2_set_default_params() - Set all core parameters to their
  * auto-detected default values.
+ *
+ * @hsotg: Programming view of the DWC_otg controller
+ *
  */
 static void dwc2_set_default_params(struct dwc2_hsotg *hsotg)
 {
@@ -338,6 +342,8 @@ static void dwc2_set_default_params(struct dwc2_hsotg *hsotg)
 
 /**
  * dwc2_get_device_properties() - Read in device properties.
+ *
+ * @hsotg: Programming view of the DWC_otg controller
  *
  * Read in the device properties and adjust core parameters if needed.
  */
@@ -550,7 +556,7 @@ static void dwc2_check_param_tx_fifo_sizes(struct dwc2_hsotg *hsotg)
 }
 
 #define CHECK_RANGE(_param, _min, _max, _def) do {			\
-		if ((hsotg->params._param) < (_min) ||			\
+		if ((int)(hsotg->params._param) < (_min) ||		\
 		    (hsotg->params._param) > (_max)) {			\
 			dev_warn(hsotg->dev, "%s: Invalid parameter %s=%d\n", \
 				 __func__, #_param, hsotg->params._param); \
@@ -690,6 +696,9 @@ static void dwc2_get_dev_hwparams(struct dwc2_hsotg *hsotg)
 /**
  * During device initialization, read various hardware configuration
  * registers and interpret the contents.
+ *
+ * @hsotg: Programming view of the DWC_otg controller
+ *
  */
 int dwc2_get_hwparams(struct dwc2_hsotg *hsotg)
 {
