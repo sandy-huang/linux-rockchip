@@ -13558,8 +13558,13 @@ intel_primary_plane_create(struct drm_i915_private *dev_priv, enum pipe pipe)
 		primary->has_ccs = skl_plane_has_ccs(dev_priv, pipe,
 						     PLANE_PRIMARY);
 
-		intel_primary_formats = skl_primary_formats;
-		num_formats = ARRAY_SIZE(skl_primary_formats);
+		if (skl_plane_has_planar(dev_priv, pipe, PLANE_PRIMARY)) {
+			intel_primary_formats = skl_pri_planar_formats;
+			num_formats = ARRAY_SIZE(skl_pri_planar_formats);
+		} else {
+			intel_primary_formats = skl_primary_formats;
+			num_formats = ARRAY_SIZE(skl_primary_formats);
+		}
 
 		if (primary->has_ccs)
 			modifiers = skl_format_modifiers_ccs;
