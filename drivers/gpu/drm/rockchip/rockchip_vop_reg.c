@@ -487,6 +487,7 @@ static const struct vop_data rk3188_vop = {
 	.output = &rk3188_output,
 	.win = rk3188_vop_win_data,
 	.win_size = ARRAY_SIZE(rk3188_vop_win_data),
+	.feature = VOP_FEATURE_INTERNAL_RGB,
 };
 
 static const struct vop_scl_extension rk3288_win_full_scl_ext = {
