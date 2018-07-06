@@ -4,9 +4,6 @@
  */
 
 #include <linux/slab.h>
-#include <linux/bitops.h>
-#include <linux/regmap.h>
-#include <linux/clk.h>
 #include <linux/clk-provider.h>
 #include "clk.h"
 
