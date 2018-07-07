@@ -387,11 +387,11 @@ ap_i2c_tp: &i2c5 {
 };
 
 &wifi {
-		wifi_perst_l: wifi-perst-l {
-			rockchip,pins = <2 27 RK_FUNC_GPIO &pcfg_pull_none>;
-		};
+	wifi_perst_l: wifi-perst-l {
+		rockchip,pins = <2 27 RK_FUNC_GPIO &pcfg_pull_none>;
+	};
 
-		wlan_host_wake_l: wlan-host-wake-l {
-			rockchip,pins = <0 8 RK_FUNC_GPIO &pcfg_pull_none>;
-		};
+	wlan_host_wake_l: wlan-host-wake-l {
+		rockchip,pins = <0 8 RK_FUNC_GPIO &pcfg_pull_none>;
+	};
 };
