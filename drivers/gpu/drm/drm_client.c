@@ -78,7 +78,6 @@ EXPORT_SYMBOL(drm_client_close);
 int drm_client_new(struct drm_device *dev, struct drm_client_dev *client,
 		   const char *name, const struct drm_client_funcs *funcs)
 {
-	bool registered;
 	int ret;
 
 	if (!drm_core_check_feature(dev, DRIVER_MODESET) ||
@@ -97,21 +96,13 @@ int drm_client_new(struct drm_device *dev, struct drm_client_dev *client,
 		goto err_put_module;
 
 	mutex_lock(&dev->clientlist_mutex);
-	registered = dev->registered;
-	if (registered)
-		list_add(&client->list, &dev->clientlist);
+	list_add(&client->list, &dev->clientlist);
 	mutex_unlock(&dev->clientlist_mutex);
-	if (!registered) {
-		ret = -ENODEV;
-		goto err_close;
-	}
 
 	drm_dev_get(dev);
 
 	return 0;
 
-err_close:
-	drm_client_close(client);
 err_put_module:
 	if (funcs)
 		module_put(funcs->owner);
@@ -227,7 +218,9 @@ static void drm_client_buffer_delete(struct drm_client_buffer *buffer)
 	if (buffer->gem)
 		drm_gem_object_put_unlocked(buffer->gem);
 
-	drm_mode_destroy_dumb(dev, buffer->handle, buffer->client->file);
+	if (buffer->handle)
+		drm_mode_destroy_dumb(dev, buffer->handle, buffer->client->file);
+
 	kfree(buffer);
 }
 
@@ -252,7 +245,7 @@ drm_client_buffer_create(struct drm_client_dev *client, u32 width, u32 height, u
 	dumb_args.bpp = drm_format_plane_cpp(format, 0) * 8;
 	ret = drm_mode_create_dumb(dev, &dumb_args, client->file);
 	if (ret)
-		goto err_free;
+		goto err_delete;
 
 	buffer->handle = dumb_args.handle;
 	buffer->pitch = dumb_args.pitch;
@@ -285,8 +278,6 @@ drm_client_buffer_create(struct drm_client_dev *client, u32 width, u32 height, u
 
 err_delete:
 	drm_client_buffer_delete(buffer);
-err_free:
-	kfree(buffer);
 
 	return ERR_PTR(ret);
 }
