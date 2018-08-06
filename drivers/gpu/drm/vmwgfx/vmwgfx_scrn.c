@@ -1,7 +1,7 @@
+// SPDX-License-Identifier: GPL-2.0 OR MIT
 /**************************************************************************
  *
- * Copyright © 2011-2015 VMware, Inc., Palo Alto, CA., USA
- * All Rights Reserved.
+ * Copyright 2011-2015 VMware, Inc., Palo Alto, CA., USA
  *
  * Permission is hereby granted, free of charge, to any person obtaining a
  * copy of this software and associated documentation files (the
@@ -482,6 +482,8 @@ vmw_sou_primary_plane_prepare_fb(struct drm_plane *plane,
 		return ret;
 	}
 
+	vps->dmabuf_size = size;
+
 	/*
 	 * TTM already thinks the buffer is pinned, but make sure the
 	 * pin_count is upped.
@@ -525,8 +527,6 @@ vmw_sou_primary_plane_atomic_update(struct drm_plane *plane,
 		 */
 		if (ret != 0)
 			DRM_ERROR("Failed to update screen.\n");
-
-		crtc->primary->fb = plane->state->fb;
 	} else {
 		/*
 		 * When disabling a plane, CRTC and FB should always be NULL
@@ -695,7 +695,7 @@ static int vmw_sou_init(struct vmw_private *dev_priv, unsigned unit)
 		goto err_free_connector;
 	}
 
-	(void) drm_mode_connector_attach_encoder(connector, encoder);
+	(void) drm_connector_attach_encoder(connector, encoder);
 	encoder->possible_crtcs = (1 << unit);
 	encoder->possible_clones = 0;
 

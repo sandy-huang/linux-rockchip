@@ -54,9 +54,8 @@
 
 #define DC_LOGGER \
 		dc->ctx->logger
-#if defined(CONFIG_DRM_AMD_DC_FBC)
+
 #include "dce110/dce110_compressor.h"
-#endif
 
 #include "reg_helper.h"
 
@@ -930,38 +929,6 @@ static enum dc_status dce110_add_stream_to_ctx(
 	return result;
 }
 
-static enum dc_status dce110_validate_guaranteed(
-		struct dc *dc,
-		struct dc_stream_state *dc_stream,
-		struct dc_state *context)
-{
-	enum dc_status result = DC_ERROR_UNEXPECTED;
-
-	context->streams[0] = dc_stream;
-	dc_stream_retain(context->streams[0]);
-	context->stream_count++;
-
-	result = resource_map_pool_resources(dc, context, dc_stream);
-
-	if (result == DC_OK)
-		result = resource_map_clock_resources(dc, context, dc_stream);
-
-	if (result == DC_OK)
-		result = build_mapped_resource(dc, context, dc_stream);
-
-	if (result == DC_OK) {
-		validate_guaranteed_copy_streams(
-				context, dc->caps.max_streams);
-		result = resource_build_scaling_params_for_context(dc, context);
-	}
-
-	if (result == DC_OK)
-		if (!dce110_validate_bandwidth(dc, context))
-			result = DC_FAIL_BANDWIDTH_VALIDATE;
-
-	return result;
-}
-
 static struct pipe_ctx *dce110_acquire_underlay(
 		struct dc_state *context,
 		const struct resource_pool *pool,
@@ -1036,7 +1003,6 @@ static void dce110_destroy_resource_pool(struct resource_pool **pool)
 static const struct resource_funcs dce110_res_pool_funcs = {
 	.destroy = dce110_destroy_resource_pool,
 	.link_enc_create = dce110_link_encoder_create,
-	.validate_guaranteed = dce110_validate_guaranteed,
 	.validate_bandwidth = dce110_validate_bandwidth,
 	.validate_plane = dce110_validate_plane,
 	.acquire_idle_pipe_for_layer = dce110_acquire_underlay,
@@ -1300,12 +1266,8 @@ static bool construct(
 		}
 	}
 
-#if defined(CONFIG_DRM_AMD_DC_FBC)
 	dc->fbc_compressor = dce110_compressor_create(ctx);
 
-
-
-#endif
 	if (!underlay_create(ctx, &pool->base))
 		goto res_create_fail;
 

@@ -406,11 +406,11 @@ intel_panel_detect(struct drm_i915_private *dev_priv)
  * Return @source_val in range [@source_min..@source_max] scaled to range
  * [@target_min..@target_max].
  */
-static uint32_t scale(uint32_t source_val,
-		      uint32_t source_min, uint32_t source_max,
-		      uint32_t target_min, uint32_t target_max)
+static u32 scale(u32 source_val,
+		 u32 source_min, u32 source_max,
+		 u32 target_min, u32 target_max)
 {
-	uint64_t target_val;
+	u64 target_val;
 
 	WARN_ON(source_min > source_max);
 	WARN_ON(target_min > target_max);
@@ -1928,13 +1928,11 @@ intel_panel_init_backlight_funcs(struct intel_panel *panel)
 
 int intel_panel_init(struct intel_panel *panel,
 		     struct drm_display_mode *fixed_mode,
-		     struct drm_display_mode *alt_fixed_mode,
 		     struct drm_display_mode *downclock_mode)
 {
 	intel_panel_init_backlight_funcs(panel);
 
 	panel->fixed_mode = fixed_mode;
-	panel->alt_fixed_mode = alt_fixed_mode;
 	panel->downclock_mode = downclock_mode;
 
 	return 0;
@@ -1947,10 +1945,6 @@ void intel_panel_fini(struct intel_panel *panel)
 
 	if (panel->fixed_mode)
 		drm_mode_destroy(intel_connector->base.dev, panel->fixed_mode);
-
-	if (panel->alt_fixed_mode)
-		drm_mode_destroy(intel_connector->base.dev,
-				panel->alt_fixed_mode);
 
 	if (panel->downclock_mode)
 		drm_mode_destroy(intel_connector->base.dev,

@@ -125,18 +125,6 @@ MODULE_FIRMWARE("amdgpu/fiji_mec.bin");
 MODULE_FIRMWARE("amdgpu/fiji_mec2.bin");
 MODULE_FIRMWARE("amdgpu/fiji_rlc.bin");
 
-MODULE_FIRMWARE("amdgpu/polaris11_ce.bin");
-MODULE_FIRMWARE("amdgpu/polaris11_ce_2.bin");
-MODULE_FIRMWARE("amdgpu/polaris11_pfp.bin");
-MODULE_FIRMWARE("amdgpu/polaris11_pfp_2.bin");
-MODULE_FIRMWARE("amdgpu/polaris11_me.bin");
-MODULE_FIRMWARE("amdgpu/polaris11_me_2.bin");
-MODULE_FIRMWARE("amdgpu/polaris11_mec.bin");
-MODULE_FIRMWARE("amdgpu/polaris11_mec_2.bin");
-MODULE_FIRMWARE("amdgpu/polaris11_mec2.bin");
-MODULE_FIRMWARE("amdgpu/polaris11_mec2_2.bin");
-MODULE_FIRMWARE("amdgpu/polaris11_rlc.bin");
-
 MODULE_FIRMWARE("amdgpu/polaris10_ce.bin");
 MODULE_FIRMWARE("amdgpu/polaris10_ce_2.bin");
 MODULE_FIRMWARE("amdgpu/polaris10_pfp.bin");
@@ -149,6 +137,18 @@ MODULE_FIRMWARE("amdgpu/polaris10_mec2.bin");
 MODULE_FIRMWARE("amdgpu/polaris10_mec2_2.bin");
 MODULE_FIRMWARE("amdgpu/polaris10_rlc.bin");
 
+MODULE_FIRMWARE("amdgpu/polaris11_ce.bin");
+MODULE_FIRMWARE("amdgpu/polaris11_ce_2.bin");
+MODULE_FIRMWARE("amdgpu/polaris11_pfp.bin");
+MODULE_FIRMWARE("amdgpu/polaris11_pfp_2.bin");
+MODULE_FIRMWARE("amdgpu/polaris11_me.bin");
+MODULE_FIRMWARE("amdgpu/polaris11_me_2.bin");
+MODULE_FIRMWARE("amdgpu/polaris11_mec.bin");
+MODULE_FIRMWARE("amdgpu/polaris11_mec_2.bin");
+MODULE_FIRMWARE("amdgpu/polaris11_mec2.bin");
+MODULE_FIRMWARE("amdgpu/polaris11_mec2_2.bin");
+MODULE_FIRMWARE("amdgpu/polaris11_rlc.bin");
+
 MODULE_FIRMWARE("amdgpu/polaris12_ce.bin");
 MODULE_FIRMWARE("amdgpu/polaris12_ce_2.bin");
 MODULE_FIRMWARE("amdgpu/polaris12_pfp.bin");
@@ -160,6 +160,13 @@ MODULE_FIRMWARE("amdgpu/polaris12_mec_2.bin");
 MODULE_FIRMWARE("amdgpu/polaris12_mec2.bin");
 MODULE_FIRMWARE("amdgpu/polaris12_mec2_2.bin");
 MODULE_FIRMWARE("amdgpu/polaris12_rlc.bin");
+
+MODULE_FIRMWARE("amdgpu/vegam_ce.bin");
+MODULE_FIRMWARE("amdgpu/vegam_pfp.bin");
+MODULE_FIRMWARE("amdgpu/vegam_me.bin");
+MODULE_FIRMWARE("amdgpu/vegam_mec.bin");
+MODULE_FIRMWARE("amdgpu/vegam_mec2.bin");
+MODULE_FIRMWARE("amdgpu/vegam_rlc.bin");
 
 static const struct amdgpu_gds_reg_offset amdgpu_gds_reg_offset[] =
 {
@@ -290,6 +297,37 @@ static const u32 tonga_mgcg_cgcg_init[] =
 	mmCP_RB_WPTR_POLL_CNTL, 0xffffffff, 0x00900100,
 	mmRLC_CGCG_CGLS_CTRL, 0xffffffff, 0x0020003c,
 	mmCP_MEM_SLP_CNTL, 0x00000001, 0x00000001,
+};
+
+static const u32 golden_settings_vegam_a11[] =
+{
+	mmCB_HW_CONTROL, 0x0001f3cf, 0x00007208,
+	mmCB_HW_CONTROL_2, 0x0f000000, 0x0d000000,
+	mmCB_HW_CONTROL_3, 0x000001ff, 0x00000040,
+	mmDB_DEBUG2, 0xf00fffff, 0x00000400,
+	mmPA_SC_ENHANCE, 0xffffffff, 0x20000001,
+	mmPA_SC_LINE_STIPPLE_STATE, 0x0000ff0f, 0x00000000,
+	mmPA_SC_RASTER_CONFIG, 0x3f3fffff, 0x3a00161a,
+	mmPA_SC_RASTER_CONFIG_1, 0x0000003f, 0x0000002e,
+	mmRLC_CGCG_CGLS_CTRL, 0x00000003, 0x0001003c,
+	mmRLC_CGCG_CGLS_CTRL_3D, 0xffffffff, 0x0001003c,
+	mmSQ_CONFIG, 0x07f80000, 0x01180000,
+	mmTA_CNTL_AUX, 0x000f000f, 0x000b0000,
+	mmTCC_CTRL, 0x00100000, 0xf31fff7f,
+	mmTCP_ADDR_CONFIG, 0x000003ff, 0x000000f7,
+	mmTCP_CHAN_STEER_HI, 0xffffffff, 0x00000000,
+	mmTCP_CHAN_STEER_LO, 0xffffffff, 0x32761054,
+	mmVGT_RESET_DEBUG, 0x00000004, 0x00000004,
+};
+
+static const u32 vegam_golden_common_all[] =
+{
+	mmGRBM_GFX_INDEX, 0xffffffff, 0xe0000000,
+	mmGB_ADDR_CONFIG, 0xffffffff, 0x22011003,
+	mmSPI_RESOURCE_RESERVE_CU_0, 0xffffffff, 0x00000800,
+	mmSPI_RESOURCE_RESERVE_CU_1, 0xffffffff, 0x00000800,
+	mmSPI_RESOURCE_RESERVE_EN_CU_0, 0xffffffff, 0x00FF7FBF,
+	mmSPI_RESOURCE_RESERVE_EN_CU_1, 0xffffffff, 0x00FF7FAF,
 };
 
 static const u32 golden_settings_polaris11_a11[] =
@@ -712,6 +750,14 @@ static void gfx_v8_0_init_golden_registers(struct amdgpu_device *adev)
 							tonga_golden_common_all,
 							ARRAY_SIZE(tonga_golden_common_all));
 		break;
+	case CHIP_VEGAM:
+		amdgpu_device_program_register_sequence(adev,
+							golden_settings_vegam_a11,
+							ARRAY_SIZE(golden_settings_vegam_a11));
+		amdgpu_device_program_register_sequence(adev,
+							vegam_golden_common_all,
+							ARRAY_SIZE(vegam_golden_common_all));
+		break;
 	case CHIP_POLARIS11:
 	case CHIP_POLARIS12:
 		amdgpu_device_program_register_sequence(adev,
@@ -820,26 +866,32 @@ static int gfx_v8_0_ring_test_ib(struct amdgpu_ring *ring, long timeout)
 	struct amdgpu_device *adev = ring->adev;
 	struct amdgpu_ib ib;
 	struct dma_fence *f = NULL;
-	uint32_t scratch;
-	uint32_t tmp = 0;
+
+	unsigned int index;
+	uint64_t gpu_addr;
+	uint32_t tmp;
 	long r;
 
-	r = amdgpu_gfx_scratch_get(adev, &scratch);
+	r = amdgpu_device_wb_get(adev, &index);
 	if (r) {
-		DRM_ERROR("amdgpu: failed to get scratch reg (%ld).\n", r);
+		dev_err(adev->dev, "(%ld) failed to allocate wb slot\n", r);
 		return r;
 	}
-	WREG32(scratch, 0xCAFEDEAD);
+
+	gpu_addr = adev->wb.gpu_addr + (index * 4);
+	adev->wb.wb[index] = cpu_to_le32(0xCAFEDEAD);
 	memset(&ib, 0, sizeof(ib));
-	r = amdgpu_ib_get(adev, NULL, 256, &ib);
+	r = amdgpu_ib_get(adev, NULL, 16, &ib);
 	if (r) {
 		DRM_ERROR("amdgpu: failed to get ib (%ld).\n", r);
 		goto err1;
 	}
-	ib.ptr[0] = PACKET3(PACKET3_SET_UCONFIG_REG, 1);
-	ib.ptr[1] = ((scratch - PACKET3_SET_UCONFIG_REG_START));
-	ib.ptr[2] = 0xDEADBEEF;
-	ib.length_dw = 3;
+	ib.ptr[0] = PACKET3(PACKET3_WRITE_DATA, 3);
+	ib.ptr[1] = WRITE_DATA_DST_SEL(5) | WR_CONFIRM;
+	ib.ptr[2] = lower_32_bits(gpu_addr);
+	ib.ptr[3] = upper_32_bits(gpu_addr);
+	ib.ptr[4] = 0xDEADBEEF;
+	ib.length_dw = 5;
 
 	r = amdgpu_ib_schedule(ring, 1, &ib, NULL, &f);
 	if (r)
@@ -854,20 +906,21 @@ static int gfx_v8_0_ring_test_ib(struct amdgpu_ring *ring, long timeout)
 		DRM_ERROR("amdgpu: fence wait failed (%ld).\n", r);
 		goto err2;
 	}
-	tmp = RREG32(scratch);
+
+	tmp = adev->wb.wb[index];
 	if (tmp == 0xDEADBEEF) {
 		DRM_DEBUG("ib test on ring %d succeeded\n", ring->idx);
 		r = 0;
 	} else {
-		DRM_ERROR("amdgpu: ib test failed (scratch(0x%04X)=0x%08X)\n",
-			  scratch, tmp);
+		DRM_ERROR("ib test on ring %d failed\n", ring->idx);
 		r = -EINVAL;
 	}
+
 err2:
 	amdgpu_ib_free(adev, &ib, NULL);
 	dma_fence_put(f);
 err1:
-	amdgpu_gfx_scratch_free(adev, scratch);
+	amdgpu_device_wb_free(adev, index);
 	return r;
 }
 
@@ -918,17 +971,20 @@ static int gfx_v8_0_init_microcode(struct amdgpu_device *adev)
 	case CHIP_FIJI:
 		chip_name = "fiji";
 		break;
-	case CHIP_POLARIS11:
-		chip_name = "polaris11";
+	case CHIP_STONEY:
+		chip_name = "stoney";
 		break;
 	case CHIP_POLARIS10:
 		chip_name = "polaris10";
 		break;
+	case CHIP_POLARIS11:
+		chip_name = "polaris11";
+		break;
 	case CHIP_POLARIS12:
 		chip_name = "polaris12";
 		break;
-	case CHIP_STONEY:
-		chip_name = "stoney";
+	case CHIP_VEGAM:
+		chip_name = "vegam";
 		break;
 	default:
 		BUG();
@@ -1770,6 +1826,7 @@ static int gfx_v8_0_gpu_early_init(struct amdgpu_device *adev)
 		gb_addr_config = POLARIS11_GB_ADDR_CONFIG_GOLDEN;
 		break;
 	case CHIP_POLARIS10:
+	case CHIP_VEGAM:
 		ret = amdgpu_atombios_get_gfx_info(adev);
 		if (ret)
 			return ret;
@@ -1957,12 +2014,13 @@ static int gfx_v8_0_sw_init(void *handle)
 	struct amdgpu_device *adev = (struct amdgpu_device *)handle;
 
 	switch (adev->asic_type) {
-	case CHIP_FIJI:
 	case CHIP_TONGA:
+	case CHIP_CARRIZO:
+	case CHIP_FIJI:
+	case CHIP_POLARIS10:
 	case CHIP_POLARIS11:
 	case CHIP_POLARIS12:
-	case CHIP_POLARIS10:
-	case CHIP_CARRIZO:
+	case CHIP_VEGAM:
 		adev->gfx.mec.num_mec = 2;
 		break;
 	case CHIP_TOPAZ:
@@ -1996,6 +2054,20 @@ static int gfx_v8_0_sw_init(void *handle)
 			      &adev->gfx.priv_inst_irq);
 	if (r)
 		return r;
+
+	/* Add CP EDC/ECC irq  */
+	r = amdgpu_irq_add_id(adev, AMDGPU_IH_CLIENTID_LEGACY, 197,
+			      &adev->gfx.cp_ecc_error_irq);
+	if (r)
+		return r;
+
+	/* SQ interrupts. */
+	r = amdgpu_irq_add_id(adev, AMDGPU_IH_CLIENTID_LEGACY, 239,
+			      &adev->gfx.sq_irq);
+	if (r) {
+		DRM_ERROR("amdgpu_irq_add() for SQ failed: %d\n", r);
+		return r;
+	}
 
 	adev->gfx.gfx_current_status = AMDGPU_GFX_NORMAL_MODE;
 
@@ -2323,6 +2395,7 @@ static void gfx_v8_0_tiling_mode_table_init(struct amdgpu_device *adev)
 
 		break;
 	case CHIP_FIJI:
+	case CHIP_VEGAM:
 		modearray[0] = (ARRAY_MODE(ARRAY_2D_TILED_THIN1) |
 				PIPE_CONFIG(ADDR_SURF_P16_32x32_16x16) |
 				TILE_SPLIT(ADDR_SURF_TILE_SPLIT_64B) |
@@ -3504,6 +3577,7 @@ gfx_v8_0_raster_config(struct amdgpu_device *adev, u32 *rconf, u32 *rconf1)
 {
 	switch (adev->asic_type) {
 	case CHIP_FIJI:
+	case CHIP_VEGAM:
 		*rconf |= RB_MAP_PKR0(2) | RB_MAP_PKR1(2) |
 			  RB_XSEL2(1) | PKR_MAP(2) |
 			  PKR_XSEL(1) | PKR_YSEL(1) |
@@ -4071,7 +4145,8 @@ static void gfx_v8_0_init_pg(struct amdgpu_device *adev)
 		gfx_v8_0_init_power_gating(adev);
 		WREG32(mmRLC_PG_ALWAYS_ON_CU_MASK, adev->gfx.cu_info.ao_cu_mask);
 	} else if ((adev->asic_type == CHIP_POLARIS11) ||
-		   (adev->asic_type == CHIP_POLARIS12)) {
+		   (adev->asic_type == CHIP_POLARIS12) ||
+		   (adev->asic_type == CHIP_VEGAM)) {
 		gfx_v8_0_init_csb(adev);
 		gfx_v8_0_init_save_restore_list(adev);
 		gfx_v8_0_enable_save_restore_machine(adev);
@@ -4146,7 +4221,8 @@ static int gfx_v8_0_rlc_resume(struct amdgpu_device *adev)
 	WREG32(mmRLC_CGCG_CGLS_CTRL, tmp);
 	if (adev->asic_type == CHIP_POLARIS11 ||
 	    adev->asic_type == CHIP_POLARIS10 ||
-	    adev->asic_type == CHIP_POLARIS12) {
+	    adev->asic_type == CHIP_POLARIS12 ||
+	    adev->asic_type == CHIP_VEGAM) {
 		tmp = RREG32(mmRLC_CGCG_CGLS_CTRL_3D);
 		tmp &= ~0x3;
 		WREG32(mmRLC_CGCG_CGLS_CTRL_3D, tmp);
@@ -5056,6 +5132,10 @@ static int gfx_v8_0_hw_fini(void *handle)
 	amdgpu_irq_put(adev, &adev->gfx.priv_reg_irq, 0);
 	amdgpu_irq_put(adev, &adev->gfx.priv_inst_irq, 0);
 
+	amdgpu_irq_put(adev, &adev->gfx.cp_ecc_error_irq, 0);
+
+	amdgpu_irq_put(adev, &adev->gfx.sq_irq, 0);
+
 	/* disable KCQ to avoid CPC touch memory not valid anymore */
 	for (i = 0; i < adev->gfx.num_compute_rings; i++)
 		gfx_v8_0_kcq_disable(&adev->gfx.kiq.ring, &adev->gfx.compute_ring[i]);
@@ -5487,6 +5567,20 @@ static int gfx_v8_0_late_init(void *handle)
 	if (r)
 		return r;
 
+	r = amdgpu_irq_get(adev, &adev->gfx.cp_ecc_error_irq, 0);
+	if (r) {
+		DRM_ERROR("amdgpu_irq_get() failed to get IRQ for EDC, r: %d.\n", r);
+		return r;
+	}
+
+	r = amdgpu_irq_get(adev, &adev->gfx.sq_irq, 0);
+	if (r) {
+		DRM_ERROR(
+			"amdgpu_irq_get() failed to get IRQ for SQ, r: %d.\n",
+			r);
+		return r;
+	}
+
 	amdgpu_device_ip_set_powergating_state(adev,
 					       AMD_IP_BLOCK_TYPE_GFX,
 					       AMD_PG_STATE_GATE);
@@ -5498,7 +5592,8 @@ static void gfx_v8_0_enable_gfx_static_mg_power_gating(struct amdgpu_device *ade
 						       bool enable)
 {
 	if ((adev->asic_type == CHIP_POLARIS11) ||
-	    (adev->asic_type == CHIP_POLARIS12))
+	    (adev->asic_type == CHIP_POLARIS12) ||
+	    (adev->asic_type == CHIP_VEGAM))
 		/* Send msg to SMU via Powerplay */
 		amdgpu_device_ip_set_powergating_state(adev,
 						       AMD_IP_BLOCK_TYPE_SMC,
@@ -5588,6 +5683,7 @@ static int gfx_v8_0_set_powergating_state(void *handle,
 		break;
 	case CHIP_POLARIS11:
 	case CHIP_POLARIS12:
+	case CHIP_VEGAM:
 		if ((adev->pg_flags & AMD_PG_SUPPORT_GFX_SMG) && enable)
 			gfx_v8_0_enable_gfx_static_mg_power_gating(adev, true);
 		else
@@ -6154,6 +6250,7 @@ static int gfx_v8_0_set_clockgating_state(void *handle,
 	case CHIP_POLARIS10:
 	case CHIP_POLARIS11:
 	case CHIP_POLARIS12:
+	case CHIP_VEGAM:
 		gfx_v8_0_polaris_update_gfx_clock_gating(adev, state);
 		break;
 	default:
@@ -6729,6 +6826,77 @@ static int gfx_v8_0_set_eop_interrupt_state(struct amdgpu_device *adev,
 	return 0;
 }
 
+static int gfx_v8_0_set_cp_ecc_int_state(struct amdgpu_device *adev,
+					 struct amdgpu_irq_src *source,
+					 unsigned int type,
+					 enum amdgpu_interrupt_state state)
+{
+	int enable_flag;
+
+	switch (state) {
+	case AMDGPU_IRQ_STATE_DISABLE:
+		enable_flag = 0;
+		break;
+
+	case AMDGPU_IRQ_STATE_ENABLE:
+		enable_flag = 1;
+		break;
+
+	default:
+		return -EINVAL;
+	}
+
+	WREG32_FIELD(CP_INT_CNTL, CP_ECC_ERROR_INT_ENABLE, enable_flag);
+	WREG32_FIELD(CP_INT_CNTL_RING0, CP_ECC_ERROR_INT_ENABLE, enable_flag);
+	WREG32_FIELD(CP_INT_CNTL_RING1, CP_ECC_ERROR_INT_ENABLE, enable_flag);
+	WREG32_FIELD(CP_INT_CNTL_RING2, CP_ECC_ERROR_INT_ENABLE, enable_flag);
+	WREG32_FIELD(CPC_INT_CNTL, CP_ECC_ERROR_INT_ENABLE, enable_flag);
+	WREG32_FIELD(CP_ME1_PIPE0_INT_CNTL, CP_ECC_ERROR_INT_ENABLE,
+		     enable_flag);
+	WREG32_FIELD(CP_ME1_PIPE1_INT_CNTL, CP_ECC_ERROR_INT_ENABLE,
+		     enable_flag);
+	WREG32_FIELD(CP_ME1_PIPE2_INT_CNTL, CP_ECC_ERROR_INT_ENABLE,
+		     enable_flag);
+	WREG32_FIELD(CP_ME1_PIPE3_INT_CNTL, CP_ECC_ERROR_INT_ENABLE,
+		     enable_flag);
+	WREG32_FIELD(CP_ME2_PIPE0_INT_CNTL, CP_ECC_ERROR_INT_ENABLE,
+		     enable_flag);
+	WREG32_FIELD(CP_ME2_PIPE1_INT_CNTL, CP_ECC_ERROR_INT_ENABLE,
+		     enable_flag);
+	WREG32_FIELD(CP_ME2_PIPE2_INT_CNTL, CP_ECC_ERROR_INT_ENABLE,
+		     enable_flag);
+	WREG32_FIELD(CP_ME2_PIPE3_INT_CNTL, CP_ECC_ERROR_INT_ENABLE,
+		     enable_flag);
+
+	return 0;
+}
+
+static int gfx_v8_0_set_sq_int_state(struct amdgpu_device *adev,
+				     struct amdgpu_irq_src *source,
+				     unsigned int type,
+				     enum amdgpu_interrupt_state state)
+{
+	int enable_flag;
+
+	switch (state) {
+	case AMDGPU_IRQ_STATE_DISABLE:
+		enable_flag = 1;
+		break;
+
+	case AMDGPU_IRQ_STATE_ENABLE:
+		enable_flag = 0;
+		break;
+
+	default:
+		return -EINVAL;
+	}
+
+	WREG32_FIELD(SQ_INTERRUPT_MSG_CTRL, STALL,
+		     enable_flag);
+
+	return 0;
+}
+
 static int gfx_v8_0_eop_irq(struct amdgpu_device *adev,
 			    struct amdgpu_irq_src *source,
 			    struct amdgpu_iv_entry *entry)
@@ -6776,6 +6944,69 @@ static int gfx_v8_0_priv_inst_irq(struct amdgpu_device *adev,
 {
 	DRM_ERROR("Illegal instruction in command stream\n");
 	schedule_work(&adev->reset_work);
+	return 0;
+}
+
+static int gfx_v8_0_cp_ecc_error_irq(struct amdgpu_device *adev,
+				     struct amdgpu_irq_src *source,
+				     struct amdgpu_iv_entry *entry)
+{
+	DRM_ERROR("CP EDC/ECC error detected.");
+	return 0;
+}
+
+static int gfx_v8_0_sq_irq(struct amdgpu_device *adev,
+			   struct amdgpu_irq_src *source,
+			   struct amdgpu_iv_entry *entry)
+{
+	u8 enc, se_id;
+	char type[20];
+
+	/* Parse all fields according to SQ_INTERRUPT* registers */
+	enc = (entry->src_data[0] >> 26) & 0x3;
+	se_id = (entry->src_data[0] >> 24) & 0x3;
+
+	switch (enc) {
+		case 0:
+			DRM_INFO("SQ general purpose intr detected:"
+					"se_id %d, immed_overflow %d, host_reg_overflow %d,"
+					"host_cmd_overflow %d, cmd_timestamp %d,"
+					"reg_timestamp %d, thread_trace_buff_full %d,"
+					"wlt %d, thread_trace %d.\n",
+					se_id,
+					(entry->src_data[0] >> 7) & 0x1,
+					(entry->src_data[0] >> 6) & 0x1,
+					(entry->src_data[0] >> 5) & 0x1,
+					(entry->src_data[0] >> 4) & 0x1,
+					(entry->src_data[0] >> 3) & 0x1,
+					(entry->src_data[0] >> 2) & 0x1,
+					(entry->src_data[0] >> 1) & 0x1,
+					entry->src_data[0] & 0x1
+					);
+			break;
+		case 1:
+		case 2:
+
+			if (enc == 1)
+				sprintf(type, "instruction intr");
+			else
+				sprintf(type, "EDC/ECC error");
+
+			DRM_INFO(
+				"SQ %s detected: "
+					"se_id %d, cu_id %d, simd_id %d, wave_id %d, vm_id %d\n",
+					type, se_id,
+					(entry->src_data[0] >> 20) & 0xf,
+					(entry->src_data[0] >> 18) & 0x3,
+					(entry->src_data[0] >> 14) & 0xf,
+					(entry->src_data[0] >> 10) & 0xf
+					);
+			break;
+		default:
+			DRM_ERROR("SQ invalid encoding type\n.");
+			return -EINVAL;
+	}
+
 	return 0;
 }
 
@@ -6979,6 +7210,16 @@ static const struct amdgpu_irq_src_funcs gfx_v8_0_kiq_irq_funcs = {
 	.process = gfx_v8_0_kiq_irq,
 };
 
+static const struct amdgpu_irq_src_funcs gfx_v8_0_cp_ecc_error_irq_funcs = {
+	.set = gfx_v8_0_set_cp_ecc_int_state,
+	.process = gfx_v8_0_cp_ecc_error_irq,
+};
+
+static const struct amdgpu_irq_src_funcs gfx_v8_0_sq_irq_funcs = {
+	.set = gfx_v8_0_set_sq_int_state,
+	.process = gfx_v8_0_sq_irq,
+};
+
 static void gfx_v8_0_set_irq_funcs(struct amdgpu_device *adev)
 {
 	adev->gfx.eop_irq.num_types = AMDGPU_CP_IRQ_LAST;
@@ -6992,6 +7233,12 @@ static void gfx_v8_0_set_irq_funcs(struct amdgpu_device *adev)
 
 	adev->gfx.kiq.irq.num_types = AMDGPU_CP_KIQ_IRQ_LAST;
 	adev->gfx.kiq.irq.funcs = &gfx_v8_0_kiq_irq_funcs;
+
+	adev->gfx.cp_ecc_error_irq.num_types = 1;
+	adev->gfx.cp_ecc_error_irq.funcs = &gfx_v8_0_cp_ecc_error_irq_funcs;
+
+	adev->gfx.sq_irq.num_types = 1;
+	adev->gfx.sq_irq.funcs = &gfx_v8_0_sq_irq_funcs;
 }
 
 static void gfx_v8_0_set_rlc_funcs(struct amdgpu_device *adev)

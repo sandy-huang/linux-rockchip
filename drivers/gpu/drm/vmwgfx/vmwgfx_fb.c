@@ -439,38 +439,13 @@ static int vmw_fb_compute_depth(struct fb_var_screeninfo *var,
 static int vmwgfx_set_config_internal(struct drm_mode_set *set)
 {
 	struct drm_crtc *crtc = set->crtc;
-	struct drm_framebuffer *fb;
-	struct drm_crtc *tmp;
-	struct drm_device *dev = set->crtc->dev;
 	struct drm_modeset_acquire_ctx ctx;
 	int ret;
 
 	drm_modeset_acquire_init(&ctx, 0);
 
 restart:
-	/*
-	 * NOTE: ->set_config can also disable other crtcs (if we steal all
-	 * connectors from it), hence we need to refcount the fbs across all
-	 * crtcs. Atomic modeset will have saner semantics ...
-	 */
-	drm_for_each_crtc(tmp, dev)
-		tmp->primary->old_fb = tmp->primary->fb;
-
-	fb = set->fb;
-
 	ret = crtc->funcs->set_config(set, &ctx);
-	if (ret == 0) {
-		crtc->primary->crtc = crtc;
-		crtc->primary->fb = fb;
-	}
-
-	drm_for_each_crtc(tmp, dev) {
-		if (tmp->primary->fb)
-			drm_framebuffer_get(tmp->primary->fb);
-		if (tmp->primary->old_fb)
-			drm_framebuffer_put(tmp->primary->old_fb);
-		tmp->primary->old_fb = NULL;
-	}
 
 	if (ret == -EDEADLK) {
 		drm_modeset_backoff(&ctx);
@@ -866,21 +841,13 @@ int vmw_fb_on(struct vmw_private *vmw_priv)
 	spin_lock_irqsave(&par->dirty.lock, flags);
 	par->dirty.active = true;
 	spin_unlock_irqrestore(&par->dirty.lock, flags);
- 
+
+	/*
+	 * Need to reschedule a dirty update, because otherwise that's
+	 * only done in dirty_mark() if the previous coalesced
+	 * dirty region was empty.
+	 */
+	schedule_delayed_work(&par->local_work, 0);
+
 	return 0;
-}
-
-/**
- * vmw_fb_refresh - Refresh fb display
- *
- * @vmw_priv: Pointer to device private
- *
- * Call into kms to show the fbdev display(s).
- */
-void vmw_fb_refresh(struct vmw_private *vmw_priv)
-{
-	if (!vmw_priv->fb_info)
-		return;
-
-	vmw_fb_set_par(vmw_priv->fb_info);
 }

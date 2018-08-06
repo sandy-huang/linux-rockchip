@@ -49,10 +49,12 @@ struct i915_vma {
 	struct drm_mm_node node;
 	struct drm_i915_gem_object *obj;
 	struct i915_address_space *vm;
+	const struct i915_vma_ops *ops;
 	struct drm_i915_fence_reg *fence;
 	struct reservation_object *resv; /** Alias of obj->resv */
 	struct sg_table *pages;
 	void __iomem *iomap;
+	void *private; /* owned by creator */
 	u64 size;
 	u64 display_alignment;
 	struct i915_page_sizes page_sizes;
@@ -118,6 +120,8 @@ struct i915_vma {
 
 	/** This vma's place in the eviction list */
 	struct list_head evict_link;
+
+	struct list_head closed_link;
 
 	/**
 	 * Used for performing relocations during execbuffer insertion.
@@ -285,6 +289,8 @@ void i915_vma_revoke_mmap(struct i915_vma *vma);
 int __must_check i915_vma_unbind(struct i915_vma *vma);
 void i915_vma_unlink_ctx(struct i915_vma *vma);
 void i915_vma_close(struct i915_vma *vma);
+void i915_vma_reopen(struct i915_vma *vma);
+void i915_vma_destroy(struct i915_vma *vma);
 
 int __i915_vma_do_pin(struct i915_vma *vma,
 		      u64 size, u64 alignment, u64 flags);
@@ -333,6 +339,12 @@ static inline void i915_vma_unpin(struct i915_vma *vma)
 	GEM_BUG_ON(!i915_vma_is_pinned(vma));
 	GEM_BUG_ON(!drm_mm_node_allocated(&vma->node));
 	__i915_vma_unpin(vma);
+}
+
+static inline bool i915_vma_is_bound(const struct i915_vma *vma,
+				     unsigned int where)
+{
+	return vma->flags & where;
 }
 
 /**
@@ -403,10 +415,12 @@ static inline void __i915_vma_unpin_fence(struct i915_vma *vma)
 static inline void
 i915_vma_unpin_fence(struct i915_vma *vma)
 {
-	lockdep_assert_held(&vma->obj->base.dev->struct_mutex);
+	/* lockdep_assert_held(&vma->vm->i915->drm.struct_mutex); */
 	if (vma->fence)
 		__i915_vma_unpin_fence(vma);
 }
+
+void i915_vma_parked(struct drm_i915_private *i915);
 
 #define for_each_until(cond) if (cond) break; else
 

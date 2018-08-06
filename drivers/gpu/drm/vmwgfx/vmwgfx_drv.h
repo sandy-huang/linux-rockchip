@@ -1,7 +1,7 @@
+/* SPDX-License-Identifier: GPL-2.0 OR MIT */
 /**************************************************************************
  *
- * Copyright © 2009-2015 VMware, Inc., Palo Alto, CA., USA
- * All Rights Reserved.
+ * Copyright 2009-2015 VMware, Inc., Palo Alto, CA., USA
  *
  * Permission is hereby granted, free of charge, to any person obtaining a
  * copy of this software and associated documentation files (the
@@ -910,7 +910,6 @@ int vmw_fb_init(struct vmw_private *vmw_priv);
 int vmw_fb_close(struct vmw_private *dev_priv);
 int vmw_fb_off(struct vmw_private *vmw_priv);
 int vmw_fb_on(struct vmw_private *vmw_priv);
-void vmw_fb_refresh(struct vmw_private *vmw_priv);
 
 /**
  * Kernel modesetting - vmwgfx_kms.c

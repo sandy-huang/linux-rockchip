@@ -130,9 +130,6 @@ i915_param_named_unsafe(invert_brightness, int, 0600,
 i915_param_named(disable_display, bool, 0400,
 	"Disable display (default: false)");
 
-i915_param_named_unsafe(enable_cmd_parser, bool, 0400,
-	"Enable command parsing (true=enabled [default], false=disabled)");
-
 i915_param_named(mmio_debug, int, 0600,
 	"Enable the MMIO debug code for the first N failures (default: off). "
 	"This may negatively affect performance.");
@@ -163,6 +160,9 @@ i915_param_named_unsafe(guc_firmware_path, charp, 0400,
 
 i915_param_named_unsafe(huc_firmware_path, charp, 0400,
 	"HuC firmware path to use instead of the default one");
+
+i915_param_named_unsafe(dmc_firmware_path, charp, 0400,
+	"DMC firmware path to use instead of the default one");
 
 i915_param_named_unsafe(enable_dp_mst, bool, 0600,
 	"Enable multi-stream transport (MST) for new DisplayPort sinks. (default: true)");

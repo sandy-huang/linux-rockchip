@@ -78,6 +78,8 @@ void dc_conn_log(struct dc_context *ctx,
 	if (i == NUM_ELEMENTS(signal_type_info_tbl))
 		goto fail;
 
+	dm_logger_append_heading(&entry);
+
 	dm_logger_append(&entry, "[%s][ConnIdx:%d] ",
 			signal_type_info_tbl[i].name,
 			link->link_index);
@@ -94,7 +96,6 @@ void dc_conn_log(struct dc_context *ctx,
 			dm_logger_append(&entry, "%2.2X ", hex_data[i]);
 
 	dm_logger_append(&entry, "^\n");
-	dm_helpers_dc_conn_log(ctx, &entry, event);
 
 fail:
 	dm_logger_close(&entry);

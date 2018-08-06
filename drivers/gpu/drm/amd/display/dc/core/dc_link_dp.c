@@ -1378,8 +1378,8 @@ static uint32_t bandwidth_in_kbps_from_timing(
 {
 	uint32_t bits_per_channel = 0;
 	uint32_t kbps;
-	switch (timing->display_color_depth) {
 
+	switch (timing->display_color_depth) {
 	case COLOR_DEPTH_666:
 		bits_per_channel = 6;
 		break;
@@ -1401,14 +1401,20 @@ static uint32_t bandwidth_in_kbps_from_timing(
 	default:
 		break;
 	}
+
 	ASSERT(bits_per_channel != 0);
 
 	kbps = timing->pix_clk_khz;
 	kbps *= bits_per_channel;
 
-	if (timing->flags.Y_ONLY != 1)
+	if (timing->flags.Y_ONLY != 1) {
 		/*Only YOnly make reduce bandwidth by 1/3 compares to RGB*/
 		kbps *= 3;
+		if (timing->pixel_encoding == PIXEL_ENCODING_YCBCR420)
+			kbps /= 2;
+		else if (timing->pixel_encoding == PIXEL_ENCODING_YCBCR422)
+			kbps = kbps * 2 / 3;
+	}
 
 	return kbps;
 
@@ -1624,17 +1630,46 @@ static enum dc_status read_hpd_rx_irq_data(
 	struct dc_link *link,
 	union hpd_irq_data *irq_data)
 {
+	static enum dc_status retval;
+
 	/* The HW reads 16 bytes from 200h on HPD,
 	 * but if we get an AUX_DEFER, the HW cannot retry
 	 * and this causes the CTS tests 4.3.2.1 - 3.2.4 to
 	 * fail, so we now explicitly read 6 bytes which is
 	 * the req from the above mentioned test cases.
+	 *
+	 * For DP 1.4 we need to read those from 2002h range.
 	 */
-	return core_link_read_dpcd(
-	link,
-	DP_SINK_COUNT,
-	irq_data->raw,
-	sizeof(union hpd_irq_data));
+	if (link->dpcd_caps.dpcd_rev.raw < DPCD_REV_14)
+		retval = core_link_read_dpcd(
+			link,
+			DP_SINK_COUNT,
+			irq_data->raw,
+			sizeof(union hpd_irq_data));
+	else {
+		/* Read 14 bytes in a single read and then copy only the required fields.
+		 * This is more efficient than doing it in two separate AUX reads. */
+
+		uint8_t tmp[DP_SINK_STATUS_ESI - DP_SINK_COUNT_ESI + 1];
+
+		retval = core_link_read_dpcd(
+			link,
+			DP_SINK_COUNT_ESI,
+			tmp,
+			sizeof(tmp));
+
+		if (retval != DC_OK)
+			return retval;
+
+		irq_data->bytes.sink_cnt.raw = tmp[DP_SINK_COUNT_ESI - DP_SINK_COUNT_ESI];
+		irq_data->bytes.device_service_irq.raw = tmp[DP_DEVICE_SERVICE_IRQ_VECTOR_ESI0 - DP_SINK_COUNT_ESI];
+		irq_data->bytes.lane01_status.raw = tmp[DP_LANE0_1_STATUS_ESI - DP_SINK_COUNT_ESI];
+		irq_data->bytes.lane23_status.raw = tmp[DP_LANE2_3_STATUS_ESI - DP_SINK_COUNT_ESI];
+		irq_data->bytes.lane_status_updated.raw = tmp[DP_LANE_ALIGN_STATUS_UPDATED_ESI - DP_SINK_COUNT_ESI];
+		irq_data->bytes.sink_status.raw = tmp[DP_SINK_STATUS_ESI - DP_SINK_COUNT_ESI];
+	}
+
+	return retval;
 }
 
 static bool allow_hpd_rx_irq(const struct dc_link *link)
@@ -1736,12 +1771,10 @@ static void dp_test_send_link_training(struct dc_link *link)
 	dp_retrain_link_dp_test(link, &link_settings, false);
 }
 
-/* TODO hbr2 compliance eye output is unstable
+/* TODO Raven hbr2 compliance eye output is unstable
  * (toggling on and off) with debugger break
  * This caueses intermittent PHY automation failure
  * Need to look into the root cause */
-static uint8_t force_tps4_for_cp2520 = 1;
-
 static void dp_test_send_phy_test_pattern(struct dc_link *link)
 {
 	union phy_test_pattern dpcd_test_pattern;
@@ -1801,13 +1834,13 @@ static void dp_test_send_phy_test_pattern(struct dc_link *link)
 		break;
 	case PHY_TEST_PATTERN_CP2520_1:
 		/* CP2520 pattern is unstable, temporarily use TPS4 instead */
-		test_pattern = (force_tps4_for_cp2520 == 1) ?
+		test_pattern = (link->dc->caps.force_dp_tps4_for_cp2520 == 1) ?
 				DP_TEST_PATTERN_TRAINING_PATTERN4 :
 				DP_TEST_PATTERN_HBR2_COMPLIANCE_EYE;
 		break;
 	case PHY_TEST_PATTERN_CP2520_2:
 		/* CP2520 pattern is unstable, temporarily use TPS4 instead */
-		test_pattern = (force_tps4_for_cp2520 == 1) ?
+		test_pattern = (link->dc->caps.force_dp_tps4_for_cp2520 == 1) ?
 				DP_TEST_PATTERN_TRAINING_PATTERN4 :
 				DP_TEST_PATTERN_HBR2_COMPLIANCE_EYE;
 		break;
@@ -2272,12 +2305,15 @@ static void dp_wa_power_up_0010FA(struct dc_link *link, uint8_t *dpcd_data,
 
 static bool retrieve_link_cap(struct dc_link *link)
 {
-	uint8_t dpcd_data[DP_TRAINING_AUX_RD_INTERVAL - DP_DPCD_REV + 1];
+	uint8_t dpcd_data[DP_ADAPTER_CAP - DP_DPCD_REV + 1];
 
+	struct dp_device_vendor_id sink_id;
 	union down_stream_port_count down_strm_port_count;
 	union edp_configuration_cap edp_config_cap;
 	union dp_downstream_port_present ds_port = { 0 };
 	enum dc_status status = DC_ERROR_UNEXPECTED;
+	uint32_t read_dpcd_retry_cnt = 3;
+	int i;
 
 	memset(dpcd_data, '\0', sizeof(dpcd_data));
 	memset(&down_strm_port_count,
@@ -2285,11 +2321,15 @@ static bool retrieve_link_cap(struct dc_link *link)
 	memset(&edp_config_cap, '\0',
 		sizeof(union edp_configuration_cap));
 
-	status = core_link_read_dpcd(
-			link,
-			DP_DPCD_REV,
-			dpcd_data,
-			sizeof(dpcd_data));
+	for (i = 0; i < read_dpcd_retry_cnt; i++) {
+		status = core_link_read_dpcd(
+				link,
+				DP_DPCD_REV,
+				dpcd_data,
+				sizeof(dpcd_data));
+		if (status == DC_OK)
+			break;
+	}
 
 	if (status != DC_OK) {
 		dm_error("%s: Read dpcd data failed.\n", __func__);
@@ -2354,6 +2394,17 @@ static bool retrieve_link_cap(struct dc_link *link)
 			&link->dpcd_caps.sink_count.raw,
 			sizeof(link->dpcd_caps.sink_count.raw));
 
+	/* read sink ieee oui */
+	core_link_read_dpcd(link,
+			DP_SINK_OUI,
+			(uint8_t *)(&sink_id),
+			sizeof(sink_id));
+
+	link->dpcd_caps.sink_dev_id =
+			(sink_id.ieee_oui[0] << 16) +
+			(sink_id.ieee_oui[1] << 8) +
+			(sink_id.ieee_oui[2]);
+
 	/* Connectivity log: detection */
 	CONN_DATA_DETECT(link, dpcd_data, sizeof(dpcd_data), "Rx Caps: ");
 
@@ -2376,6 +2427,10 @@ bool detect_dp_sink_caps(struct dc_link *link)
 void detect_edp_sink_caps(struct dc_link *link)
 {
 	retrieve_link_cap(link);
+
+	if (link->reported_link_cap.link_rate == LINK_RATE_UNKNOWN)
+		link->reported_link_cap.link_rate = LINK_RATE_HIGH2;
+
 	link->verified_link_cap = link->reported_link_cap;
 }
 

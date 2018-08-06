@@ -1,7 +1,7 @@
+// SPDX-License-Identifier: GPL-2.0 OR MIT
 /**************************************************************************
  *
- * Copyright © 2009-2016 VMware, Inc., Palo Alto, CA., USA
- * All Rights Reserved.
+ * Copyright 2009-2016 VMware, Inc., Palo Alto, CA., USA
  *
  * Permission is hereby granted, free of charge, to any person obtaining a
  * copy of this software and associated documentation files (the
@@ -159,14 +159,14 @@ static const struct drm_ioctl_desc vmw_ioctls[] = {
 		      DRM_RENDER_ALLOW),
 	VMW_IOCTL_DEF(VMW_CURSOR_BYPASS,
 		      vmw_kms_cursor_bypass_ioctl,
-		      DRM_MASTER | DRM_CONTROL_ALLOW),
+		      DRM_MASTER),
 
 	VMW_IOCTL_DEF(VMW_CONTROL_STREAM, vmw_overlay_ioctl,
-		      DRM_MASTER | DRM_CONTROL_ALLOW),
+		      DRM_MASTER),
 	VMW_IOCTL_DEF(VMW_CLAIM_STREAM, vmw_stream_claim_ioctl,
-		      DRM_MASTER | DRM_CONTROL_ALLOW),
+		      DRM_MASTER),
 	VMW_IOCTL_DEF(VMW_UNREF_STREAM, vmw_stream_unref_ioctl,
-		      DRM_MASTER | DRM_CONTROL_ALLOW),
+		      DRM_MASTER),
 
 	VMW_IOCTL_DEF(VMW_CREATE_CONTEXT, vmw_context_define_ioctl,
 		      DRM_AUTH | DRM_RENDER_ALLOW),
@@ -1278,8 +1278,6 @@ static void vmw_master_drop(struct drm_device *dev,
 	dev_priv->active_master = &dev_priv->fbdev_master;
 	ttm_lock_set_kill(&dev_priv->fbdev_master.lock, false, SIGTERM);
 	ttm_vt_unlock(&dev_priv->fbdev_master.lock);
-
-	vmw_fb_refresh(dev_priv);
 }
 
 /**
@@ -1483,7 +1481,6 @@ static int vmw_pm_freeze(struct device *kdev)
 			vmw_kms_resume(dev);
 		if (dev_priv->enable_fb)
 			vmw_fb_on(dev_priv);
-		vmw_fb_refresh(dev_priv);
 		return -EBUSY;
 	}
 
@@ -1522,8 +1519,6 @@ static int vmw_pm_restore(struct device *kdev)
 
 	if (dev_priv->enable_fb)
 		vmw_fb_on(dev_priv);
-
-	vmw_fb_refresh(dev_priv);
 
 	return 0;
 }
