@@ -41,7 +41,7 @@
 #include "dce100/dce100_resource.h"
 #include "dce110/dce110_resource.h"
 #include "dce112/dce112_resource.h"
-#if defined(CONFIG_DRM_AMD_DC_DCN1_0)
+#ifdef CONFIG_X86
 #include "dcn10/dcn10_resource.h"
 #endif
 #include "dce120/dce120_resource.h"
@@ -85,7 +85,7 @@ enum dce_version resource_parse_asic_id(struct hw_asic_id asic_id)
 	case FAMILY_AI:
 		dc_version = DCE_VERSION_12_0;
 		break;
-#if defined(CONFIG_DRM_AMD_DC_DCN1_0)
+#ifdef CONFIG_X86
 	case FAMILY_RV:
 		dc_version = DCN_VERSION_1_0;
 		break;
@@ -136,7 +136,7 @@ struct resource_pool *dc_create_resource_pool(
 			num_virtual_links, dc);
 		break;
 
-#if defined(CONFIG_DRM_AMD_DC_DCN1_0)
+#ifdef CONFIG_X86
 	case DCN_VERSION_1_0:
 		res_pool = dcn10_create_resource_pool(
 				num_virtual_links, dc);
@@ -330,12 +330,29 @@ bool resource_are_streams_timing_synchronizable(
 				!= stream2->timing.pix_clk_khz)
 		return false;
 
+	if (stream1->clamping.c_depth != stream2->clamping.c_depth)
+		return false;
+
 	if (stream1->phy_pix_clk != stream2->phy_pix_clk
 			&& (!dc_is_dp_signal(stream1->signal)
 			|| !dc_is_dp_signal(stream2->signal)))
 		return false;
 
 	return true;
+}
+static bool is_dp_and_hdmi_sharable(
+		struct dc_stream_state *stream1,
+		struct dc_stream_state *stream2)
+{
+	if (stream1->ctx->dc->caps.disable_dp_clk_share)
+		return false;
+
+	if (stream1->clamping.c_depth != COLOR_DEPTH_888 ||
+	    stream2->clamping.c_depth != COLOR_DEPTH_888)
+	return false;
+
+	return true;
+
 }
 
 static bool is_sharable_clk_src(
@@ -348,7 +365,10 @@ static bool is_sharable_clk_src(
 	if (pipe_with_clk_src->stream->signal == SIGNAL_TYPE_VIRTUAL)
 		return false;
 
-	if (dc_is_dp_signal(pipe_with_clk_src->stream->signal))
+	if (dc_is_dp_signal(pipe_with_clk_src->stream->signal) ||
+		(dc_is_dp_signal(pipe->stream->signal) &&
+		!is_dp_and_hdmi_sharable(pipe_with_clk_src->stream,
+				     pipe->stream)))
 		return false;
 
 	if (dc_is_hdmi_signal(pipe_with_clk_src->stream->signal)
@@ -1213,7 +1233,7 @@ static struct pipe_ctx *acquire_free_pipe_for_stream(
 
 }
 
-#if defined(CONFIG_DRM_AMD_DC_DCN1_0)
+#ifdef CONFIG_X86
 static int acquire_first_split_pipe(
 		struct resource_context *res_ctx,
 		const struct resource_pool *pool,
@@ -1284,7 +1304,7 @@ bool dc_add_plane_to_context(
 
 	free_pipe = acquire_free_pipe_for_stream(context, pool, stream);
 
-#if defined(CONFIG_DRM_AMD_DC_DCN1_0)
+#ifdef CONFIG_X86
 	if (!free_pipe) {
 		int pipe_idx = acquire_first_split_pipe(&context->res_ctx, pool, stream);
 		if (pipe_idx >= 0)
@@ -1705,8 +1725,8 @@ enum dc_status dc_add_stream_to_ctx(
 	struct dc_context *dc_ctx = dc->ctx;
 	enum dc_status res;
 
-	if (new_ctx->stream_count >= dc->res_pool->pipe_count) {
-		DC_ERROR("Max streams reached, can add stream %p !\n", stream);
+	if (new_ctx->stream_count >= dc->res_pool->timing_generator_count) {
+		DC_ERROR("Max streams reached, can't add stream %p !\n", stream);
 		return DC_ERROR_UNEXPECTED;
 	}
 
@@ -1882,7 +1902,7 @@ enum dc_status resource_map_pool_resources(
 	/* acquire new resources */
 	pipe_idx = acquire_first_free_pipe(&context->res_ctx, pool, stream);
 
-#ifdef CONFIG_DRM_AMD_DC_DCN1_0
+#ifdef CONFIG_X86
 	if (pipe_idx < 0)
 		pipe_idx = acquire_first_split_pipe(&context->res_ctx, pool, stream);
 #endif
@@ -1948,7 +1968,7 @@ void dc_resource_state_construct(
 		const struct dc *dc,
 		struct dc_state *dst_ctx)
 {
-	dst_ctx->dis_clk = dc->res_pool->display_clock;
+	dst_ctx->dis_clk = dc->res_pool->dccg;
 }
 
 enum dc_status dc_validate_global_state(
