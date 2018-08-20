@@ -17,6 +17,26 @@
 
 #include "it66121.h"
 #define INIT_CLK_HIGH
+
+struct it66121_priv {
+	struct drm_encoder encoder;
+	struct drm_connector connector;
+
+	struct i2c_client *hdmi;
+	int irq;
+	int powerstatus;
+	int plug_status;
+	u8 AudioChannelEnable;
+	struct platform_device *audio_pdev;
+	struct mutex mutex;
+};
+
+struct a_reg_entry {
+	u8 reg;
+	u8 mask;
+	u8 val;
+};
+
 // #define INIT_CLK_LOW
 #define conn_to_it66121_priv(x) \
 	container_of(x, struct it66121_priv, connector)
