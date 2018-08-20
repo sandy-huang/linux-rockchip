@@ -140,8 +140,8 @@ enum {
 };
 
 #define IT66121_DDC_MASTER			0x10
-//    #define B_TX_MASTERROM (1<<1)
-//    #define B_TX_MASTERDDC (0<<1)
+#define IT66121_DDC_MASTER_ROM			BIT(1)
+#define IT66121_DDC_MASTER_DDC			0
 #define IT66121_DDC_MASTER_HOST			BIT(0)
 #define IT66121_DDC_MASTER_HDCP			(0)
 
@@ -203,6 +203,56 @@ enum {
 #define IT66121_AN_GENERATE 0x1F
     #define B_TX_START_CIPHER_GEN  1
     #define B_TX_STOP_CIPHER_GEN   0
+
+
+#define IT66121_HDCP			0x20
+#define IT66121_HDCP_ENABLE_HDCP11	BIT(1)
+#define IT66121_HDCP_DESIRED		BIT(0)
+
+#define REG_TX_AUTHFIRE    0x21
+#define REG_TX_LISTCTRL    0x22
+#define B_TX_LISTFAIL  (1<<1)
+#define B_TX_LISTDONE  (1<<0)
+
+#define REG_TX_AKSV    0x23
+#define REG_TX_AKSV0   0x23
+#define REG_TX_AKSV1   0x24
+#define REG_TX_AKSV2   0x25
+#define REG_TX_AKSV3   0x26
+#define REG_TX_AKSV4   0x27
+
+#define REG_TX_AN  0x28
+#define REG_TX_AN_GEN  0x30
+#define REG_TX_ARI     0x38
+#define REG_TX_ARI0    0x38
+#define REG_TX_ARI1    0x39
+#define REG_TX_APJ     0x3A
+
+#define REG_TX_BKSV    0x3B
+#define REG_TX_BRI     0x40
+#define REG_TX_BRI0    0x40
+#define REG_TX_BRI1    0x41
+#define REG_TX_BPJ     0x42
+#define REG_TX_BCAP    0x43
+#define B_TX_CAP_HDMI_REPEATER (1<<6)
+#define B_TX_CAP_KSV_FIFO_RDY  (1<<5)
+#define B_TX_CAP_HDMI_FAST_MODE    (1<<4)
+#define B_CAP_HDCP_1p1  (1<<1)
+#define B_TX_CAP_FAST_REAUTH   (1<<0)
+#define REG_TX_BSTAT   0x44
+#define REG_TX_BSTAT0   0x44
+#define REG_TX_BSTAT1   0x45
+#define B_TX_CAP_HDMI_MODE (1<<12)
+#define B_TX_CAP_DVI_MODE (0<<12)
+#define B_TX_MAX_CASCADE_EXCEEDED  (1<<11)
+#define M_TX_REPEATER_DEPTH    (0x7<<8)
+#define O_TX_REPEATER_DEPTH    8
+#define B_TX_DOWNSTREAM_OVER   (1<<7)
+#define M_TX_DOWNSTREAM_COUNT  0x7F
+
+#define REG_TX_AUTH_STAT 0x46
+#define B_TX_AUTH_DONE (1<<7)
+
 
 #define IT66121_CLK_CTRL0 0x58
     #define O_TX_OSCLK_SEL 5
@@ -678,7 +728,269 @@ typedef enum _mode_id {
 #define hdmitx_DISABLE_GeneralPurpose_PKT() { HDMITX_WriteI2C_Byte(IT66121_NULL_CTRL,0); }
 
 
+#ifdef EXTERN_HDCPROM
+#pragma message("Defined EXTERN_HDCPROM")
+#endif // EXTERN_HDCPROM
 
+#define SUPPORT_EDID
+//#define SUPPORT_AUDIO_MONITOR
+#define AudioOutDelayCnt 250
+
+#ifdef CONFIG_SUPPORT_HDCP
+#define SUPPORT_HDCP
+#define SUPPORT_SHA
+#endif
+
+
+/*
+ *Video Configuration
+ */
+
+#define SUPPORT_OUTPUTYUV
+#define SUPPORT_OUTPUTRGB
+#define DISABLE_HDMITX_CSC
+
+#define SUPPORT_INPUTRGB
+#define SUPPORT_INPUTYUV444
+#define SUPPORT_INPUTYUV422
+// #define SUPPORT_SYNCEMBEDDED
+// #define SUPPORT_DEGEN
+#define NON_SEQUENTIAL_YCBCR422
+
+
+
+#define INPUT_COLOR_MODE F_MODE_RGB444
+//#define INPUT_COLOR_MODE F_MODE_YUV422
+//#define INPUT_COLOR_MODE F_MODE_YUV444
+
+#define INPUT_COLOR_DEPTH 24
+// #define INPUT_COLOR_DEPTH 30
+// #define INPUT_COLOR_DEPTH 36
+
+//#define OUTPUT_COLOR_MODE F_MODE_YUV422
+//#define OUTPUT_COLOR_MODE F_MODE_YUV444
+#define OUTPUT_COLOR_MODE F_MODE_RGB444
+
+//#define OUTPUT_3D_MODE Frame_Pcaking
+//#define OUTPUT_3D_MODE Top_and_Botton
+//#define OUTPUT_3D_MODE Side_by_Side
+
+// #define INV_INPUT_ACLK
+#define INV_INPUT_PCLK
+
+#ifdef SUPPORT_SYNCEMBEDDED
+// #define INPUT_SIGNAL_TYPE (T_MODE_SYNCEMB)                 // 16 bit sync embedded
+// #define INPUT_SIGNAL_TYPE (T_MODE_SYNCEMB | T_MODE_CCIR656) // 8 bit sync embedded
+#define INPUT_SIGNAL_TYPE (T_MODE_SYNCEMB|T_MODE_INDDR|T_MODE_PCLKDIV2) // 16 bit sync embedded DDR
+// #define INPUT_SIGNAL_TYPE (T_MODE_SYNCEMB|T_MODE_INDDR)      // 8  bit sync embedded DDR
+
+#define SUPPORT_INPUTYUV422
+#ifdef INPUT_COLOR_MODE
+#undef INPUT_COLOR_MODE
+#endif // INPUT_COLOR_MODE
+#define INPUT_COLOR_MODE F_MODE_YUV422
+#else
+//    #pragma message ("Defined seperated sync.")
+#define INPUT_SIGNAL_TYPE 0 // 24 bit sync seperate
+//#define INPUT_SIGNAL_TYPE ( T_MODE_DEGEN )
+//#define INPUT_SIGNAL_TYPE ( T_MODE_INDDR)
+//#define INPUT_SIGNAL_TYPE ( T_MODE_SYNCEMB)
+//#define INPUT_SIGNAL_TYPE ( T_MODE_CCIR656 | T_MODE_SYNCEMB )
+#endif
+
+
+#if defined(SUPPORT_INPUTYUV444) || defined(SUPPORT_INPUTYUV422)
+#define SUPPORT_INPUTYUV
+#endif
+
+#ifdef SUPPORT_SYNCEMBEDDED
+#pragma message("defined SUPPORT_SYNCEMBEDDED for Sync Embedded timing input or CCIR656 input.")
+#endif
+
+
+
+/*
+ *Audio Configuration
+ */
+
+// #define SUPPORT_HBR_AUDIO
+#define USE_SPDIF_CHSTAT
+#ifndef SUPPORT_HBR_AUDIO
+#define INPUT_SAMPLE_FREQ AUDFS_48KHz
+#define INPUT_SAMPLE_FREQ_HZ 44100L
+#define OUTPUT_CHANNEL 2 // 3 // 4 // 5//6 //7 //8
+
+#define CNOFIG_INPUT_AUDIO_TYPE T_AUDIO_LPCM
+// #define CNOFIG_INPUT_AUDIO_TYPE T_AUDIO_NLPCM
+#define CONFIG_INPUT_AUDIO_SPDIF 0 // I2S
+// #define CONFIG_INPUT_AUDIO_SPDIF 1 // SPDIF
+
+// #define I2S_FORMAT 0x00 // 24bit I2S audio
+#define I2S_FORMAT 0x01 // 32bit I2S audio
+// #define I2S_FORMAT 0x02 // 24bit I2S audio, right justify
+// #define I2S_FORMAT 0x03 // 32bit I2S audio, right justify
+
+#else // SUPPORT_HBR_AUDIO
+
+#define INPUT_SAMPLE_FREQ AUDFS_768KHz
+#define INPUT_SAMPLE_FREQ_HZ 768000L
+#define OUTPUT_CHANNEL 8
+#define CNOFIG_INPUT_AUDIO_TYPE T_AUDIO_HBR
+#define CONFIG_INPUT_AUDIO_SPDIF 0 // I2S
+// #define CONFIG_INPUT_AUDIO_SPDIF 1 // SPDIF
+#define I2S_FORMAT 0x47 // 32bit audio
+#endif
+
+
+/*
+ *Audio Monitor Configuration
+ */
+
+// #define HDMITX_AUTO_MONITOR_INPUT
+// #define HDMITX_INPUT_INFO
+
+#ifdef  HDMITX_AUTO_MONITOR_INPUT
+#define HDMITX_INPUT_INFO
+#endif
+
+
+#ifndef INV_INPUT_PCLK
+#define PCLKINV 0
+#else
+#define PCLKINV B_TX_VDO_LATCH_EDGE
+#endif
+
+#ifndef INV_INPUT_ACLK
+#define InvAudCLK 0
+#else
+#define InvAudCLK B_TX_AUDFMT_FALL_EDGE_SAMPLE_WS
+#endif
+
+#define INIT_CLK_HIGH
+// #define INIT_CLK_LOW
+
+// Video Data Type
+#define F_MODE_RGB444  0
+#define F_MODE_YUV422 1
+#define F_MODE_YUV444 2
+#define F_MODE_CLRMOD_MASK 3
+
+
+#define F_MODE_INTERLACE  1
+
+#define F_VIDMODE_ITU709  (1<<4)
+#define F_VIDMODE_ITU601  0
+
+#define F_VIDMODE_0_255   0
+#define F_VIDMODE_16_235  (1<<5)
+
+#define F_VIDMODE_EN_UDFILT (1<<6)
+#define F_VIDMODE_EN_DITHER (1<<7)
+
+#define T_MODE_CCIR656 (1<<0)
+#define T_MODE_SYNCEMB (1<<1)
+#define T_MODE_INDDR   (1<<2)
+#define T_MODE_PCLKDIV2 (1<<3)
+#define T_MODE_DEGEN (1<<4)
+#define T_MODE_SYNCGEN (1<<5)
+
+/* Packet and Info Frame definition and datastructure.
+ */
+#define VENDORSPEC_INFOFRAME_TYPE 0x81
+#define AVI_INFOFRAME_TYPE  0x82
+#define SPD_INFOFRAME_TYPE 0x83
+#define AUDIO_INFOFRAME_TYPE 0x84
+#define MPEG_INFOFRAME_TYPE 0x85
+
+#define VENDORSPEC_INFOFRAME_VER 0x01
+#define AVI_INFOFRAME_VER  0x02
+#define SPD_INFOFRAME_VER 0x01
+#define AUDIO_INFOFRAME_VER 0x01
+#define MPEG_INFOFRAME_VER 0x01
+
+#define VENDORSPEC_INFOFRAME_LEN 5
+#define AVI_INFOFRAME_LEN 13
+#define SPD_INFOFRAME_LEN 25
+#define AUDIO_INFOFRAME_LEN 10
+#define MPEG_INFOFRAME_LEN 10
+
+#define ACP_PKT_LEN 9
+#define ISRC1_PKT_LEN 16
+#define ISRC2_PKT_LEN 16
+
+
+// Audio relate definition and macro.
+// 2008/08/15 added by jj_tseng@chipadvanced
+#define F_AUDIO_ON  (1<<7)
+#define F_AUDIO_HBR (1<<6)
+#define F_AUDIO_DSD (1<<5)
+#define F_AUDIO_NLPCM (1<<4)
+#define F_AUDIO_LAYOUT_1 (1<<3)
+#define F_AUDIO_LAYOUT_0 (0<<3)
+
+// HBR - 1100
+// DSD - 1010
+// NLPCM - 1001
+// LPCM - 1000
+
+#define T_AUDIO_MASK 0xF0
+#define T_AUDIO_OFF 0
+#define T_AUDIO_HBR (F_AUDIO_ON|F_AUDIO_HBR)
+#define T_AUDIO_DSD (F_AUDIO_ON|F_AUDIO_DSD)
+#define T_AUDIO_NLPCM (F_AUDIO_ON|F_AUDIO_NLPCM)
+#define T_AUDIO_LPCM (F_AUDIO_ON)
+
+// for sample clock
+#define AUDFS_22p05KHz  4
+#define AUDFS_44p1KHz 0
+#define AUDFS_88p2KHz 8
+#define AUDFS_176p4KHz    12
+
+#define AUDFS_24KHz  6
+#define AUDFS_48KHz  2
+#define AUDFS_96KHz  10
+#define AUDFS_192KHz 14
+
+#define AUDFS_768KHz 9
+
+#define AUDFS_32KHz  3
+#define AUDFS_OTHER    1
+
+// Audio Enable
+#define ENABLE_SPDIF    (1<<4)
+#define ENABLE_I2S_SRC3  (1<<3)
+#define ENABLE_I2S_SRC2  (1<<2)
+#define ENABLE_I2S_SRC1  (1<<1)
+#define ENABLE_I2S_SRC0  (1<<0)
+
+#define AUD_SWL_NOINDICATE  0x0
+#define AUD_SWL_16          0x2
+#define AUD_SWL_17          0xC
+#define AUD_SWL_18          0x4
+#define AUD_SWL_20          0xA // for maximum 20 bit
+#define AUD_SWL_21          0xD
+#define AUD_SWL_22          0x5
+#define AUD_SWL_23          0x9
+#define AUD_SWL_24          0xB
+
+
+#define    HDMI_4x3  0x00
+#define    HDMI_16x9 0x01
+
+#define     HDMI_ITU601 0x00
+#define     HDMI_ITU709 0x01
+
+#define M_TX_AUD_BIT M_TX_AUD_16BIT
+#define SUPPORT_AUDI_AudSWL 16
+#if(SUPPORT_AUDI_AudSWL==16)
+    #define CHTSTS_SWCODE 0x02
+#elif(SUPPORT_AUDI_AudSWL==18)
+    #define CHTSTS_SWCODE 0x04
+#elif(SUPPORT_AUDI_AudSWL==20)
+    #define CHTSTS_SWCODE 0x03
+#else
+    #define CHTSTS_SWCODE 0x0B
+#endif
 
 
 

@@ -3,9 +3,9 @@
 #include <linux/module.h>
 #include <linux/irq.h>
 #include <linux/delay.h>
+#include <linux/string.h>
 #include <sound/asoundef.h>
 #include <sound/hdmi-codec.h>
-#include <linux/string.h>
 
 #include <drm/drmP.h>
 #include <drm/drm_atomic_helper.h>
@@ -137,9 +137,9 @@ static struct a_reg_entry it66121_init_table[] = {
 	{ 0x59, 0xD8, 0x40 | PCLKINV },
 	{ 0xE1, 0x20, InvAudCLK },
 	{ 0x05, 0xC0, 0x40 },
-	{ REG_TX_INT_MASK1, 0xFF, ~(B_TX_RXSEN_MASK | B_TX_HPD_MASK) },
-	{ REG_TX_INT_MASK2, 0xFF, ~(B_TX_KSVLISTCHK_MASK | B_TX_AUTH_DONE_MASK | B_TX_AUTH_FAIL_MASK) },
-	{ REG_TX_INT_MASK3, 0xFF, ~(0x0) },
+	{ IT66121_INT_MASK1, 0xFF, ~(IT66121_INT_MASK1_RX_SENSE | IT66121_INT_MASK1_HPD) },
+	{ IT66121_INT_MASK2, 0xFF, ~(IT66121_INT_MASK2_KSVLIST_CHK | IT66121_INT_MASK2_AUTH_DONE | IT66121_INT_MASK2_AUTH_FAIL) },
+	{ IT66121_INT_MASK3, 0xFF, ~(0x0) },
 	{ 0x0C, 0xFF, 0xFF },
 	{ 0x0D, 0xFF, 0xFF },
 	{ 0x0E, 0x03, 0x03 },
@@ -477,17 +477,9 @@ static enum drm_connector_status
 it66121_connector_detect(struct drm_connector *connector, bool force)
 {
 	struct it66121_priv *priv = conn_to_it66121_priv(connector);
-	char isconnect = reg_read(priv->hdmi, REG_TX_SYS_STATUS) & B_TX_HPDETECT;
+	char isconnect = reg_read(priv->hdmi, IT66121_SYS_STATUS0) & IT66121_SYS_STATUS0_HP_DETECT;
 
 	return isconnect ? connector_status_connected : connector_status_disconnected;
-}
-
-static int it66121_connector_dpms(struct drm_connector *connector, int mode)
-{
-	if (drm_core_check_feature(connector->dev, DRIVER_ATOMIC))
-		return drm_atomic_helper_connector_dpms(connector, mode);
-	else
-		return drm_helper_connector_dpms(connector, mode);
 }
 
 static void it66121_connector_destroy(struct drm_connector *connector)
@@ -497,7 +489,6 @@ static void it66121_connector_destroy(struct drm_connector *connector)
 }
 
 static const struct drm_connector_funcs it66121_connector_funcs = {
-	.dpms = it66121_connector_dpms,
 	.fill_modes = drm_helper_probe_single_connector_modes,
 	.detect = it66121_connector_detect,
 	.destroy = it66121_connector_destroy,
@@ -513,7 +504,6 @@ static int it66121_connector_mode_valid(struct drm_connector *connector,
 	return MODE_OK;
 }
 
-
 static struct drm_encoder*
 it66121_connector_best_encoder(struct drm_connector *connector)
 {
@@ -527,25 +517,25 @@ static void it66121_abort_DDC(struct i2c_client *client)
 	u8 CPDesire, SWReset, DDCMaster;
 	u8 uc, timeout, i;
 	// save the SW reset,DDC master,and CP Desire setting.
-	SWReset = reg_read(client, REG_TX_SW_RST);
-	CPDesire = reg_read(client, REG_TX_HDCP_DESIRE);
-	DDCMaster = reg_read(client, REG_TX_DDC_MASTER_CTRL);
+	SWReset = reg_read(client, IT66121_SW_RST);
+	CPDesire = reg_read(client, IT66121_HDCP);
+	DDCMaster = reg_read(client, IT66121_DDC_MASTER);
 
-	reg_write(client, REG_TX_HDCP_DESIRE, CPDesire & (~B_TX_CPDESIRE));
-	reg_write(client, REG_TX_SW_RST, SWReset | B_TX_HDCP_RST_HDMITX);
-	reg_write(client, REG_TX_DDC_MASTER_CTRL, B_TX_MASTERDDC | B_TX_MASTERHOST);
+	reg_write(client, IT66121_HDCP, CPDesire & (IT66121_HDCP_DESIRED));
+	reg_write(client, IT66121_SW_RST, SWReset | IT66121_SW_RST_HDCP);
+	reg_write(client, IT66121_DDC_MASTER, IT66121_DDC_MASTER_DDC | IT66121_DDC_MASTER_HOST);
 
 	// 2009/01/15 modified by Jau-Chih.Tseng@ite.com.tw
 	// do abort DDC twice.
 	for (i = 0; i < 2; i++) {
-		reg_write(client, REG_TX_DDC_CMD, CMD_DDC_ABORT);
+		reg_write(client, IT66121_DDC_CMD, IT66121_DDC_CMD_DDC_ABORT);
 
 		for (timeout = 0; timeout < 200; timeout++) {
-			uc = reg_read(client, REG_TX_DDC_STATUS);
-			if (uc & B_TX_DDC_DONE) {
+			uc = reg_read(client, IT66121_DDC_STATUS);
+			if (uc & IT66121_DDC_STATUS_DONE) {
 				break; // success
 			}
-			if (uc & (B_TX_DDC_NOACK | B_TX_DDC_WAITBUS | B_TX_DDC_ARBILOSE)) {
+			if (uc & (IT66121_DDC_STATUS_NOACK | IT66121_DDC_STATUS_WAIT_BUS | IT66121_DDC_STATUS_ARBILOSE)) {
 				dev_err(&client->dev, "it66121_abort_DDC Fail by reg16=%02X\n", (int)uc);
 				break;
 			}
@@ -591,14 +581,14 @@ static int it66121_read_edid_block(void *data, u8 *buf, unsigned int blk, size_t
 
 	if (!buf) return -1;
 
-	if (reg_read(priv->hdmi, REG_TX_INT_STAT1) & B_TX_INT_DDC_BUS_HANG) {
+	if (reg_read(priv->hdmi, IT66121_INT_STAT1) & IT66121_INT_STAT1_DDC_BUS_HANG) {
 		dev_err(&priv->hdmi->dev, "Sorry, ddc bus is hang\n");
 		it66121_abort_DDC(priv->hdmi);
 	}
 
 	/*clear the DDC FIFO*/
-	reg_write(client, REG_TX_DDC_MASTER_CTRL, B_TX_MASTERDDC | B_TX_MASTERHOST);
-	reg_write(client, REG_TX_DDC_CMD, CMD_FIFO_CLR);
+	reg_write(client, IT66121_DDC_MASTER, IT66121_DDC_MASTER_DDC | IT66121_DDC_MASTER_HOST);
+	reg_write(client, IT66121_DDC_CMD, IT66121_DDC_CMD_FIFO_CLEAR);
 
 	bCurrOffset = (blk % 2) / length;
 	bSegment  = blk / length;
@@ -607,40 +597,40 @@ static int it66121_read_edid_block(void *data, u8 *buf, unsigned int blk, size_t
 	while (length > 0) {
 		ReqCount = (length > DDC_FIFO_MAXREQ) ? DDC_FIFO_MAXREQ : length;
 
-		reg_write(client, REG_TX_DDC_MASTER_CTRL, B_TX_MASTERDDC | B_TX_MASTERHOST);
-		reg_write(client, REG_TX_DDC_CMD, CMD_FIFO_CLR);
+		reg_write(client, IT66121_DDC_MASTER, IT66121_DDC_MASTER_DDC | IT66121_DDC_MASTER_HOST);
+		reg_write(client, IT66121_DDC_CMD, IT66121_DDC_CMD_FIFO_CLEAR);
 
 		for (TimeOut = 0; TimeOut < 200; TimeOut++) {
-			ucdata = reg_read(client, REG_TX_DDC_STATUS);
+			ucdata = reg_read(client, IT66121_DDC_STATUS);
 
-			if (ucdata & B_TX_DDC_DONE) {
+			if (ucdata & IT66121_DDC_STATUS_DONE)
 				break;
-			}
-			if ((ucdata & B_TX_DDC_ERROR) || (reg_read(client, REG_TX_INT_STAT1) & B_TX_INT_DDC_BUS_HANG)) {
+
+			if ((ucdata & IT66121_DDC_STATUS_ERROR) || (reg_read(client, IT66121_INT_STAT1) & IT66121_INT_STAT1_DDC_BUS_HANG)) {
 				dev_err(&priv->hdmi->dev, "it66121_read_edid_block(): DDC_STATUS = %02X,fail.\n", (int)ucdata);
 				/*clear the DDC FIFO*/
-				reg_write(client, REG_TX_DDC_MASTER_CTRL, B_TX_MASTERDDC | B_TX_MASTERHOST);
-				reg_write(client, REG_TX_DDC_CMD, CMD_FIFO_CLR);
+				reg_write(client, IT66121_DDC_MASTER, IT66121_DDC_MASTER_DDC | IT66121_DDC_MASTER_HOST);
+				reg_write(client, IT66121_DDC_CMD, IT66121_DDC_CMD_FIFO_CLEAR);
 				return -1;
 			}
 		}
-		reg_write(client, REG_TX_DDC_MASTER_CTRL, B_TX_MASTERDDC | B_TX_MASTERHOST); //0x10
-		reg_write(client, REG_TX_DDC_HEADER, DDC_EDID_ADDRESS); // for EDID ucdata get 0x11
-		reg_write(client, REG_TX_DDC_REQOFF, bCurrOffset); //0x12
-		reg_write(client, REG_TX_DDC_REQCOUNT, (u8)ReqCount); //0x13
-		reg_write(client, REG_TX_DDC_EDIDSEG, bSegment); //0x14
-		reg_write(client, REG_TX_DDC_CMD, CMD_EDID_READ); //0x15
+		reg_write(client, IT66121_DDC_MASTER, IT66121_DDC_MASTER_DDC | IT66121_DDC_MASTER_HOST);
+		reg_write(client, IT66121_DDC_HEADER, DDC_EDID_ADDRESS); // for EDID ucdata get 0x11
+		reg_write(client, IT66121_DDC_REQOFFSET, bCurrOffset); //0x12
+		reg_write(client, IT66121_DDC_REQCOUNT, (u8)ReqCount); //0x13
+		reg_write(client, IT66121_DDC_SEGMENT, bSegment); //0x14
+		reg_write(client, IT66121_DDC_CMD, IT66121_DDC_CMD_EDID_READ); //0x15
 
 		bCurrOffset += ReqCount;
 		length -= ReqCount;
 
 		for (TimeOut = 250; TimeOut > 0; TimeOut--) {
 			mdelay(1);
-			ucdata = reg_read(client, REG_TX_DDC_STATUS);
-			if (ucdata & B_TX_DDC_DONE) {
+			ucdata = reg_read(client, IT66121_DDC_STATUS);
+			if (ucdata & IT66121_DDC_STATUS_DONE)
 				break;
-			}
-			if (ucdata & B_TX_DDC_ERROR) {
+
+			if (ucdata & IT66121_DDC_STATUS_ERROR) {
 				dev_err(&priv->hdmi->dev, "it66121_read_edid_block(): DDC_STATUS = %02X,fail.\n", (int)ucdata);
 				return -1;
 			}
@@ -652,7 +642,7 @@ static int it66121_read_edid_block(void *data, u8 *buf, unsigned int blk, size_t
 		}
 
 		do {
-			*(pBuff++) = reg_read(client, REG_TX_DDC_READFIFO);
+			*(pBuff++) = reg_read(client, IT66121_DDC_READ_FIFO);
 			ReqCount--;
 		} while (ReqCount > 0);
 
@@ -676,7 +666,6 @@ static int it66121_connector_get_modes(struct drm_connector *connector)
 	drm_connector_update_edid_property(connector, edid);
 	n = drm_add_edid_modes(connector, edid);
 	//priv->is_hdmi_sink = drm_detect_hdmi_monitor(edid);
-	drm_edid_to_eld(connector, edid);
 
 	kfree(edid);
 	printk("it66121_connector_get_modes->color_formats: %x", connector->display_info.color_formats);
@@ -705,16 +694,16 @@ static void it66121_disable_video_output(struct it66121_priv *priv)
 	struct i2c_client *client = priv->hdmi;
 	u8 udata;
 
-	udata = reg_read(client, REG_TX_SW_RST) | B_HDMITX_VID_RST;
-	reg_write(client, REG_TX_SW_RST, udata);
-	reg_write(client, REG_TX_AFE_DRV_CTRL, B_TX_AFE_DRV_RST | B_TX_AFE_DRV_PWD);
+	udata = reg_read(client, IT66121_SW_RST) | IT66121_SW_RST_SOFT_VID;
+	reg_write(client, IT66121_SW_RST, udata);
+	reg_write(client, IT66121_AFE_DRV_CTRL, B_TX_AFE_DRV_RST | B_TX_AFE_DRV_PWD);
 	write_a_entry(priv, 0x62, 0x90, 0x00);
 	write_a_entry(priv, 0x64, 0x89, 0x00);
 }
 
 static void it66121_disable_audio_output(struct it66121_priv *priv)
 {
-	write_a_entry(priv, REG_TX_SW_RST, (B_HDMITX_AUD_RST | B_TX_AREF_RST), (B_HDMITX_AUD_RST | B_TX_AREF_RST));
+	write_a_entry(priv, IT66121_SW_RST, (IT66121_SW_RST_AUDIO_FIFO | IT66121_SW_RST_SOFT_AUD), (IT66121_SW_RST_AUDIO_FIFO | IT66121_SW_RST_SOFT_AUD));
 	write_a_entry(priv, 0x0F, 0x10, 0x10);
 }
 
@@ -813,20 +802,20 @@ static void it66121_set_CSC_scale(struct it66121_priv *priv,
 		switch (input_color_mode & (F_VIDMODE_ITU709 | F_VIDMODE_16_235)) {
 		case F_VIDMODE_ITU709 | F_VIDMODE_16_235:
 			for (i = 0; i < SIZEOF_CSCMTX; i++)
-				reg_write(client, REG_TX_CSC_YOFF + i, bCSCMtx_RGB2YUV_ITU709_16_235[i]);
+				reg_write(client, IT66121_CSC_YOFF + i, bCSCMtx_RGB2YUV_ITU709_16_235[i]);
 			break;
 		case F_VIDMODE_ITU709 | F_VIDMODE_0_255:
 			for (i = 0; i < SIZEOF_CSCMTX; i++)
-				reg_write(client, REG_TX_CSC_YOFF + i, bCSCMtx_RGB2YUV_ITU709_0_255[i]);
+				reg_write(client, IT66121_CSC_YOFF + i, bCSCMtx_RGB2YUV_ITU709_0_255[i]);
 			break;
 		case F_VIDMODE_ITU601 | F_VIDMODE_16_235:
 			for (i = 0; i < SIZEOF_CSCMTX; i++)
-				reg_write(client, REG_TX_CSC_YOFF + i, bCSCMtx_RGB2YUV_ITU601_16_235[i]);
+				reg_write(client, IT66121_CSC_YOFF + i, bCSCMtx_RGB2YUV_ITU601_16_235[i]);
 			break;
 		case F_VIDMODE_ITU601 | F_VIDMODE_0_255:
 		default:
 			for (i = 0; i < SIZEOF_CSCMTX; i++)
-				reg_write(client, REG_TX_CSC_YOFF + i, bCSCMtx_RGB2YUV_ITU601_0_255[i]);
+				reg_write(client, IT66121_CSC_YOFF + i, bCSCMtx_RGB2YUV_ITU601_0_255[i]);
 			break;
 		}
 	}
@@ -835,20 +824,20 @@ static void it66121_set_CSC_scale(struct it66121_priv *priv,
 		switch (input_color_mode & (F_VIDMODE_ITU709 | F_VIDMODE_16_235)) {
 		case F_VIDMODE_ITU709 | F_VIDMODE_16_235:
 			for (i = 0; i < SIZEOF_CSCMTX; i++)
-				reg_write(client, REG_TX_CSC_YOFF + i, bCSCMtx_YUV2RGB_ITU709_16_235[i]);
+				reg_write(client, IT66121_CSC_YOFF + i, bCSCMtx_YUV2RGB_ITU709_16_235[i]);
 			break;
 		case F_VIDMODE_ITU709 | F_VIDMODE_0_255:
 			for (i = 0; i < SIZEOF_CSCMTX; i++)
-				reg_write(client, REG_TX_CSC_YOFF + i, bCSCMtx_YUV2RGB_ITU709_0_255[i]);
+				reg_write(client, IT66121_CSC_YOFF + i, bCSCMtx_YUV2RGB_ITU709_0_255[i]);
 			break;
 		case F_VIDMODE_ITU601 | F_VIDMODE_16_235:
 			for (i = 0; i < SIZEOF_CSCMTX; i++)
-				reg_write(client, REG_TX_CSC_YOFF + i, bCSCMtx_YUV2RGB_ITU601_16_235[i]);
+				reg_write(client, IT66121_CSC_YOFF + i, bCSCMtx_YUV2RGB_ITU601_16_235[i]);
 			break;
 		case F_VIDMODE_ITU601 | F_VIDMODE_0_255:
 		default:
 			for (i = 0; i < SIZEOF_CSCMTX; i++)
-				reg_write(client, REG_TX_CSC_YOFF + i, bCSCMtx_YUV2RGB_ITU601_0_255[i]);
+				reg_write(client, IT66121_CSC_YOFF + i, bCSCMtx_YUV2RGB_ITU601_0_255[i]);
 			break;
 		}
 	}
@@ -858,17 +847,17 @@ static void it66121_set_CSC_scale(struct it66121_priv *priv,
 	else
 		write_a_entry(priv, 0xF, 0x10, 0x00);
 
-	udata = reg_read(client, REG_TX_CSC_CTRL) & ~(M_TX_CSC_SEL | B_TX_DNFREE_GO | B_TX_EN_DITHER | B_TX_EN_UDFILTER);
+	udata = reg_read(client, IT66121_CSC_CTRL) & ~(M_TX_CSC_SEL | B_TX_DNFREE_GO | B_TX_EN_DITHER | B_TX_EN_UDFILTER);
 	udata |= filter | csc;
 
-	reg_write(client, REG_TX_CSC_CTRL, udata);
+	reg_write(client, IT66121_CSC_CTRL, udata);
 }
 
 static void it66121_setup_AFE(struct it66121_priv *priv, u8 level)
 {
 	struct i2c_client *client = priv->hdmi;
 
-	reg_write(client, REG_TX_AFE_DRV_CTRL, B_TX_AFE_DRV_RST); /* 0x10 */
+	reg_write(client, IT66121_AFE_DRV_CTRL, B_TX_AFE_DRV_RST); /* 0x10 */
 	switch (level) {
 	case 1:
 		write_a_entry(priv, 0x62, 0x90, 0x80);
@@ -882,8 +871,8 @@ static void it66121_setup_AFE(struct it66121_priv *priv, u8 level)
 		break;
 	}
 
-	write_a_entry(priv, REG_TX_SW_RST, B_TX_REF_RST_HDMITX | B_HDMITX_VID_RST, 0);
-	reg_write(client, REG_TX_AFE_DRV_CTRL, 0);
+	write_a_entry(priv, IT66121_SW_RST, IT66121_SW_RST_REF | IT66121_SW_RST_SOFT_VID, 0);
+	reg_write(client, IT66121_AFE_DRV_CTRL, 0);
 	mdelay(1);
 }
 
@@ -925,28 +914,28 @@ static void it66121_config_avi_info_frame(struct it66121_priv *priv, u8 aspec,
 	AVI_DB[12] = 0;
 
 	it66121_switch_blank(priv, 1);
-	reg_write(client, REG_TX_AVIINFO_DB1, AVI_DB[0]);
-	reg_write(client, REG_TX_AVIINFO_DB2, AVI_DB[1]);
-	reg_write(client, REG_TX_AVIINFO_DB3, AVI_DB[2]);
-	reg_write(client, REG_TX_AVIINFO_DB4, AVI_DB[3]);
-	reg_write(client, REG_TX_AVIINFO_DB5, AVI_DB[4]);
-	reg_write(client, REG_TX_AVIINFO_DB6, AVI_DB[5]);
-	reg_write(client, REG_TX_AVIINFO_DB7, AVI_DB[6]);
-	reg_write(client, REG_TX_AVIINFO_DB8, AVI_DB[7]);
-	reg_write(client, REG_TX_AVIINFO_DB9, AVI_DB[8]);
-	reg_write(client, REG_TX_AVIINFO_DB10, AVI_DB[9]);
-	reg_write(client, REG_TX_AVIINFO_DB11, AVI_DB[10]);
-	reg_write(client, REG_TX_AVIINFO_DB12, AVI_DB[11]);
-	reg_write(client, REG_TX_AVIINFO_DB13, AVI_DB[12]);
+	reg_write(client, IT66121_AVIINFO_DB1, AVI_DB[0]);
+	reg_write(client, IT66121_AVIINFO_DB2, AVI_DB[1]);
+	reg_write(client, IT66121_AVIINFO_DB3, AVI_DB[2]);
+	reg_write(client, IT66121_AVIINFO_DB4, AVI_DB[3]);
+	reg_write(client, IT66121_AVIINFO_DB5, AVI_DB[4]);
+	reg_write(client, IT66121_AVIINFO_DB6, AVI_DB[5]);
+	reg_write(client, IT66121_AVIINFO_DB7, AVI_DB[6]);
+	reg_write(client, IT66121_AVIINFO_DB8, AVI_DB[7]);
+	reg_write(client, IT66121_AVIINFO_DB9, AVI_DB[8]);
+	reg_write(client, IT66121_AVIINFO_DB10, AVI_DB[9]);
+	reg_write(client, IT66121_AVIINFO_DB11, AVI_DB[10]);
+	reg_write(client, IT66121_AVIINFO_DB12, AVI_DB[11]);
+	reg_write(client, IT66121_AVIINFO_DB13, AVI_DB[12]);
 	for (i = 0, checksum = 0; i < 13; i++) {
 		checksum -= AVI_DB[i];
 	}
 	checksum -= AVI_INFOFRAME_VER + AVI_INFOFRAME_TYPE + AVI_INFOFRAME_LEN;
-	reg_write(client, REG_TX_AVIINFO_SUM, checksum);
+	reg_write(client, IT66121_AVIINFO_SUM, checksum);
 
 	it66121_switch_blank(priv, 0);
 
-	reg_write(client, REG_TX_AVI_INFOFRM_CTRL, B_TX_ENABLE_PKT | B_TX_REPEAT_PKT);
+	reg_write(client, IT66121_AVI_INFOFRM_CTRL, B_TX_ENABLE_PKT | B_TX_REPEAT_PKT);
 }
 
 /**
@@ -1007,24 +996,24 @@ static void it66121_enable_video_output(struct it66121_priv *priv,
 		input_color_mode &= ~F_VIDMODE_16_235;
 	}
 
-	is_high_clk ? reg_write(client, REG_TX_PLL_CTRL, 0x30 /*0xff*/) :
-		reg_write(client, REG_TX_PLL_CTRL, 0x00);
+	is_high_clk ? reg_write(client, IT66121_PLL_CTRL, 0x30 /*0xff*/) :
+		reg_write(client, IT66121_PLL_CTRL, 0x00);
 
-	reg_write(client, REG_TX_SW_RST,	B_HDMITX_VID_RST |
-			  B_HDMITX_AUD_RST |
-			  B_TX_AREF_RST |
-			  B_TX_HDCP_RST_HDMITX);
+	reg_write(client, IT66121_SW_RST, IT66121_SW_RST_SOFT_VID |
+			  IT66121_SW_RST_AUDIO_FIFO |
+			  IT66121_SW_RST_SOFT_AUD |
+			  IT66121_SW_RST_HDCP);
 
 	// 2009/12/09 added by jau-chih.tseng@ite.com.tw
 	it66121_switch_blank(priv, 1);
-	reg_write(client, REG_TX_AVIINFO_DB1, 0x00);
+	reg_write(client, IT66121_AVIINFO_DB1, 0x00);
 	it66121_switch_blank(priv, 0);
 	//~jau-chih.tseng@ite.com.tw
 
 	/*Set regC1[0] = '1' for AVMUTE the output, only support hdmi mode now*/
-	//write_a_entry(priv, REG_TX_GCP, B_TX_SETAVMUTE,  B_TX_SETAVMUTE);
-	write_a_entry(priv, REG_TX_GCP, B_TX_SETAVMUTE,  0);
-	reg_write(client, REG_TX_PKT_GENERAL_CTRL, B_TX_ENABLE_PKT | B_TX_REPEAT_PKT);
+	//write_a_entry(priv, IT66121_GCP, B_TX_SETAVMUTE,  B_TX_SETAVMUTE);
+	write_a_entry(priv, IT66121_GCP, B_TX_SETAVMUTE,  0);
+	reg_write(client, IT66121_PKT_GENERAL_CTRL, B_TX_ENABLE_PKT | B_TX_REPEAT_PKT);
 
 	/* Programming Input Signal Type
 	 * InputColorMode: F_MODE_RGB444
@@ -1036,35 +1025,35 @@ static void it66121_enable_video_output(struct it66121_priv *priv,
 	 *  				T_MODE_SYNCEMB
 	 *  				T_MODE_INDDR
 	*/
-	udata = reg_read(client, REG_TX_INPUT_MODE);
+	udata = reg_read(client, IT66121_INPUT_MODE);
 	udata &= ~(M_TX_INCOLMOD | B_TX_2X656CLK | B_TX_SYNCEMB | B_TX_INDDR | B_TX_PCLKDIV2);
 	udata |= 0x01; //input clock delay 1 for 1080P DDR
 	udata |= input_color_mode & F_MODE_CLRMOD_MASK; //define in it66121.h, F_MODE_RGB444
 	udata |= INPUT_SIGNAL_TYPE; //define in it66121.h,  24 bit sync seperate
-	reg_write(client, REG_TX_INPUT_MODE, udata);
+	reg_write(client, IT66121_INPUT_MODE, udata);
 
 	/*
 	 * Set color space converting by the input color space and output color space.
 	*/
 	it66121_set_CSC_scale(priv, input_color_mode);
 	/*hdmi mode*/
-	reg_write(client, REG_TX_HDMI_MODE, B_TX_HDMI_MODE);
+	reg_write(client, IT66121_HDMI_MODE, B_TX_HDMI_MODE);
 	/*dvi mode*/
-	//reg_write(client,REG_TX_HDMI_MODE, B_TX_DVI_MODE);
+	//reg_write(client,IT66121_HDMI_MODE, B_TX_DVI_MODE);
 #ifdef INVERT_VID_LATCHEDGE
-	udata = reg_read(client, REG_TX_CLK_CTRL1);
+	udata = reg_read(client, IT66121_CLK_CTRL1);
 	udata |= B_TX_VDO_LATCH_EDGE;
-	reg_write(client, REG_TX_CLK_CTRL1, udata);
+	reg_write(client, IT66121_CLK_CTRL1, udata);
 #endif
 
 	it66121_setup_AFE(priv, is_high_clk); // pass if High Freq request
-	reg_write(client, REG_TX_SW_RST, B_HDMITX_AUD_RST |
-			  B_TX_AREF_RST |
-			  B_TX_HDCP_RST_HDMITX);
+	reg_write(client, IT66121_SW_RST, IT66121_SW_RST_AUDIO_FIFO |
+			  IT66121_SW_RST_SOFT_AUD |
+			  IT66121_SW_RST_HDCP);
 
 	/*fire APFE*/
 	it66121_switch_blank(priv, 0);
-	reg_write(client, REG_TX_AFE_DRV_CTRL, 0);
+	reg_write(client, IT66121_AFE_DRV_CTRL, 0);
 
 	it66121_config_avi_info_frame(priv, aspec, Colorimetry, pixelrep, vic);
 
@@ -1081,14 +1070,6 @@ static void it66121_encoder_mode_set(struct drm_encoder *encoder,
 
 }
 
-static void it66121_encoder_save(struct drm_encoder *encoder)
-{
-}
-
-static void it66121_encoder_restore(struct drm_encoder *encoder)
-{
-}
-
 static bool t66121_encoder_mode_fixup(struct drm_encoder *encoder,
 									  const struct drm_display_mode *mode,
 									  struct drm_display_mode *adjusted_mode)
@@ -1098,8 +1079,6 @@ static bool t66121_encoder_mode_fixup(struct drm_encoder *encoder,
 
 static const struct drm_encoder_helper_funcs it66121_encoder_helper_funcs = {
 	.dpms = it66121_encoder_dpms,
-	.save =  it66121_encoder_save,
-	.restore = it66121_encoder_restore,
 	.mode_fixup = t66121_encoder_mode_fixup,
 	.prepare = it66121_encoder_prepare,
 	.commit = it66121_encoder_commit,
@@ -1110,16 +1089,16 @@ void it66121_clear_Interrupt(struct i2c_client *client)
 {
 	char intclr3, intdata4;
 	intdata4 = reg_read(client, 0xee);
-	intclr3 = reg_read(client, REG_TX_SYS_STATUS);
-	intclr3 = intclr3 | B_TX_CLR_AUD_CTS | B_TX_INTACTDONE;
+	intclr3 = reg_read(client, IT66121_SYS_STATUS0);
+	intclr3 = intclr3 | IT66121_SYS_STATUS0_CLEAR_AUD_CTS | IT66121_SYS_STATUS0_INTACTDONE;
 	if (intdata4)
 		reg_write(client, 0xEE, intdata4); // clear ext interrupt ;
 
-	reg_write(client, REG_TX_INT_CLR0, 0xFF);
-	reg_write(client, REG_TX_INT_CLR1, 0xFF);
-	reg_write(client, REG_TX_SYS_STATUS, intclr3); // clear interrupt.
-	intclr3 &= ~(B_TX_INTACTDONE);
-	reg_write(client, REG_TX_SYS_STATUS, intclr3); // INTACTDONE reset to zero.
+	reg_write(client, IT66121_INT_CLR0, 0xFF);
+	reg_write(client, IT66121_INT_CLR1, 0xFF);
+	reg_write(client, IT66121_SYS_STATUS0, intclr3); // clear interrupt.
+	intclr3 &= ~(IT66121_SYS_STATUS0_INTACTDONE);
+	reg_write(client, IT66121_SYS_STATUS0, intclr3); // INTACTDONE reset to zero.
 }
 
 static irqreturn_t it66121_thread_interrupt(int irq, void *data)
@@ -1132,45 +1111,45 @@ static irqreturn_t it66121_thread_interrupt(int irq, void *data)
 	u8 intdata2;
 	u8 intdata3;
 	u8 udata;
-	sysstat = reg_read(priv->hdmi, REG_TX_SYS_STATUS); //0x0E
+	sysstat = reg_read(priv->hdmi, IT66121_SYS_STATUS0);
 
-	intdata1 = reg_read(client, REG_TX_INT_STAT1); //0x06
-	intdata2 = reg_read(client, REG_TX_INT_STAT2); //0x07
-	intdata3 = reg_read(client, REG_TX_INT_STAT3); //0x08
+	intdata1 = reg_read(client, IT66121_INT_STAT1); //0x06
+	intdata2 = reg_read(client, IT66121_INT_STAT2); //0x07
+	intdata3 = reg_read(client, IT66121_INT_STAT3); //0x08
 
 	if (priv->powerstatus == 0)
 		it66121_power_on(priv);
 
 	it66121_clear_Interrupt(client);
 
-	if (intdata1 & B_TX_INT_DDCFIFO_ERR) {
+	if (intdata1 & IT66121_INT_STAT1_DDC_FIFO_ERR) {
 		//dev_err(&client->dev, "DDC FIFO Error.\n");
 		/*clear ddc fifo*/
-		reg_write(client, REG_TX_DDC_MASTER_CTRL, B_TX_MASTERDDC | B_TX_MASTERHOST);
-		reg_write(client, REG_TX_DDC_CMD, CMD_FIFO_CLR);
+		reg_write(client, IT66121_DDC_MASTER, IT66121_DDC_MASTER_DDC | IT66121_DDC_MASTER_HOST);
+		reg_write(client, IT66121_DDC_CMD, IT66121_DDC_CMD_FIFO_CLEAR);
 	}
 
-	if (intdata1 & B_TX_INT_DDC_BUS_HANG) {
+	if (intdata1 & IT66121_INT_STAT1_DDC_BUS_HANG) {
 		//dev_err(&client->dev, "DDC BUS HANG.\n");
 		/*abort ddc*/
 		it66121_abort_DDC(client);
 	}
 
-	if (intdata1 & B_TX_INT_AUD_OVERFLOW) {
+	if (intdata1 & IT66121_INT_STAT1_AUDIO_OVERFLOW) {
 		//dev_err(&client->dev, "AUDIO FIFO OVERFLOW.\n");
-		write_a_entry(priv, REG_TX_SW_RST, (B_HDMITX_AUD_RST | B_TX_AREF_RST),
-					  (B_HDMITX_AUD_RST | B_TX_AREF_RST));
-		udata = reg_read(client, REG_TX_SW_RST);
-		reg_write(client, REG_TX_SW_RST, udata & (~(B_HDMITX_AUD_RST | B_TX_AREF_RST)));
+		write_a_entry(priv, IT66121_SW_RST, (IT66121_SW_RST_AUDIO_FIFO | IT66121_SW_RST_SOFT_AUD),
+					  (IT66121_SW_RST_AUDIO_FIFO | IT66121_SW_RST_SOFT_AUD));
+		udata = reg_read(client, IT66121_SW_RST);
+		reg_write(client, IT66121_SW_RST, udata & (~(IT66121_SW_RST_AUDIO_FIFO | IT66121_SW_RST_SOFT_AUD)));
 	}
 
-	if (intdata3 & B_TX_INT_VIDSTABLE) {
+	if (intdata3 & IT66121_INT_STAT3_VID_STABLE) {
 		//dev_info(&client->dev, "it66121 interrupt video enabled\n");
-		sysstat = reg_read(client, REG_TX_SYS_STATUS);
-		if (sysstat & B_TXVIDSTABLE) {
+		sysstat = reg_read(client, IT66121_SYS_STATUS0);
+		if (sysstat & IT66121_SYS_STATUS0_TX_VID_STABLE) {
 			/*fire APFE*/
 			it66121_switch_blank(priv, 0);
-			reg_write(client, REG_TX_AFE_DRV_CTRL, 0);
+			reg_write(client, IT66121_AFE_DRV_CTRL, 0);
 		}
 	}
 
@@ -1201,26 +1180,26 @@ static void it66121_aud_config_aai(struct it66121_priv *priv)
 
 	it66121_switch_blank(priv, 1);
 	checksum = 0x100 - (AUDIO_INFOFRAME_VER + AUDIO_INFOFRAME_TYPE + AUDIO_INFOFRAME_LEN);
-	reg_write(client, REG_TX_PKT_AUDINFO_CC, aud_db[0]);
-	checksum -= reg_read(client, REG_TX_PKT_AUDINFO_CC);
+	reg_write(client, IT66121_PKT_AUDINFO_CC, aud_db[0]);
+	checksum -= reg_read(client, IT66121_PKT_AUDINFO_CC);
 	checksum &= 0xFF;
 
-	reg_write(client, REG_TX_PKT_AUDINFO_SF, aud_db[1]);
-	checksum -= reg_read(client, REG_TX_PKT_AUDINFO_SF);
+	reg_write(client, IT66121_PKT_AUDINFO_SF, aud_db[1]);
+	checksum -= reg_read(client, IT66121_PKT_AUDINFO_SF);
 	checksum &= 0xFF;
 
-	reg_write(client, REG_TX_PKT_AUDINFO_CA, aud_db[3]);
-	checksum -= reg_read(client, REG_TX_PKT_AUDINFO_CA);
+	reg_write(client, IT66121_PKT_AUDINFO_CA, aud_db[3]);
+	checksum -= reg_read(client, IT66121_PKT_AUDINFO_CA);
 	checksum &= 0xFF;
 
-	reg_write(client, REG_TX_PKT_AUDINFO_DM_LSV, aud_db[4]);
-	checksum -= reg_read(client, REG_TX_PKT_AUDINFO_DM_LSV);
+	reg_write(client, IT66121_PKT_AUDINFO_DM_LSV, aud_db[4]);
+	checksum -= reg_read(client, IT66121_PKT_AUDINFO_DM_LSV);
 	checksum &= 0xFF;
 
-	reg_write(client, REG_TX_PKT_AUDINFO_SUM, checksum);
+	reg_write(client, IT66121_PKT_AUDINFO_SUM, checksum);
 
 	it66121_switch_blank(priv, 0);
-	reg_write(client, REG_TX_AUD_INFOFRM_CTRL, B_TX_ENABLE_PKT | B_TX_REPEAT_PKT);
+	reg_write(client, IT66121_AUD_INFOFRM_CTRL, B_TX_ENABLE_PKT | B_TX_REPEAT_PKT);
 }
 
 static void it66121_aud_set_fs(struct it66121_priv *priv, u8 fs)
@@ -1231,7 +1210,7 @@ static void it66121_aud_set_fs(struct it66121_priv *priv, u8 fs)
 	u8 udata;
 	struct i2c_client *client = priv->hdmi;
 
-	if (B_TX_HBR & reg_read(client, REG_TX_AUD_HDAUDIO))
+	if (B_TX_HBR & reg_read(client, IT66121_AUD_HDAUDIO))
 		HBR_mode = 1;
 	else
 		HBR_mode = 0;
@@ -1272,19 +1251,19 @@ static void it66121_aud_set_fs(struct it66121_priv *priv, u8 fs)
 	reg_write(client, 0xF8, 0xC3);
 	reg_write(client, 0xF8, 0xA5);
 
-	udata =  reg_read(client, REG_TX_PKT_SINGLE_CTRL);
+	udata =  reg_read(client, IT66121_PKT_SINGLE_CTRL);
 	udata &= ~B_TX_SW_CTS;
-	reg_write(client, REG_TX_PKT_SINGLE_CTRL, udata);
+	reg_write(client, IT66121_PKT_SINGLE_CTRL, udata);
 
 	reg_write(client, 0xF8, 0xFF);
 
 	if (0 == HBR_mode) { //LPCM
 		it66121_switch_blank(priv, 1);
 		fs = AUDFS_768KHz;
-		reg_write(client, REG_TX_AUDCHST_CA_FS, 0x00 | fs);
+		reg_write(client, IT66121_AUDCHST_CA_FS, 0x00 | fs);
 		fs = ~fs; // OFS is the one's complement of FS
-		udata = (0x0f & reg_read(client, REG_TX_AUDCHST_OFS_WL));
-		reg_write(client, REG_TX_AUDCHST_OFS_WL, (fs << 4) | udata);
+		udata = (0x0f & reg_read(client, IT66121_AUDCHST_OFS_WL));
+		reg_write(client, IT66121_AUDCHST_OFS_WL, (fs << 4) | udata);
 		it66121_switch_blank(priv, 0);
 	}
 }
@@ -1296,12 +1275,12 @@ static void it66121_set_ChStat(struct it66121_priv *priv, u8 ucIEC60958ChStat[])
 
 	it66121_switch_blank(priv, 1);
 	udata = (ucIEC60958ChStat[0] << 1) & 0x7C;
-	reg_write(client, REG_TX_AUDCHST_MODE, udata);
-	reg_write(client, REG_TX_AUDCHST_CAT, ucIEC60958ChStat[1]); // 192, audio CATEGORY
-	reg_write(client, REG_TX_AUDCHST_SRCNUM, ucIEC60958ChStat[2] & 0xF);
-	reg_write(client, REG_TX_AUD0CHST_CHTNUM, (ucIEC60958ChStat[2] >> 4) & 0xF);
-	reg_write(client, REG_TX_AUDCHST_CA_FS, ucIEC60958ChStat[3]); // choose clock
-	reg_write(client, REG_TX_AUDCHST_OFS_WL, ucIEC60958ChStat[4]);
+	reg_write(client, IT66121_AUDCHST_MODE, udata);
+	reg_write(client, IT66121_AUDCHST_CAT, ucIEC60958ChStat[1]); // 192, audio CATEGORY
+	reg_write(client, IT66121_AUDCHST_SRCNUM, ucIEC60958ChStat[2] & 0xF);
+	reg_write(client, IT66121_AUD0CHST_CHTNUM, (ucIEC60958ChStat[2] >> 4) & 0xF);
+	reg_write(client, IT66121_AUDCHST_CA_FS, ucIEC60958ChStat[3]); // choose clock
+	reg_write(client, IT66121_AUDCHST_OFS_WL, ucIEC60958ChStat[4]);
 	it66121_switch_blank(priv, 0);
 }
 
@@ -1311,34 +1290,34 @@ static void it66121_set_HBRAudio(struct it66121_priv *priv)
 	struct i2c_client *client = priv->hdmi;
 	it66121_switch_blank(priv, 0);
 
-	reg_write(client, REG_TX_AUDIO_CTRL1, 0x47); // regE1 bOutputAudioMode should be loaded from ROM image.
-	reg_write(client, REG_TX_AUDIO_FIFOMAP, 0xE4); // default mapping.
+	reg_write(client, IT66121_AUDIO_CTRL1, 0x47); // regE1 bOutputAudioMode should be loaded from ROM image.
+	reg_write(client, IT66121_AUDIO_FIFOMAP, 0xE4); // default mapping.
 
 	if (CONFIG_INPUT_AUDIO_SPDIF) {
-		reg_write(client, REG_TX_AUDIO_CTRL0, M_TX_AUD_BIT | B_TX_AUD_SPDIF);
-		reg_write(client, REG_TX_AUDIO_CTRL3, B_TX_CHSTSEL);
+		reg_write(client, IT66121_AUDIO_CTRL0, M_TX_AUD_BIT | B_TX_AUD_SPDIF);
+		reg_write(client, IT66121_AUDIO_CTRL3, B_TX_CHSTSEL);
 	} else {
-		reg_write(client, REG_TX_AUDIO_CTRL0, M_TX_AUD_BIT);
-		reg_write(client, REG_TX_AUDIO_CTRL3, 0);
+		reg_write(client, IT66121_AUDIO_CTRL0, M_TX_AUD_BIT);
+		reg_write(client, IT66121_AUDIO_CTRL3, 0);
 	}
-	reg_write(client, REG_TX_AUD_SRCVALID_FLAT, 0x08);
-	reg_write(client, REG_TX_AUD_HDAUDIO, B_TX_HBR); // regE5 = 0 ;
+	reg_write(client, IT66121_AUD_SRCVALID_FLAT, 0x08);
+	reg_write(client, IT66121_AUD_HDAUDIO, B_TX_HBR); // regE5 = 0 ;
 
-	//uc = HDMITX_ReadI2C_Byte(client,REG_TX_CLK_CTRL1);
+	//uc = HDMITX_ReadI2C_Byte(client,IT66121_CLK_CTRL1);
 	//uc &= ~M_TX_AUD_DIV ;
-	//HDMITX_WriteI2C_Byte(client,REG_TX_CLK_CTRL1, uc);
+	//HDMITX_WriteI2C_Byte(client,IT66121_CLK_CTRL1, uc);
 
 	if (CONFIG_INPUT_AUDIO_SPDIF) {
 		u8 i;
 		for (i = 0; i < 100; i++) {
-			if (reg_read(client, REG_TX_CLK_STATUS2) & B_TX_OSF_LOCK) {
+			if (reg_read(client, IT66121_CLK_STATUS2) & B_TX_OSF_LOCK) {
 				break; // stable clock.
 			}
 		}
-		reg_write(client, REG_TX_AUDIO_CTRL0, M_TX_AUD_BIT |
+		reg_write(client, IT66121_AUDIO_CTRL0, M_TX_AUD_BIT |
 				  B_TX_AUD_SPDIF | B_TX_AUD_EN_SPDIF);
 	} else {
-		reg_write(client, REG_TX_AUDIO_CTRL0, M_TX_AUD_BIT |
+		reg_write(client, IT66121_AUDIO_CTRL0, M_TX_AUD_BIT |
 				  B_TX_AUD_EN_I2S3 |
 				  B_TX_AUD_EN_I2S2 |
 				  B_TX_AUD_EN_I2S1 |
@@ -1348,33 +1327,33 @@ static void it66121_set_HBRAudio(struct it66121_priv *priv)
 	udata &= ~(1 << 6);
 	reg_write(client, 0x5c, udata);
 
-	//hdmiTxDev[0].bAudioChannelEnable = reg_read(client, REG_TX_AUDIO_CTRL0);
-	// reg_write(client,REG_TX_SW_RST, rst  );
+	//hdmiTxDev[0].bAudioChannelEnable = reg_read(client, IT66121_AUDIO_CTRL0);
+	// reg_write(client,IT66121_SW_RST, rst  );
 }
 
 static void it66121_set_DSDAudio(struct i2c_client *client)
 {
 	// to be continue
 	// u8 rst;
-	// rst = reg_read(client,REG_TX_SW_RST);
+	// rst = reg_read(client,IT66121_SW_RST);
 
-	//red_write(client,REG_TX_SW_RST, rst | (B_HDMITX_AUD_RST|B_TX_AREF_RST) );
+	//red_write(client,IT66121_SW_RST, rst | (B_HDMITX_AUD_RST|B_TX_AREF_RST) );
 
-	reg_write(client, REG_TX_AUDIO_CTRL1, 0x41); // regE1 bOutputAudioMode should be loaded from ROM image.
-	reg_write(client, REG_TX_AUDIO_FIFOMAP, 0xE4); // default mapping.
+	reg_write(client, IT66121_AUDIO_CTRL1, 0x41); // regE1 bOutputAudioMode should be loaded from ROM image.
+	reg_write(client, IT66121_AUDIO_FIFOMAP, 0xE4); // default mapping.
 
-	reg_write(client, REG_TX_AUDIO_CTRL0, M_TX_AUD_BIT);
-	reg_write(client, REG_TX_AUDIO_CTRL3, 0);
+	reg_write(client, IT66121_AUDIO_CTRL0, M_TX_AUD_BIT);
+	reg_write(client, IT66121_AUDIO_CTRL3, 0);
 
-	reg_write(client, REG_TX_AUD_SRCVALID_FLAT, 0x00);
-	reg_write(client, REG_TX_AUD_HDAUDIO, B_TX_DSD); // regE5 = 0 ;
-													 //red_write(client,REG_TX_SW_RST, rst & ~(B_HDMITX_AUD_RST|B_TX_AREF_RST) );
+	reg_write(client, IT66121_AUD_SRCVALID_FLAT, 0x00);
+	reg_write(client, IT66121_AUD_HDAUDIO, B_TX_DSD); // regE5 = 0 ;
+													 //red_write(client,IT66121_SW_RST, rst & ~(B_HDMITX_AUD_RST|B_TX_AREF_RST) );
 
-	//uc = reg_read(client,REG_TX_CLK_CTRL1);
+	//uc = reg_read(client,IT66121_CLK_CTRL1);
 	//uc &= ~M_TX_AUD_DIV ;
-	//red_write(client,REG_TX_CLK_CTRL1, uc);
+	//red_write(client,IT66121_CLK_CTRL1, uc);
 
-	reg_write(client, REG_TX_AUDIO_CTRL0, M_TX_AUD_BIT |
+	reg_write(client, IT66121_AUDIO_CTRL0, M_TX_AUD_BIT |
 			  B_TX_AUD_EN_I2S3 |
 			  B_TX_AUD_EN_I2S2 |
 			  B_TX_AUD_EN_I2S1 |
@@ -1394,31 +1373,31 @@ static void it66121_set_NLPCMAudio(struct it66121_priv *priv)
 	}
 
 	it66121_switch_blank(priv, 0);
-	// HDMITX_WriteI2C_Byte(client,REG_TX_AUDIO_CTRL0, M_TX_AUD_24BIT|B_TX_AUD_SPDIF);
-	reg_write(client, REG_TX_AUDIO_CTRL0, AudioEnable);
-	//HDMITX_AndREG_Byte(REG_TX_SW_RST,~(B_HDMITX_AUD_RST|B_TX_AREF_RST));
+	// HDMITX_WriteI2C_Byte(client,IT66121_AUDIO_CTRL0, M_TX_AUD_24BIT|B_TX_AUD_SPDIF);
+	reg_write(client, IT66121_AUDIO_CTRL0, AudioEnable);
+	//HDMITX_AndREG_Byte(IT66121_SW_RST,~(B_HDMITX_AUD_RST|B_TX_AREF_RST));
 
-	reg_write(client, REG_TX_AUDIO_CTRL1, 0x01); // regE1 bOutputAudioMode should be loaded from ROM image.
-	reg_write(client, REG_TX_AUDIO_FIFOMAP, 0xE4); // default mapping.
+	reg_write(client, IT66121_AUDIO_CTRL1, 0x01); // regE1 bOutputAudioMode should be loaded from ROM image.
+	reg_write(client, IT66121_AUDIO_FIFOMAP, 0xE4); // default mapping.
 
 #ifdef USE_SPDIF_CHSTAT
-	reg_write(client, REG_TX_AUDIO_CTRL3, B_TX_CHSTSEL);
+	reg_write(client, IT66121_AUDIO_CTRL3, B_TX_CHSTSEL);
 #else // not USE_SPDIF_CHSTAT
-	reg_write(client, REG_TX_AUDIO_CTRL3, 0);
+	reg_write(client, IT66121_AUDIO_CTRL3, 0);
 #endif // USE_SPDIF_CHSTAT
 
-	reg_write(client, REG_TX_AUD_SRCVALID_FLAT, 0x00);
-	reg_write(client, REG_TX_AUD_HDAUDIO, 0x00); // regE5 = 0 ;
+	reg_write(client, IT66121_AUD_SRCVALID_FLAT, 0x00);
+	reg_write(client, IT66121_AUD_HDAUDIO, 0x00); // regE5 = 0 ;
 
 	if (CONFIG_INPUT_AUDIO_SPDIF) {
 		for (i = 0; i < 100; i++) {
-			if (reg_read(client, REG_TX_CLK_STATUS2) & B_TX_OSF_LOCK) {
+			if (reg_read(client, IT66121_CLK_STATUS2) & B_TX_OSF_LOCK) {
 				break; // stable clock.
 			}
 		}
 	}
 	priv->AudioChannelEnable = AudioEnable;
-	reg_write(client, REG_TX_AUDIO_CTRL0, AudioEnable | B_TX_AUD_EN_I2S0);
+	reg_write(client, IT66121_AUDIO_CTRL0, AudioEnable | B_TX_AUD_EN_I2S0);
 }
 
 static void it66121_set_LPCMAudio(struct it66121_priv *priv,
@@ -1476,35 +1455,35 @@ static void it66121_set_LPCMAudio(struct it66121_priv *priv,
 		AudioFormat |= 0x01;
 
 	it66121_switch_blank(priv, 0);
-	reg_write(client, REG_TX_AUDIO_CTRL0, AudioEnable & 0xF0);
+	reg_write(client, IT66121_AUDIO_CTRL0, AudioEnable & 0xF0);
 
 	// regE1 bOutputAudioMode should be loaded from ROM image.
-	reg_write(client, REG_TX_AUDIO_CTRL1,
+	reg_write(client, IT66121_AUDIO_CTRL1,
 			  AudioFormat |
 			  B_TX_AUDFMT_DELAY_1T_TO_WS |
 			  B_TX_AUDFMT_RISE_EDGE_SAMPLE_WS
 			 );
 
 
-	reg_write(client, REG_TX_AUDIO_FIFOMAP, 0xE4); // default mapping.
+	reg_write(client, IT66121_AUDIO_FIFOMAP, 0xE4); // default mapping.
 #ifdef USE_SPDIF_CHSTAT
 	if (CONFIG_INPUT_AUDIO_SPDIF) {
-		reg_write(client, REG_TX_AUDIO_CTRL3, B_TX_CHSTSEL);
+		reg_write(client, IT66121_AUDIO_CTRL3, B_TX_CHSTSEL);
 	} else {
-		reg_write(client, REG_TX_AUDIO_CTRL3, 0);
+		reg_write(client, IT66121_AUDIO_CTRL3, 0);
 	}
 #else // not USE_SPDIF_CHSTAT
-	reg_write(client, REG_TX_AUDIO_CTRL3, 0);
+	reg_write(client, IT66121_AUDIO_CTRL3, 0);
 #endif // USE_SPDIF_CHSTAT
 
-	reg_write(client, REG_TX_AUD_SRCVALID_FLAT, 0x00);
-	reg_write(client, REG_TX_AUD_HDAUDIO, 0x00); // regE5 = 0 ;
+	reg_write(client, IT66121_AUD_SRCVALID_FLAT, 0x00);
+	reg_write(client, IT66121_AUD_HDAUDIO, 0x00); // regE5 = 0 ;
 	priv->AudioChannelEnable = AudioEnable;
 	if (CONFIG_INPUT_AUDIO_SPDIF) {
 		u8 i;
 		write_a_entry(priv, 0x5c, (1 << 6), (1 << 6));
 		for (i = 0; i < 100; i++) {
-			if (reg_read(client, REG_TX_CLK_STATUS2) & B_TX_OSF_LOCK) {
+			if (reg_read(client, IT66121_CLK_STATUS2) & B_TX_OSF_LOCK) {
 				break; // stable clock.
 			}
 		}
@@ -1519,16 +1498,16 @@ static int it66121_aud_output_config(struct it66121_priv *priv,
 	u8 fs;
 	u8 ucIEC60958ChStat[8];
 
-	write_a_entry(priv, REG_TX_SW_RST, (B_HDMITX_AUD_RST | B_TX_AREF_RST),
-				  (B_HDMITX_AUD_RST | B_TX_AREF_RST));
-	reg_write(client, REG_TX_CLK_CTRL0, B_TX_AUTO_OVER_SAMPLING_CLOCK | B_TX_EXT_256FS | 0x01);
+	write_a_entry(priv, IT66121_SW_RST, (IT66121_SW_RST_AUDIO_FIFO | IT66121_SW_RST_SOFT_AUD),
+				  (IT66121_SW_RST_AUDIO_FIFO | IT66121_SW_RST_SOFT_AUD));
+	reg_write(client, IT66121_CLK_CTRL0, B_TX_AUTO_OVER_SAMPLING_CLOCK | B_TX_EXT_256FS | 0x01);
 
 	write_a_entry(priv, 0x0F, 0x10, 0x00); // power on the ACLK
 
 	//use i2s
-	udata = reg_read(client, REG_TX_AUDIO_CTRL0);
+	udata = reg_read(client, IT66121_AUDIO_CTRL0);
 	udata &= ~B_TX_AUD_SPDIF;
-	reg_write(client, REG_TX_AUDIO_CTRL0, udata);
+	reg_write(client, IT66121_AUDIO_CTRL0, udata);
 
 
 	// one bit audio have no channel status.
@@ -1568,8 +1547,7 @@ static int it66121_aud_output_config(struct it66121_priv *priv,
 	ucIEC60958ChStat[3] = fs;
 	ucIEC60958ChStat[4] = (((~fs) << 4) & 0xF0) | CHTSTS_SWCODE; // Fs | 24bit word length
 
-
-	write_a_entry(priv, REG_TX_SW_RST, (B_HDMITX_AUD_RST | B_TX_AREF_RST), B_TX_AREF_RST);
+	write_a_entry(priv, IT66121_SW_RST, (IT66121_SW_RST_AUDIO_FIFO | IT66121_SW_RST_SOFT_AUD), IT66121_SW_RST_SOFT_AUD);
 
 	switch (CNOFIG_INPUT_AUDIO_TYPE) {
 	case T_AUDIO_HBR:
@@ -1598,16 +1576,16 @@ static int it66121_aud_output_config(struct it66121_priv *priv,
 		// can add auto adjust
 		break;
 	}
-	udata = reg_read(client, REG_TX_INT_MASK1);
-	udata &= ~B_TX_AUDIO_OVFLW_MASK;
-	reg_write(client, REG_TX_INT_MASK1, udata);
-	reg_write(client, REG_TX_AUDIO_CTRL0, priv->AudioChannelEnable);
+	udata = reg_read(client, IT66121_INT_MASK1);
+	udata &= ~IT66121_INT_MASK1_AUDIO_OVERFLOW;
+	reg_write(client, IT66121_INT_MASK1, udata);
+	reg_write(client, IT66121_AUDIO_CTRL0, priv->AudioChannelEnable);
 
-	write_a_entry(priv, REG_TX_SW_RST, (B_HDMITX_AUD_RST | B_TX_AREF_RST), 0);
+	write_a_entry(priv, IT66121_SW_RST, (IT66121_SW_RST_AUDIO_FIFO | IT66121_SW_RST_SOFT_AUD), 0);
 	return 0;
 }
 
-static int it66121_audio_hw_params(struct device *dev,
+static int it66121_audio_hw_params(struct device *dev, void *data,
 				   struct hdmi_codec_daifmt *daifmt,
 				   struct hdmi_codec_params *params)
 {
@@ -1619,15 +1597,14 @@ static int it66121_audio_hw_params(struct device *dev,
 
 	it66121_aud_config_aai(priv);
 	it66121_aud_output_config(priv, params);
-	it66121_dump_reg(priv);
 	return 0;
 }
 
-static void it66121_audio_shutdown(struct device *dev)
+static void it66121_audio_shutdown(struct device *dev, void *data)
 {
 }
 
-static int it66121_audio_digital_mute(struct device *dev, bool enable)
+static int it66121_audio_digital_mute(struct device *dev, void *data, bool enable)
 {
 	struct it66121_priv *priv = dev_get_drvdata(dev);
 
@@ -1637,25 +1614,14 @@ static int it66121_audio_digital_mute(struct device *dev, bool enable)
 	return 0;
 }
 
-static int it66121_audio_get_eld(struct device *dev,
+static int it66121_audio_get_eld(struct device *dev, void *data,
 				 uint8_t *buf, size_t len)
 {
 	struct it66121_priv *priv = dev_get_drvdata(dev);
-	struct drm_mode_config *config = &priv->encoder.dev->mode_config;
-	struct drm_connector *connector;
-	int ret = -ENODEV;
 
-	mutex_lock(&config->mutex);
-	list_for_each_entry(connector, &config->connector_list, head) {
-		if (&priv->encoder == connector->encoder) {
-			memcpy(buf, connector->eld,
-				   min(sizeof(connector->eld), len));
-			ret = 0;
-		}
-	}
-	mutex_unlock(&config->mutex);
+	memcpy(buf, priv->connector.eld, min(sizeof(priv->connector.eld), len));
 
-	return ret;
+	return 0;
 }
 
 static const struct hdmi_codec_ops audio_codec_ops = {
@@ -1688,9 +1654,9 @@ static int it66121_init(struct i2c_client *client, struct it66121_priv *priv)
 	int vender_id1, vender_id2, device_id;
 
 	mutex_init(&priv->mutex);   /* protect the range items */
-	vender_id1 = reg_read(priv->hdmi, REG_TX_VENDOR_ID0);
-	vender_id2 = reg_read(priv->hdmi, REG_TX_VENDOR_ID1);
-	device_id = reg_read(priv->hdmi, REG_TX_DEVICE_ID0);
+	vender_id1 = reg_read(priv->hdmi, IT66121_VENDOR_ID0);
+	vender_id2 = reg_read(priv->hdmi, IT66121_VENDOR_ID1);
+	device_id = reg_read(priv->hdmi, IT66121_DEVICE_ID0);
 
 	if (!(vender_id1 == 0x54 &&
 		  vender_id2 == 0x49 &&
@@ -1782,10 +1748,9 @@ static int it66121_bind(struct device *dev, struct device *master, void *data)
 	priv->connector.polled = DRM_CONNECTOR_POLL_HPD;
 	priv->encoder.possible_crtcs = crtcs;
 
-
 	drm_encoder_helper_add(&priv->encoder, &it66121_encoder_helper_funcs);
 	ret = drm_encoder_init(drm, &priv->encoder, &it66121_encoder_funcs,
-						   DRM_MODE_ENCODER_TMDS);
+						   DRM_MODE_ENCODER_TMDS, NULL);
 
 	drm_connector_helper_add(&priv->connector, &it66121_connector_helper_funcs);
 	ret = drm_connector_init(drm, &priv->connector,
