@@ -266,9 +266,9 @@
 &i2c2 {
 	status = "okay";
 
-	it66121: hdmi@98 {
+	it66121: hdmi@4c {
 		compatible = "ite,it66121";
-		reg = <(0x98 | I2C_TEN_BIT_ADDRESS)>;
+		reg = <0x4c>;
 		interrupt-parent = <&gpio2>;
 		interrupts = <RK_PD6 IRQ_TYPE_LEVEL_LOW>;
 //		pinctrl-names = "default";
@@ -283,15 +283,13 @@
 		pvcc12-supply = <&vdd_hdmi>;
 		pvcc33-supply = <&vcc_hdmi>;
 		vcc33-supply = <&vcc_hdmi>;
+
+		port {
+			it66121_in_vop1: endpoint {
+				remote-endpoint = <&vop1_out_it66121>;
+			};
+		};
 	};
-};
-
-&vop0 {
-	status = "okay";
-};
-
-&vop1 {
-	status = "okay";
 };
 
 &mmc0 {
@@ -387,6 +385,24 @@
 
 &usb_otg {
 	status = "okay";
+};
+
+&vop0 {
+	status = "okay";
+};
+
+&vop0_out {
+	/* rk1000 */
+};
+
+&vop1 {
+	status = "okay";
+};
+
+&vop1_out {
+	vop1_out_it66121: endpoint {
+		remote-endpoint = <&it66121_in_vop1>;
+	};
 };
 
 &wdt {
