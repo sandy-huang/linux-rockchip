@@ -1,3 +1,10 @@
+// SPDX-License-Identifier: GPL-2.0
+/*
+ * Copyright (C) 2018 Heiko Stuebner <heiko@sntech.de>
+ *
+ * based on beagleboard it66121 i2c encoder driver
+ * Copyright (C) 2017 Baozhu Zuo <zuobaozhu@gmail.com>
+ */
 #include <linux/gpio/consumer.h>
 #include <linux/hdmi.h>
 #include <linux/module.h>
@@ -414,9 +421,9 @@ static int write_a_entry(struct it66121 *priv, u8 reg, u8 mask, u8 val)
 	return 0;
 }
 
-static inline void it66121_switch_blank(struct it66121 *priv, u8 blank)
+static inline void it66121_switch_bank(struct it66121 *priv, u8 bank)
 {
-	write_a_entry(priv, 0x0f, 1, blank);
+	write_a_entry(priv, 0x0f, 1, bank);
 }
 
 static int it66121_load_reg_table(struct it66121 *priv, struct a_reg_entry table[])
@@ -540,7 +547,7 @@ static int it66121_read_edid_block(void *data, u8 *buf, unsigned int blk, size_t
 
 	bCurrOffset = (blk % 2) / length;
 	bSegment  = blk / length;
-	it66121_switch_blank(priv, 0);
+	it66121_switch_bank(priv, 0);
 
 	while (length > 0) {
 		ReqCount = (length > DDC_FIFO_MAXREQ) ? DDC_FIFO_MAXREQ : length;
@@ -617,7 +624,6 @@ static int it66121_connector_get_modes(struct drm_connector *connector)
 		kfree(edid);
 	}
 
-	kfree(edid);
 	printk("it66121_connector_get_modes->color_formats: %x", connector->display_info.color_formats);
 	return num;
 }
@@ -637,7 +643,6 @@ static const struct drm_connector_helper_funcs it66121_connector_helper_funcs = 
 static void it66121_bridge_disable(struct drm_bridge *bridge)
 {
 	struct it66121 *priv = bridge_to_it66121(bridge);
-	struct i2c_client *client = priv->i2c;
 	u8 udata;
 
 	/* disable video output */
@@ -657,7 +662,6 @@ static void it66121_bridge_disable(struct drm_bridge *bridge)
 static void it66121_set_CSC_scale(struct it66121 *priv,
 				  u8 input_color_mode)
 {
-	struct i2c_client *client = priv->i2c;
 	u8 csc = 0;
 	u8 filter = 0;
 	u8 udata = 0;
@@ -780,8 +784,6 @@ static void it66121_set_CSC_scale(struct it66121 *priv,
 
 static void it66121_setup_AFE(struct it66121 *priv, u8 level)
 {
-	struct i2c_client *client = priv->i2c;
-
 	reg_write(priv, IT66121_AFE_DRV_CTRL, B_TX_AFE_DRV_RST); /* 0x10 */
 	switch (level) {
 	case 1:
@@ -804,7 +806,6 @@ static void it66121_setup_AFE(struct it66121 *priv, u8 level)
 static void it66121_config_avi_info_frame(struct it66121 *priv, u8 aspec,
 					  u8 colorimetry, u8 pixelrep, int vic)
 {
-	struct i2c_client *client = priv->i2c;
 	u8 AVI_DB[12];
 	int checksum;
 	int i;
@@ -825,7 +826,7 @@ static void it66121_config_avi_info_frame(struct it66121 *priv, u8 aspec,
 	AVI_DB[0] |= 0x02;
 	AVI_DB[1] = 8;
 	AVI_DB[1] |= (aspec != HDMI_16x9) ? (1 << 4) : (2 << 4); // 4:3 or 16:9
-	AVI_DB[1] |= (colorimetry != HDMI_ITU709) ? (1 << 6) : (2 << 6); // 4:3 or 16:9
+//	AVI_DB[1] |= (colorimetry != HDMI_ITU709) ? (1 << 6) : (2 << 6); // 4:3 or 16:9
 	AVI_DB[2] = 0;
 	AVI_DB[3] = vic;
 	AVI_DB[4] =  pixelrep & 3;
@@ -838,7 +839,7 @@ static void it66121_config_avi_info_frame(struct it66121 *priv, u8 aspec,
 	AVI_DB[11] = 0;
 	AVI_DB[12] = 0;
 
-	it66121_switch_blank(priv, 1);
+	it66121_switch_bank(priv, 1);
 	reg_write(priv, IT66121_AVIINFO_DB1, AVI_DB[0]);
 	reg_write(priv, IT66121_AVIINFO_DB2, AVI_DB[1]);
 	reg_write(priv, IT66121_AVIINFO_DB3, AVI_DB[2]);
@@ -852,13 +853,16 @@ static void it66121_config_avi_info_frame(struct it66121 *priv, u8 aspec,
 	reg_write(priv, IT66121_AVIINFO_DB11, AVI_DB[10]);
 	reg_write(priv, IT66121_AVIINFO_DB12, AVI_DB[11]);
 	reg_write(priv, IT66121_AVIINFO_DB13, AVI_DB[12]);
+dev_warn(&priv->i2c->dev, "old code\n");
 	for (i = 0, checksum = 0; i < 13; i++) {
 		checksum -= AVI_DB[i];
+dev_warn(&priv->i2c->dev, "%d, 0x%x: 0x%x\n", i, IT66121_AVIINFO_DB1+i, AVI_DB[i]);
 	}
 	checksum -= AVI_INFOFRAME_VER + AVI_INFOFRAME_TYPE + AVI_INFOFRAME_LEN;
 	reg_write(priv, IT66121_AVIINFO_SUM, checksum);
+dev_warn(&priv->i2c->dev, "chk, 0x%x: 0x%x\n", IT66121_AVIINFO_SUM, (u8) checksum);
 
-	it66121_switch_blank(priv, 0);
+	it66121_switch_bank(priv, 0);
 
 	reg_write(priv, IT66121_AVI_INFOFRM_CTRL, B_TX_ENABLE_PKT | B_TX_REPEAT_PKT);
 }
@@ -880,7 +884,6 @@ static void it66121_config_avi_info_frame(struct it66121 *priv, u8 aspec,
 static void it66121_enable_video_output(struct it66121 *priv,
 					struct drm_display_mode *mode)
 {
-	struct i2c_client *client = priv->i2c;
 	int name_len = 0;
 	u8 is_high_clk = 0;
 	u8 pixelrep = 0;
@@ -930,9 +933,9 @@ static void it66121_enable_video_output(struct it66121 *priv,
 			  IT66121_SW_RST_HDCP);
 
 	// 2009/12/09 added by jau-chih.tseng@ite.com.tw
-	it66121_switch_blank(priv, 1);
+	it66121_switch_bank(priv, 1);
 	reg_write(priv, IT66121_AVIINFO_DB1, 0x00);
-	it66121_switch_blank(priv, 0);
+	it66121_switch_bank(priv, 0);
 	//~jau-chih.tseng@ite.com.tw
 
 	/*Set regC1[0] = '1' for AVMUTE the output, only support hdmi mode now*/
@@ -977,7 +980,7 @@ static void it66121_enable_video_output(struct it66121 *priv,
 			  IT66121_SW_RST_HDCP);
 
 	/*fire APFE*/
-	it66121_switch_blank(priv, 0);
+	it66121_switch_bank(priv, 0);
 	reg_write(priv, IT66121_AFE_DRV_CTRL, 0);
 
 	it66121_config_avi_info_frame(priv, aspec, Colorimetry, pixelrep, vic);
@@ -988,11 +991,37 @@ static void it66121_enable_video_output(struct it66121 *priv,
 
 static void it66121_bridge_mode_set(struct drm_bridge *bridge,
 				    struct drm_display_mode *mode,
-				    struct drm_display_mode *adjusted_mode)
+				    struct drm_display_mode *adj)
 {
 	struct it66121 *priv = bridge_to_it66121(bridge);
+	struct hdmi_avi_infoframe frame;
+	u8 buf[HDMI_INFOFRAME_SIZE(AVI)];
+	int ret;
 
-	it66121_enable_video_output(priv, mode);
+	it66121_enable_video_output(priv, adj);
+
+	ret = drm_hdmi_avi_infoframe_from_display_mode(&frame, adj, false);
+	if (ret < 0) {
+		DRM_ERROR("couldn't fill AVI infoframe\n");
+		return;
+	}
+
+	ret = hdmi_avi_infoframe_pack(&frame, buf, sizeof(buf));
+	if (ret < 0) {
+		DRM_ERROR("failed to pack AVI infoframe: %d\n", ret);
+		return;
+	}
+
+dev_warn(&priv->i2c->dev, "new code\n");
+for (ret = 0; ret < HDMI_AVI_INFOFRAME_SIZE; ret++)
+	dev_warn(&priv->i2c->dev, "%d, 0x%x: 0x%x\n", ret, IT66121_AVIINFO_DB1+ret, buf[HDMI_INFOFRAME_HEADER_SIZE + ret]);
+dev_warn(&priv->i2c->dev, "chk, 0x%x: 0x%x\n", IT66121_AVIINFO_SUM, buf[3]);
+
+	/* Do not send the infoframe header, but keep the CRC field. */
+/*	regmap_bulk_write(regmap, SII902X_TPI_AVI_INFOFRAME,
+			  buf + HDMI_INFOFRAME_HEADER_SIZE - 1,
+			  HDMI_AVI_INFOFRAME_SIZE + 1);*/
+
 }
 
 
@@ -1105,7 +1134,7 @@ static irqreturn_t it66121_thread_interrupt(int irq, void *data)
 		sysstat = reg_read(priv, IT66121_SYS_STATUS0);
 		if (sysstat & IT66121_SYS_STATUS0_TX_VID_STABLE) {
 			/*fire APFE*/
-			it66121_switch_blank(priv, 0);
+			it66121_switch_bank(priv, 0);
 			reg_write(priv, IT66121_AFE_DRV_CTRL, 0);
 		}
 	}
@@ -1118,18 +1147,18 @@ static irqreturn_t it66121_thread_interrupt(int irq, void *data)
 
 static void it66121_aud_config_aai(struct it66121 *priv)
 {
-	struct i2c_client *client = priv->i2c;
 	u8 aud_db[AUDIO_INFOFRAME_LEN];
 	unsigned int checksum = 0;
 	u8 i;
 
+//FIXME check and use hdmi_audio_infoframe_pack
 	aud_db[0] = 1;
 
 	for (i = 1; i < AUDIO_INFOFRAME_LEN; i++) {
 		aud_db[i] = 0;
 	}
 
-	it66121_switch_blank(priv, 1);
+	it66121_switch_bank(priv, 1);
 	checksum = 0x100 - (AUDIO_INFOFRAME_VER + AUDIO_INFOFRAME_TYPE + AUDIO_INFOFRAME_LEN);
 	reg_write(priv, IT66121_PKT_AUDINFO_CC, aud_db[0]);
 	checksum -= reg_read(priv, IT66121_PKT_AUDINFO_CC);
@@ -1149,7 +1178,7 @@ static void it66121_aud_config_aai(struct it66121 *priv)
 
 	reg_write(priv, IT66121_PKT_AUDINFO_SUM, checksum);
 
-	it66121_switch_blank(priv, 0);
+	it66121_switch_bank(priv, 0);
 	reg_write(priv, IT66121_AUD_INFOFRM_CTRL, B_TX_ENABLE_PKT | B_TX_REPEAT_PKT);
 }
 
@@ -1159,7 +1188,6 @@ static void it66121_aud_set_fs(struct it66121 *priv, u8 fs)
 	u32  LastCTS = 0;
 	u8 HBR_mode;
 	u8 udata;
-	struct i2c_client *client = priv->i2c;
 
 	if (B_TX_HBR & reg_read(priv, IT66121_AUD_HDAUDIO))
 		HBR_mode = 1;
@@ -1189,7 +1217,7 @@ static void it66121_aud_set_fs(struct it66121 *priv, u8 fs)
 	}
 
 	// tr_printf((" n = %ld\n",n));
-	it66121_switch_blank(priv, 1);
+	it66121_switch_bank(priv, 1);
 	reg_write(priv, REGPktAudN0, (u8)((n)&0xFF));
 	reg_write(priv, REGPktAudN1, (u8)((n >> 8) & 0xFF));
 	reg_write(priv, REGPktAudN2, (u8)((n >> 16) & 0xF));
@@ -1197,7 +1225,7 @@ static void it66121_aud_set_fs(struct it66121 *priv, u8 fs)
 	reg_write(priv, REGPktAudCTS0, (u8)((LastCTS)&0xFF));
 	reg_write(priv, REGPktAudCTS1, (u8)((LastCTS >> 8) & 0xFF));
 	reg_write(priv, REGPktAudCTS2, (u8)((LastCTS >> 16) & 0xF));
-	it66121_switch_blank(priv, 0);
+	it66121_switch_bank(priv, 0);
 
 	reg_write(priv, 0xF8, 0xC3);
 	reg_write(priv, 0xF8, 0xA5);
@@ -1209,22 +1237,21 @@ static void it66121_aud_set_fs(struct it66121 *priv, u8 fs)
 	reg_write(priv, 0xF8, 0xFF);
 
 	if (0 == HBR_mode) { //LPCM
-		it66121_switch_blank(priv, 1);
+		it66121_switch_bank(priv, 1);
 		fs = AUDFS_768KHz;
 		reg_write(priv, IT66121_AUDCHST_CA_FS, 0x00 | fs);
 		fs = ~fs; // OFS is the one's complement of FS
 		udata = (0x0f & reg_read(priv, IT66121_AUDCHST_OFS_WL));
 		reg_write(priv, IT66121_AUDCHST_OFS_WL, (fs << 4) | udata);
-		it66121_switch_blank(priv, 0);
+		it66121_switch_bank(priv, 0);
 	}
 }
 
 static void it66121_set_ChStat(struct it66121 *priv, u8 ucIEC60958ChStat[])
 {
 	u8 udata;
-	struct i2c_client *client = priv->i2c;
 
-	it66121_switch_blank(priv, 1);
+	it66121_switch_bank(priv, 1);
 	udata = (ucIEC60958ChStat[0] << 1) & 0x7C;
 	reg_write(priv, IT66121_AUDCHST_MODE, udata);
 	reg_write(priv, IT66121_AUDCHST_CAT, ucIEC60958ChStat[1]); // 192, audio CATEGORY
@@ -1232,14 +1259,13 @@ static void it66121_set_ChStat(struct it66121 *priv, u8 ucIEC60958ChStat[])
 	reg_write(priv, IT66121_AUD0CHST_CHTNUM, (ucIEC60958ChStat[2] >> 4) & 0xF);
 	reg_write(priv, IT66121_AUDCHST_CA_FS, ucIEC60958ChStat[3]); // choose clock
 	reg_write(priv, IT66121_AUDCHST_OFS_WL, ucIEC60958ChStat[4]);
-	it66121_switch_blank(priv, 0);
+	it66121_switch_bank(priv, 0);
 }
 
 static void it66121_set_HBRAudio(struct it66121 *priv)
 {
 	u8 udata;
-	struct i2c_client *client = priv->i2c;
-	it66121_switch_blank(priv, 0);
+	it66121_switch_bank(priv, 0);
 
 	reg_write(priv, IT66121_AUDIO_CTRL1, 0x47); // regE1 bOutputAudioMode should be loaded from ROM image.
 	reg_write(priv, IT66121_AUDIO_FIFOMAP, 0xE4); // default mapping.
@@ -1315,7 +1341,6 @@ static void it66121_set_NLPCMAudio(struct it66121 *priv)
 { // no Source Num, no I2S.
 	u8 AudioEnable, AudioFormat;
 	u8 i;
-	struct i2c_client *client = priv->i2c;
 	AudioFormat = 0x01; // NLPCM must use standard I2S mode.
 	if (CONFIG_INPUT_AUDIO_SPDIF) {
 		AudioEnable = M_TX_AUD_BIT | B_TX_AUD_SPDIF;
@@ -1323,7 +1348,7 @@ static void it66121_set_NLPCMAudio(struct it66121 *priv)
 		AudioEnable = M_TX_AUD_BIT;
 	}
 
-	it66121_switch_blank(priv, 0);
+	it66121_switch_bank(priv, 0);
 	// HDMITX_WriteI2C_Byte(client,IT66121_AUDIO_CTRL0, M_TX_AUD_24BIT|B_TX_AUD_SPDIF);
 	reg_write(priv, IT66121_AUDIO_CTRL0, AudioEnable);
 	//HDMITX_AndREG_Byte(IT66121_SW_RST,~(B_HDMITX_AUD_RST|B_TX_AREF_RST));
@@ -1354,7 +1379,6 @@ static void it66121_set_NLPCMAudio(struct it66121 *priv)
 static void it66121_set_LPCMAudio(struct it66121 *priv,
 				  u8 AudioSrcNum, u8 AudSWL)
 {
-	struct i2c_client *client = priv->i2c;
 	u8 AudioEnable, AudioFormat;
 
 	AudioEnable = 0;
@@ -1405,7 +1429,7 @@ static void it66121_set_LPCMAudio(struct it66121 *priv,
 	if (AudSWL != 16)
 		AudioFormat |= 0x01;
 
-	it66121_switch_blank(priv, 0);
+	it66121_switch_bank(priv, 0);
 	reg_write(priv, IT66121_AUDIO_CTRL0, AudioEnable & 0xF0);
 
 	// regE1 bOutputAudioMode should be loaded from ROM image.
@@ -1444,7 +1468,6 @@ static void it66121_set_LPCMAudio(struct it66121 *priv,
 static int it66121_aud_output_config(struct it66121 *priv,
 				     struct hdmi_codec_params *param)
 {
-	struct i2c_client *client = priv->i2c;
 	u8 udata;
 	u8 fs;
 	u8 ucIEC60958ChStat[8];
@@ -1541,9 +1564,8 @@ static int it66121_audio_hw_params(struct device *dev, void *data,
 				   struct hdmi_codec_params *params)
 {
 	struct it66121 *priv = dev_get_drvdata(dev);
-	struct i2c_client *client = priv->i2c;
 
-	dev_err(&client->dev, "%s: %u Hz, %d bit, %d channels\n", __func__,
+	dev_err(&priv->i2c->dev, "%s: %u Hz, %d bit, %d channels\n", __func__,
 			params->sample_rate, params->sample_width, params->channels);
 
 	it66121_aud_config_aai(priv);
