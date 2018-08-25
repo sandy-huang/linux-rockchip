@@ -24,6 +24,7 @@
 #include <linux/pm_runtime.h>
 #include <linux/module.h>
 #include <linux/of_graph.h>
+#include <linux/of_platform.h>
 #include <linux/component.h>
 #include <linux/console.h>
 #include <linux/iommu.h>
@@ -266,6 +267,32 @@ static const struct dev_pm_ops rockchip_drm_pm_ops = {
 #define MAX_ROCKCHIP_SUB_DRIVERS 16
 static struct platform_driver *rockchip_sub_drivers[MAX_ROCKCHIP_SUB_DRIVERS];
 static int num_rockchip_sub_drivers;
+
+/*
+ * check if a vop output-endpoint is a subdriver or bridge.
+ */
+bool rockchip_drm_endpoint_is_subdriver(struct device_node *ep)
+{
+	struct device_node *node = of_graph_get_remote_port_parent(ep);
+	struct platform_device *pdev;
+	int i;
+
+	if (!node)
+		return false;
+
+	pdev = of_find_device_by_node(node);
+	if (!pdev)
+		return false;
+
+	for (i = 0; i < num_rockchip_sub_drivers; i++) {
+		struct device_driver *drv = pdev->dev.driver;
+
+		if (rockchip_sub_drivers[i] == to_platform_driver(drv))
+			return true;
+	}
+
+	return false;
+}
 
 static int compare_dev(struct device *dev, void *data)
 {
