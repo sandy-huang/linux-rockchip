@@ -1075,10 +1075,20 @@ static const struct drm_bridge_funcs it66121_bridge_funcs = {
 
 
 
-void it66121_clear_Interrupt(struct it66121 *priv)
+static irqreturn_t it66121_thread_interrupt(int irq, void *data)
 {
+	struct it66121 *priv = data;
+	u8 sysstat;
+	u8 intdata1;
+	u8 intdata2;
+	u8 intdata3;
+	u8 udata;
 	char intclr3, intdata4;
+	sysstat = reg_read(priv, IT66121_SYS_STATUS0);
 
+	intdata1 = reg_read(priv, IT66121_INT_STAT1);
+	intdata2 = reg_read(priv, IT66121_INT_STAT2);
+	intdata3 = reg_read(priv, IT66121_INT_STAT3);
 	intdata4 = reg_read(priv, 0xee);
 	intclr3 = reg_read(priv, IT66121_SYS_STATUS0);
 	intclr3 = intclr3 | IT66121_SYS_STATUS0_CLEAR_AUD_CTS | IT66121_SYS_STATUS0_INTACTDONE;
@@ -1090,23 +1100,6 @@ void it66121_clear_Interrupt(struct it66121 *priv)
 	reg_write(priv, IT66121_SYS_STATUS0, intclr3); // clear interrupt.
 	intclr3 &= ~(IT66121_SYS_STATUS0_INTACTDONE);
 	reg_write(priv, IT66121_SYS_STATUS0, intclr3); // INTACTDONE reset to zero.
-}
-
-static irqreturn_t it66121_thread_interrupt(int irq, void *data)
-{
-	struct it66121 *priv = data;
-	u8 sysstat;
-	u8 intdata1;
-	u8 intdata2;
-	u8 intdata3;
-	u8 udata;
-	sysstat = reg_read(priv, IT66121_SYS_STATUS0);
-
-	intdata1 = reg_read(priv, IT66121_INT_STAT1);
-	intdata2 = reg_read(priv, IT66121_INT_STAT2);
-	intdata3 = reg_read(priv, IT66121_INT_STAT3);
-
-	it66121_clear_Interrupt(priv);
 
 	if (intdata1 & IT66121_INT_STAT1_DDC_FIFO_ERR) {
 		//dev_err(&client->dev, "DDC FIFO Error.\n");

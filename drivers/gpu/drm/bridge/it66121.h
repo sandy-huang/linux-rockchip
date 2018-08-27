@@ -71,7 +71,7 @@ enum {
 #define IT66121_INT_MASK1_RX_SENSE		BIT(1)
 #define IT66121_INT_MASK1_HPD			BIT(0)
 
-#define IT66121_INT_MASK2			0x0A
+#define IT66121_INT_MASK2			0x0a
 #define IT66121_INT_MASK2_PKT_AVI		BIT(7)
 #define IT66121_INT_MASK2_VID_UNSTABLE		BIT(6)
 #define IT66121_INT_MASK2_PKT_ACP		BIT(5)
@@ -81,7 +81,7 @@ enum {
 #define IT66121_INT_MASK2_AUTH_DONE		BIT(1)
 #define IT66121_INT_MASK2_AUTH_FAIL		BIT(0)
 
-#define IT66121_INT_MASK3			0x0B
+#define IT66121_INT_MASK3			0x0b
 // #define IT66121_INT_MASK3_HDCP_SYNC_DET_FAIL	BIT(6) PKT_3D_MASK?
 #define IT66121_INT_MASK3_AUD_CTS		BIT(5)
 #define IT66121_INT_MASK3_VSYNC			BIT(4)
@@ -90,7 +90,7 @@ enum {
 //#define IT66121_INT_MASK3_PKT_SPD		BIT(1)
 #define IT66121_INT_MASK3_PKT_AUD		BIT(0)
 
-#define IT66121_INT_CLR0			0x0C
+#define IT66121_INT_CLR0			0x0c
 #define IT66121_INT_CLR0_PKT_ACP		BIT(7)
 #define IT66121_INT_CLR0_PKT_NULL		BIT(6)
 #define IT66121_INT_CLR0_PKT_GEN		BIT(5)
@@ -100,7 +100,7 @@ enum {
 #define IT66121_INT_CLR0_RX_SENSE		BIT(1)
 #define IT66121_INT_CLR0_HPD			BIT(0)
 
-#define IT66121_INT_CLR1			0x0D
+#define IT66121_INT_CLR1			0x0d
 #define IT66121_INT_CLR1_VSYNC			BIT(7)
 #define IT66121_INT_CLR1_VID_STABLE		BIT(6)
 #define IT66121_INT_CLR1_PKT_MPG		BIT(5)
@@ -110,7 +110,7 @@ enum {
 #define IT66121_INT_CLR1_HDCP_SYNC_DET_FAIL	BIT(1)
 #define IT66121_INT_CLR1_VID_UNSTABLE		BIT(0)
 
-#define IT66121_SYS_STATUS0			0x0E
+#define IT66121_SYS_STATUS0			0x0e
 #define IT66121_SYS_STATUS0_INT_ACTIVE		BIT(7)
 #define IT66121_SYS_STATUS0_HP_DETECT		BIT(6)
 #define IT66121_SYS_STATUS0_RX_SENSE_DETECT	BIT(5)
@@ -120,7 +120,7 @@ enum {
 #define IT66121_SYS_STATUS0_CLEAR_AUD_CTS	BIT(1)
 #define IT66121_SYS_STATUS0_INTACTDONE		BIT(0)
 
-#define IT66121_SYS_STATUS1			0x0F
+#define IT66121_SYS_STATUS1			0x0f
 #define IT66121_SYS_STATUS1_GATE_RCLK		BIT(6)
 #define IT66121_SYS_STATUS1_GATE_IACLK		BIT(5)
 #define IT66121_SYS_STATUS1_GATE_TXCLK		BIT(4)
@@ -132,7 +132,8 @@ enum {
  * The registers are separated into three register banks:
  * Reg_000 - Reg_02F are accessible in any register bank.
  * Reg_030 - Reg_0FF are accessible in register bank0
- * Reg_130 - Reg_1BF are accessible in register bank1. These are HDMI packet registers.
+ * Reg_130 - Reg_1BF are accessible in register bank1.
+ *                   These are HDMI packet registers.
  */
 enum {
 	IT66121_SYS_STATUS1_BANK0 = 0,
@@ -184,32 +185,33 @@ enum {
 
 #define IT66121_DDC_READ_FIFO			0x17
 
-
-
-
-#define IT66121_ROM_STARTADDR   0x18
-#define IT66121_HDCP_HEADER 0x19
-#define IT66121_ROM_HEADER  0x1A
-#define IT66121_BUSHOLD_T   0x1B
-#define IT66121_ROM_STAT    0x1C
+#define IT66121_ROM_STARTADDR			0x18
+#define IT66121_HDCP_HEADER			0x19
+#define IT66121_ROM_HEADER			0x1a
+#define IT66121_DDC_BUS_HOLD_TIME		0x1b
+/*#define IT66121_ROM_STATUS			0x1c
     #define B_TX_ROM_DONE  (1<<7)
     #define B_TX_ROM_ACTIVE	(1<<6)
     #define B_TX_ROM_NOACK	(1<<5)
     #define B_TX_ROM_WAITBUS	(1<<4)
     #define B_TX_ROM_ARBILOSE	(1<<3)
     #define B_TX_ROM_BUSHANG	(1<<2)
-
+*/
 // HDCP
-#define IT66121_AN_GENERATE 0x1F
+
+#define IT66121_HDCP_AN_GENERATE		0x1f
     #define B_TX_START_CIPHER_GEN  1
     #define B_TX_STOP_CIPHER_GEN   0
 
 
-#define IT66121_HDCP			0x20
-#define IT66121_HDCP_ENABLE_HDCP11	BIT(1)
-#define IT66121_HDCP_DESIRED		BIT(0)
+#define IT66121_HDCP				0x20
+#define IT66121_HDCP_ENABLE_HDCP11		BIT(1)
+#define IT66121_HDCP_DESIRED			BIT(0)
 
-#define REG_TX_AUTHFIRE    0x21
+
+#define IT66121_HDCP_AUTH			0x21
+#define IT66121_HDCP_AUTH_FIRE			BIT(0)
+
 #define REG_TX_LISTCTRL    0x22
 #define B_TX_LISTFAIL  (1<<1)
 #define B_TX_LISTDONE  (1<<0)
@@ -253,8 +255,16 @@ enum {
 #define REG_TX_AUTH_STAT 0x46
 #define B_TX_AUTH_DONE (1<<7)
 
+#define IT66121_SHA_SEL       0x50
+#define IT66121_SHA_RD_BYTE1  0x51
+#define IT66121_SHA_RD_BYTE2  0x52
+#define IT66121_SHA_RD_BYTE3  0x53
+#define IT66121_SHA_RD_BYTE4  0x54
+#define IT66121_AKSV_RD_BYTE5 0x55
 
-#define IT66121_CLK_CTRL0 0x58
+/* clock control */
+
+#define IT66121_CLK_CTRL0			0x58
     #define O_TX_OSCLK_SEL 5
     #define M_TX_OSCLK_SEL 3
     #define B_TX_AUTO_OVER_SAMPLING_CLOCK (1<<4)
@@ -265,20 +275,13 @@ enum {
     #define B_TX_EXT_512FS (2<<O_TX_EXT_MCLK_SEL)
     #define B_TX_EXT_1024FS (3<<O_TX_EXT_MCLK_SEL)
 
-#define IT66121_SHA_SEL       0x50
-#define IT66121_SHA_RD_BYTE1  0x51
-#define IT66121_SHA_RD_BYTE2  0x52
-#define IT66121_SHA_RD_BYTE3  0x53
-#define IT66121_SHA_RD_BYTE4  0x54
-#define IT66121_AKSV_RD_BYTE5 0x55
 
-
-#define IT66121_CLK_CTRL1 0x59
+#define IT66121_CLK_CTRL1			0x59
     #define B_TX_EN_TXCLK_COUNT    (1<<5)
     #define B_TX_VDO_LATCH_EDGE    (1<<3)
 
-#define IT66121_CLK_STATUS1 0x5E
-#define IT66121_CLK_STATUS2 0x5F
+#define IT66121_CLK_STATUS1			0x5e
+#define IT66121_CLK_STATUS2			0x5f
     #define B_TX_IP_LOCK (1<<7)
     #define B_TX_XP_LOCK (1<<6)
     #define B_TX_OSF_LOCK (1<<5)
